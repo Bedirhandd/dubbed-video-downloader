@@ -109,6 +109,10 @@ uv sync
 
 Commit the updated `uv.lock` when dependency versions change. Do not edit `uv.lock` manually.
 
+## Contributing
+
+Contributions and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for commit, branch, and pull request guidelines.
+
 ## Notes
 
 - If the script prints warnings like `WARNING: Unable to download format 616. Skipping...`, this is normal. yt-dlp tries multiple format IDs, and some may be unavailable. It automatically falls back to a working format.
