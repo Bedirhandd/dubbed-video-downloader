@@ -1,0 +1,13 @@
+[project]
+name = "dubbed-video-downloader"
+version = "0.1.0"
+description = "Download YouTube videos with a selected dubbed audio track."
+readme = "readme.md"
+requires-python = ">=3.10"
+dependencies = [
+    "yt-dlp>=2026.3.17",
+    "yt-dlp-ejs>=0.8.0",
+]
+
+[tool.uv]
+package = false
