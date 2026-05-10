@@ -1,5 +1,4 @@
 import yt_dlp
-import os
 from pathlib import Path
 
 VIDEO_URLS = [
@@ -10,6 +9,20 @@ VIDEO_URLS = [
 DUB_LANGUAGE = "tr"   # Target dub language, e.g., "tr", "en"
 # Set your own FFmpeg path, or leave as None to let yt_dlp find it automatically
 FFMPEG_PATH = None    # Example for Windows: "C:/ffmpeg/ffmpeg.exe"
+
+
+def ydl_base_opts():
+    """Options needed for YouTube multi-language audio extraction."""
+    return {
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["all"],
+            },
+        },
+        "js_runtimes": {
+            "node": {},
+        },
+    }
 
 
 def get_available_audio_langs(info):
@@ -42,11 +55,12 @@ def outtmpl(lang):
 def download(url, lang, ffmpeg_path=None):
     """Download a single video with the specified dub language."""
     # First, fetch metadata to check available languages
-    with yt_dlp.YoutubeDL({"quiet": True}) as ydl:
+    with yt_dlp.YoutubeDL({**ydl_base_opts(), "quiet": True}) as ydl:
         info = ydl.extract_info(url, download=False)
     ensure_lang(info, lang)
 
     ydl_opts = {
+        **ydl_base_opts(),
         "format": f"bv*+bestaudio[language=\"{lang}\"]",
         "outtmpl": outtmpl(lang),
         "restrictfilenames": True,
