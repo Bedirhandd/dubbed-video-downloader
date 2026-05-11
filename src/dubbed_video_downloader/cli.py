@@ -124,16 +124,29 @@ def _print_config_recreate_hint() -> None:
     typer.echo("  dbdvdl init --output-dir ~/Videos --ffmpeg-path /path/to/ffmpeg")
 
 
+def _print_label_value(label: str, value: object) -> None:
+    typer.secho(f"{label}: ", fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.echo(value)
+
+
+def _print_command_header(action: str, url: str) -> None:
+    typer.echo()
+    typer.secho("==> ", fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.secho(action, fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.echo(f": {url}")
+
+
 def _print_download_plan(plan: core.DownloadPlan) -> None:
-    typer.echo("Dry run: no files will be downloaded or created.")
+    typer.secho("Dry run", fg=typer.colors.YELLOW, bold=True, nl=False)
+    typer.echo(": no files will be downloaded or created.")
     if plan.title:
-        typer.echo(f"Title: {plan.title}")
+        _print_label_value("Title", plan.title)
     if plan.uploader:
-        typer.echo(f"Uploader: {plan.uploader}")
-    typer.echo(f"Language: {plan.lang}")
+        _print_label_value("Channel", plan.uploader)
+    _print_label_value("Language", plan.lang)
     if plan.available_langs:
-        typer.echo(f"Available languages: {', '.join(plan.available_langs)}")
-    typer.echo(f"Output: {plan.output_path}")
+        _print_label_value("Available languages", ", ".join(plan.available_langs))
+    _print_label_value("Output", plan.output_path)
 
 
 @app.command("init")
@@ -336,7 +349,7 @@ def download_command(
     failures = 0
     for url in urls:
         action = "Dry run" if dry_run else "Downloading"
-        typer.echo(f"\n==> {action}: {url}")
+        _print_command_header(action, url)
         try:
             if dry_run:
                 plan = core.plan_download(
@@ -347,7 +360,7 @@ def download_command(
                     verbose=verbose,
                 )
                 _print_download_plan(plan)
-                typer.secho("Dry run OK", fg=typer.colors.GREEN)
+                typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
             else:
                 core.download(
                     url=url,
@@ -356,10 +369,10 @@ def download_command(
                     output_dir=effective_output_dir,
                     verbose=verbose,
                 )
-                typer.secho("Finished", fg=typer.colors.GREEN)
+                typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
         except Exception as exc:
             failures += 1
-            typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+            typer.secho(f"Error: {exc}", fg=typer.colors.RED, bold=True, err=True)
 
     if failures:
         raise typer.Exit(code=1)

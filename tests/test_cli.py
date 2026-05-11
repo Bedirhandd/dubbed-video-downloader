@@ -339,6 +339,46 @@ class CliTests(unittest.TestCase):
         self.assertIn("Dry run: no files will be downloaded or created.", result.output)
         self.assertIn(f"Output: {planned_output}", result.output)
 
+    def test_download_dry_run_uses_color_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.plan_download",
+                return_value=core.DownloadPlan(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    title="Title",
+                    uploader="Channel",
+                    available_langs=("tr",),
+                    output_path=home / "Downloads" / "from-config" / "tr" / "Title.mkv",
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                    color=True,
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("\x1b[", result.output)
+        self.assertIn("Title: ", result.output)
+        self.assertIn("Channel: ", result.output)
+        self.assertIn("Title\n", result.output)
+
     def test_download_dry_run_verbose_passes_through_to_core_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
