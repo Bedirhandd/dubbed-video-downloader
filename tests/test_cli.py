@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
+from dubbed_video_downloader import core
 from dubbed_video_downloader.cli import app
 
 
@@ -186,6 +187,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("dbdvdl init", result.output)
         download.assert_not_called()
 
+    def test_download_help_includes_dry_run(self) -> None:
+        result = self.runner.invoke(app, ["download", "--help"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("--dry-run", result.output)
+
     def test_download_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -223,6 +230,113 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
         )
+
+    def test_download_dry_run_requires_config_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("dubbed_video_downloader.cli.core.plan_download") as plan:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("dbdvdl init", result.output)
+        plan.assert_not_called()
+
+    def test_download_dry_run_uses_config_and_allows_cli_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+            override_output = home / "Videos" / "override"
+            override_ffmpeg = home / "bin" / "ffmpeg"
+            planned_output = override_output / "en" / "Channel" / "Title" / "Title.mkv"
+
+            with (
+                patch("dubbed_video_downloader.cli.core.download") as download,
+                patch(
+                    "dubbed_video_downloader.cli.core.plan_download",
+                    return_value=core.DownloadPlan(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="en",
+                        title="Title",
+                        uploader="Channel",
+                        available_langs=("en", "tr"),
+                        output_path=planned_output,
+                    ),
+                ) as plan,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--lang",
+                        "en",
+                        "--output-dir",
+                        str(override_output),
+                        "--ffmpeg-path",
+                        str(override_ffmpeg),
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        plan.assert_called_once_with(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="en",
+            ffmpeg_path=str(override_ffmpeg),
+            output_dir=override_output,
+        )
+        download.assert_not_called()
+        self.assertIn("Dry run: no files will be downloaded or created.", result.output)
+        self.assertIn(f"Output: {planned_output}", result.output)
+
+    def test_download_dry_run_reports_plan_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("dubbed_video_downloader.cli.core.download") as download,
+                patch(
+                    "dubbed_video_downloader.cli.core.plan_download",
+                    side_effect=RuntimeError("missing language"),
+                ) as plan,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        plan.assert_called_once()
+        download.assert_not_called()
+        self.assertIn("Error: missing language", result.output)
 
     def test_langs_requires_config_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +8,16 @@ import yt_dlp
 
 DEFAULT_OUTPUT_DIR = Path("Videos")
 DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
+
+
+@dataclass(frozen=True)
+class DownloadPlan:
+    url: str
+    lang: str
+    title: str | None
+    uploader: str | None
+    available_langs: tuple[str, ...]
+    output_path: Path
 
 
 def ydl_base_opts() -> dict[str, Any]:
@@ -69,6 +80,33 @@ def outtmpl(lang: str, output_dir: str | Path = DEFAULT_OUTPUT_DIR) -> str:
     )
 
 
+def plan_download(
+    url: str,
+    lang: str,
+    ffmpeg_path: str | Path | None = None,
+    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
+) -> DownloadPlan:
+    """Validate and describe a download without writing files."""
+    info = get_video_info(url)
+    ensure_lang(info, lang)
+
+    return DownloadPlan(
+        url=url,
+        lang=lang,
+        title=_optional_string(info.get("title")),
+        uploader=_optional_string(info.get("uploader")),
+        available_langs=tuple(sorted(get_available_audio_langs(info))),
+        output_path=_planned_output_path(
+            info=info,
+            lang=lang,
+            ffmpeg_path=ffmpeg_path,
+            output_dir=output_dir,
+            merge_output_format=merge_output_format,
+        ),
+    )
+
+
 def download(
     url: str,
     lang: str,
@@ -81,6 +119,24 @@ def download(
     ensure_lang(info, lang)
 
     Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
+    with yt_dlp.YoutubeDL(
+        _download_ydl_opts(
+            lang=lang,
+            ffmpeg_path=ffmpeg_path,
+            output_dir=output_dir,
+            merge_output_format=merge_output_format,
+        )
+    ) as ydl:
+        ydl.download([url])
+
+
+def _download_ydl_opts(
+    *,
+    lang: str,
+    ffmpeg_path: str | Path | None,
+    output_dir: str | Path,
+    merge_output_format: str,
+) -> dict[str, Any]:
     ydl_opts: dict[str, Any] = {
         **ydl_base_opts(),
         "format": f"bv*+bestaudio[language=\"{lang}\"]",
@@ -90,6 +146,32 @@ def download(
     }
     if ffmpeg_path:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
+    return ydl_opts
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+
+def _planned_output_path(
+    *,
+    info: dict[str, Any],
+    lang: str,
+    ffmpeg_path: str | Path | None,
+    output_dir: str | Path,
+    merge_output_format: str,
+) -> Path:
+    planned_info = {**info, "ext": merge_output_format}
+    ydl_opts = _download_ydl_opts(
+        lang=lang,
+        ffmpeg_path=ffmpeg_path,
+        output_dir=output_dir,
+        merge_output_format=merge_output_format,
+    )
+
+    with yt_dlp.YoutubeDL({**ydl_opts, "quiet": True}) as ydl:
+        filename = ydl.prepare_filename(planned_info)
+
+    if not filename:
+        raise RuntimeError("Could not determine planned output path.")
+    return Path(filename)
+
+
+def _optional_string(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None

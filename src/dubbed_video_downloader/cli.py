@@ -124,6 +124,18 @@ def _print_config_recreate_hint() -> None:
     typer.echo("  dbdvdl init --output-dir ~/Videos --ffmpeg-path /path/to/ffmpeg")
 
 
+def _print_download_plan(plan: core.DownloadPlan) -> None:
+    typer.echo("Dry run: no files will be downloaded or created.")
+    if plan.title:
+        typer.echo(f"Title: {plan.title}")
+    if plan.uploader:
+        typer.echo(f"Uploader: {plan.uploader}")
+    typer.echo(f"Language: {plan.lang}")
+    if plan.available_langs:
+        typer.echo(f"Available languages: {', '.join(plan.available_langs)}")
+    typer.echo(f"Output: {plan.output_path}")
+
+
 @app.command("init")
 def init_command(
     output_dir: Annotated[
@@ -291,6 +303,13 @@ def download_command(
             help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
         ),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Validate metadata and print the planned output without downloading.",
+        ),
+    ] = False,
 ) -> None:
     """Download URL(s) with a dub language."""
     loaded_config = _load_config_or_exit()
@@ -308,15 +327,26 @@ def download_command(
 
     failures = 0
     for url in urls:
-        typer.echo(f"\n==> Downloading: {url}")
+        action = "Dry run" if dry_run else "Downloading"
+        typer.echo(f"\n==> {action}: {url}")
         try:
-            core.download(
-                url=url,
-                lang=lang,
-                ffmpeg_path=ffmpeg_location,
-                output_dir=effective_output_dir,
-            )
-            typer.secho("Finished", fg=typer.colors.GREEN)
+            if dry_run:
+                plan = core.plan_download(
+                    url=url,
+                    lang=lang,
+                    ffmpeg_path=ffmpeg_location,
+                    output_dir=effective_output_dir,
+                )
+                _print_download_plan(plan)
+                typer.secho("Dry run OK", fg=typer.colors.GREEN)
+            else:
+                core.download(
+                    url=url,
+                    lang=lang,
+                    ffmpeg_path=ffmpeg_location,
+                    output_dir=effective_output_dir,
+                )
+                typer.secho("Finished", fg=typer.colors.GREEN)
         except Exception as exc:
             failures += 1
             typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)

@@ -74,6 +74,7 @@ uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
 ```
 
 `langs` veya `download` kullanmadan önce gerekli kullanıcı config dosyasını oluşturun:
@@ -127,6 +128,14 @@ uv run dbdvdl download \
   --ffmpeg-path /path/to/ffmpeg
 ```
 
+URL'yi ve istenen dublaj dilini doğrulayıp planlanan çıktı yolunu görmek için
+`--dry-run` kullanabilirsiniz. Bu mod indirme, birleştirme veya çıktı klasörü
+oluşturma işlemi yapmaz:
+
+```bash
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
+```
+
 Araç şu işlemleri yapar:
 
 1. Videoda istenen dublaj dili mevcut mu kontrol eder.
@@ -134,6 +143,8 @@ Araç şu işlemleri yapar:
 3. Videoyu ve seçilen ses parçasını indirir.
 4. Bunları `.mkv` dosyasında birleştirir.
 5. Dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör yapısına kaydeder.
+
+`--dry-run` ile araç doğrulama ve çıktı yolu önizlemesinden sonra durur.
 
 ## Bağımlılıkları Güncelleme
 

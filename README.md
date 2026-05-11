@@ -74,6 +74,7 @@ uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
 ```
 
 Before using `langs` or `download`, create the required user config:
@@ -126,6 +127,13 @@ uv run dbdvdl download \
   --ffmpeg-path /path/to/ffmpeg
 ```
 
+Use `--dry-run` to validate the URL and requested dub language, then print the
+planned output path without downloading, merging, or creating output folders:
+
+```bash
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
+```
+
 The tool will:
 
 1. Check if the requested dub language is available for each video.
@@ -133,6 +141,8 @@ The tool will:
 3. Download the video and the requested audio stream.
 4. Merge them into `.mkv`.
 5. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
+
+With `--dry-run`, the tool stops after validation and output path preview.
 
 ## Updating Dependencies
 
