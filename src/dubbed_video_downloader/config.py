@@ -12,12 +12,14 @@ CONFIG_DIR_NAME = "dubbed-video-downloader"
 CONFIG_FILE_NAME = "config.yaml"
 DEFAULT_OUTPUT_DIR = "~/Downloads/dbdvdl-output"
 DEFAULT_FFMPEG_PATH = "ffmpeg"
+DEFAULT_LANG = "en"
 
 
 @dataclass(frozen=True)
 class AppConfig:
     output_dir: Path
     ffmpeg_path: str
+    default_lang: str
 
 
 class ConfigError(RuntimeError):
@@ -55,7 +57,9 @@ def load_config(path: Path | None = None) -> AppConfig:
 def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) -> AppConfig:
     location = str(source) if source else "config"
     missing_keys = [
-        key for key in ("output_dir", "ffmpeg_path") if key not in raw_config
+        key
+        for key in ("output_dir", "ffmpeg_path", "default_lang")
+        if key not in raw_config
     ]
     if missing_keys:
         missing = ", ".join(missing_keys)
@@ -63,10 +67,16 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
 
     output_dir = _require_string(raw_config["output_dir"], "output_dir", location)
     ffmpeg_path = _require_string(raw_config["ffmpeg_path"], "ffmpeg_path", location)
+    default_lang = _require_string(
+        raw_config["default_lang"],
+        "default_lang",
+        location,
+    )
 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
         ffmpeg_path=normalize_ffmpeg_path(ffmpeg_path),
+        default_lang=normalize_default_lang(default_lang),
     )
 
 
@@ -74,6 +84,7 @@ def write_config(
     *,
     output_dir: str,
     ffmpeg_path: str,
+    default_lang: str,
     path: Path | None = None,
     overwrite: bool = False,
 ) -> Path:
@@ -85,12 +96,14 @@ def write_config(
 
     normalize_output_dir(output_dir)
     normalize_ffmpeg_path(ffmpeg_path)
+    normalized_default_lang = normalize_default_lang(default_lang)
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = yaml.safe_dump(
         {
             "output_dir": output_dir,
             "ffmpeg_path": ffmpeg_path,
+            "default_lang": normalized_default_lang,
         },
         sort_keys=False,
     )
@@ -131,6 +144,10 @@ def normalize_ffmpeg_path(value: str) -> str:
         return expanded
 
     raise ConfigError("ffmpeg_path must be `ffmpeg` or an absolute path.")
+
+
+def normalize_default_lang(value: str) -> str:
+    return _clean_string(value, "default_lang")
 
 
 def ffmpeg_location_for_yt_dlp(ffmpeg_path: str) -> str | None:

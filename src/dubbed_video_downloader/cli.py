@@ -22,9 +22,9 @@ Examples:
 
   dbdvdl langs https://www.youtube.com/watch?v=VIDEO_ID
 
-  dbdvdl download https://www.youtube.com/watch?v=VIDEO_ID --lang tr
+  dbdvdl download https://www.youtube.com/watch?v=VIDEO_ID
 
-  dbdvdl download URL1 URL2 --lang en --output-dir ~/Downloads/dbdvdl-output
+  dbdvdl download URL1 URL2 --lang tr --output-dir ~/Downloads/dbdvdl-output
 """
 
 app = typer.Typer(
@@ -78,6 +78,14 @@ def _normalize_ffmpeg_path_or_exit(value: str) -> str:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_default_lang_or_exit(value: str) -> str:
+    try:
+        return app_config.normalize_default_lang(value)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _prompt_value(value: str | None, prompt: str, default: str) -> str:
     if value is not None:
         return value
@@ -90,11 +98,17 @@ def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
-def _write_config_or_exit(output_dir: str, ffmpeg_path: str, force: bool) -> None:
+def _write_config_or_exit(
+    output_dir: str,
+    ffmpeg_path: str,
+    default_lang: str,
+    force: bool,
+) -> None:
     try:
         path = app_config.write_config(
             output_dir=output_dir,
             ffmpeg_path=ffmpeg_path,
+            default_lang=default_lang,
             overwrite=force,
         )
     except app_config.ConfigError as exc:
@@ -104,7 +118,12 @@ def _write_config_or_exit(output_dir: str, ffmpeg_path: str, force: bool) -> Non
     typer.secho(f"Wrote config: {path}", fg=typer.colors.GREEN)
 
 
-def _init_config(output_dir: str | None, ffmpeg_path: str | None, force: bool) -> None:
+def _init_config(
+    output_dir: str | None,
+    ffmpeg_path: str | None,
+    default_lang: str | None,
+    force: bool,
+) -> None:
     selected_output_dir = _prompt_value(
         output_dir,
         "Output directory",
@@ -115,13 +134,26 @@ def _init_config(output_dir: str | None, ffmpeg_path: str | None, force: bool) -
         "FFmpeg path",
         app_config.DEFAULT_FFMPEG_PATH,
     )
-    _write_config_or_exit(selected_output_dir, selected_ffmpeg_path, force)
+    selected_default_lang = _prompt_value(
+        default_lang,
+        "Default language",
+        app_config.DEFAULT_LANG,
+    )
+    _write_config_or_exit(
+        selected_output_dir,
+        selected_ffmpeg_path,
+        selected_default_lang,
+        force,
+    )
 
 
 def _print_config_recreate_hint() -> None:
     typer.echo("\nYou can create a new config with:")
     typer.echo("  dbdvdl init")
-    typer.echo("  dbdvdl init --output-dir ~/Videos --ffmpeg-path /path/to/ffmpeg")
+    typer.echo(
+        "  dbdvdl init --output-dir ~/Videos "
+        "--ffmpeg-path /path/to/ffmpeg --default-lang tr"
+    )
 
 
 def _print_label_value(label: str, value: object) -> None:
@@ -166,13 +198,20 @@ def init_command(
             help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
         ),
     ] = None,
+    default_lang: Annotated[
+        str | None,
+        typer.Option(
+            "--default-lang",
+            help="Default dub language code to use when --lang is omitted.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
     ] = False,
 ) -> None:
     """Create the required user config file."""
-    _init_config(output_dir, ffmpeg_path, force)
+    _init_config(output_dir, ffmpeg_path, default_lang, force)
 
 
 @config_app.command("init")
@@ -192,13 +231,20 @@ def config_init_command(
             help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
         ),
     ] = None,
+    default_lang: Annotated[
+        str | None,
+        typer.Option(
+            "--default-lang",
+            help="Default dub language code to use when --lang is omitted.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
     ] = False,
 ) -> None:
     """Create the required user config file."""
-    _init_config(output_dir, ffmpeg_path, force)
+    _init_config(output_dir, ffmpeg_path, default_lang, force)
 
 
 @config_app.command("show")
@@ -208,6 +254,7 @@ def config_show_command() -> None:
     typer.echo(f"Config path: {app_config.get_config_path()}")
     typer.echo(f"Output directory: {loaded_config.output_dir}")
     typer.echo(f"FFmpeg path: {loaded_config.ffmpeg_path}")
+    typer.echo(f"Default language: {loaded_config.default_lang}")
 
 
 @config_app.command("remove")
@@ -298,9 +345,13 @@ def download_command(
         ),
     ],
     lang: Annotated[
-        str,
-        typer.Option("--lang", "-l", help="Target dub language code."),
-    ] = "tr",
+        str | None,
+        typer.Option(
+            "--lang",
+            "-l",
+            help="Target dub language code. Overrides config default.",
+        ),
+    ] = None,
     output_dir: Annotated[
         str | None,
         typer.Option(
@@ -345,6 +396,11 @@ def download_command(
         else loaded_config.ffmpeg_path
     )
     ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
+    effective_lang = (
+        _normalize_default_lang_or_exit(lang)
+        if lang is not None
+        else loaded_config.default_lang
+    )
 
     failures = 0
     for url in urls:
@@ -354,7 +410,7 @@ def download_command(
             if dry_run:
                 plan = core.plan_download(
                     url=url,
-                    lang=lang,
+                    lang=effective_lang,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,
@@ -364,7 +420,7 @@ def download_command(
             else:
                 core.download(
                     url=url,
-                    lang=lang,
+                    lang=effective_lang,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,

@@ -28,7 +28,9 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertEqual(
                 config_path.read_text(encoding="utf-8"),
-                "output_dir: ~/Downloads/dbdvdl-output\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/dbdvdl-output\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
             )
 
     def test_init_refuses_overwrite_without_force(self) -> None:
@@ -53,7 +55,49 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertEqual(
                 config_path.read_text(encoding="utf-8"),
-                "output_dir: ~/Downloads/dbdvdl-output\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/dbdvdl-output\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+            )
+
+    def test_init_writes_custom_default_lang(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["init", "--default-lang", "tr"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_lang: tr\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
+    def test_config_init_writes_custom_default_lang(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["config", "init", "--default-lang", "tr"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_lang: tr\n",
+                config_path.read_text(encoding="utf-8"),
             )
 
     def test_config_show_displays_resolved_values(self) -> None:
@@ -64,7 +108,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -81,6 +127,7 @@ class CliTests(unittest.TestCase):
             result.output,
         )
         self.assertIn("FFmpeg path: ffmpeg", result.output)
+        self.assertIn("Default language: en", result.output)
 
     def test_config_show_requires_existing_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -99,7 +146,9 @@ class CliTests(unittest.TestCase):
             config_dir = home / ".config" / "dubbed-video-downloader"
             config_dir.mkdir(parents=True)
             (config_dir / "config.yaml").write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -131,7 +180,9 @@ class CliTests(unittest.TestCase):
             config_dir = home / ".config" / "dubbed-video-downloader"
             config_dir.mkdir(parents=True)
             (config_dir / "config.yaml").write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -156,7 +207,9 @@ class CliTests(unittest.TestCase):
             config_dir = home / ".config" / "dubbed-video-downloader"
             config_dir.mkdir(parents=True)
             (config_dir / "config.yaml").write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -193,6 +246,9 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--dry-run", result.output)
         self.assertIn("--verbose", result.output)
+        self.assertIn("Overrides config", result.output)
+        self.assertIn("default.", result.output)
+        self.assertNotIn("[default: tr]", result.output)
 
     def test_download_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -202,7 +258,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: tr\n",
                 encoding="utf-8",
             )
             override_output = home / "Videos" / "override"
@@ -241,7 +299,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -259,7 +319,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         download.assert_called_once_with(
             url="https://www.youtube.com/watch?v=EXAMPLE",
-            lang="tr",
+            lang="en",
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
@@ -290,7 +350,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: tr\n",
                 encoding="utf-8",
             )
             override_output = home / "Videos" / "override"
@@ -347,7 +409,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -355,11 +419,11 @@ class CliTests(unittest.TestCase):
                 "dubbed_video_downloader.cli.core.plan_download",
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
+                    lang="en",
                     title="Title",
                     uploader="Channel",
-                    available_langs=("tr",),
-                    output_path=home / "Downloads" / "from-config" / "tr" / "Title.mkv",
+                    available_langs=("en",),
+                    output_path=home / "Downloads" / "from-config" / "en" / "Title.mkv",
                 ),
             ):
                 result = self.runner.invoke(
@@ -387,7 +451,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -395,11 +461,11 @@ class CliTests(unittest.TestCase):
                 "dubbed_video_downloader.cli.core.plan_download",
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
+                    lang="en",
                     title="Title",
                     uploader="Channel",
-                    available_langs=("tr",),
-                    output_path=home / "Downloads" / "from-config" / "tr" / "Title.mkv",
+                    available_langs=("en",),
+                    output_path=home / "Downloads" / "from-config" / "en" / "Title.mkv",
                 ),
             ) as plan:
                 result = self.runner.invoke(
@@ -416,7 +482,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         plan.assert_called_once_with(
             url="https://www.youtube.com/watch?v=EXAMPLE",
-            lang="tr",
+            lang="en",
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
@@ -430,7 +496,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -485,7 +553,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -515,7 +585,9 @@ class CliTests(unittest.TestCase):
             )
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
-                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 

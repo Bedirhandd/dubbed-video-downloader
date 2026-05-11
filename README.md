@@ -73,8 +73,8 @@ uv run dbdvdl init
 uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE"
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
 Before using `langs` or `download`, create the required user config:
@@ -89,6 +89,12 @@ You can also use the equivalent config subcommand:
 uv run dbdvdl config init
 ```
 
+To choose a different default dub language during setup:
+
+```bash
+uv run dbdvdl init --default-lang tr
+```
+
 This writes:
 
 ```text
@@ -100,9 +106,11 @@ with:
 ```yaml
 output_dir: ~/Downloads/dbdvdl-output
 ffmpeg_path: ffmpeg
+default_lang: en
 ```
 
 Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
+Use `default_lang` as the dub language when `download` is run without `--lang`.
 
 Inspect or remove the config with:
 
@@ -115,23 +123,24 @@ After removing it, run `uv run dbdvdl init` again to create a fresh config.
 
 You can pass multiple URLs and optional output/FFmpeg settings:
 
-The CLI saves to the configured `output_dir`. If you pass `--output-dir`, use an
-absolute path; `~` is accepted. CLI options override config values for that run.
+The CLI saves to the configured `output_dir` and uses the configured
+`default_lang`. If you pass `--output-dir`, use an absolute path; `~` is
+accepted. CLI options override config values for that run.
 
 ```bash
 uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE1" \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
-  --lang en \
+  --lang tr \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg
 ```
 
-Use `--dry-run` to validate the URL and requested dub language, then print the
+Use `--dry-run` to validate the URL and effective dub language, then print the
 planned output path without downloading, merging, or creating output folders:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
 By default, yt-dlp warnings and debug messages are hidden to keep CLI output
@@ -139,7 +148,7 @@ focused. Use `--verbose` on `download` or `langs` when troubleshooting:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --verbose
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --verbose
 ```
 
 The tool will:

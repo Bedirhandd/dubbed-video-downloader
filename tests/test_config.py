@@ -24,7 +24,9 @@ class ConfigTests(unittest.TestCase):
             home = Path(tmpdir)
             config_path = home / "config.yaml"
             config_path.write_text(
-                "output_dir: ~/Videos\nffmpeg_path: $HOME/bin/ffmpeg\n",
+                "output_dir: ~/Videos\n"
+                "ffmpeg_path: $HOME/bin/ffmpeg\n"
+                "default_lang: en\n",
                 encoding="utf-8",
             )
 
@@ -33,35 +35,73 @@ class ConfigTests(unittest.TestCase):
 
         self.assertEqual(loaded_config.output_dir, home / "Videos")
         self.assertEqual(loaded_config.ffmpeg_path, str(home / "bin" / "ffmpeg"))
+        self.assertEqual(loaded_config.default_lang, "en")
 
     def test_unknown_keys_are_ignored(self) -> None:
         loaded_config = config.config_from_mapping(
             {
                 "output_dir": "/tmp/dbdvdl-output",
                 "ffmpeg_path": "ffmpeg",
+                "default_lang": "en",
                 "future": "accepted",
             }
         )
 
         self.assertEqual(loaded_config.output_dir, Path("/tmp/dbdvdl-output"))
         self.assertEqual(loaded_config.ffmpeg_path, "ffmpeg")
+        self.assertEqual(loaded_config.default_lang, "en")
 
-    def test_missing_required_key_fails(self) -> None:
+    def test_missing_ffmpeg_path_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:
-            config.config_from_mapping({"output_dir": "/tmp/dbdvdl-output"})
+            config.config_from_mapping(
+                {
+                    "output_dir": "/tmp/dbdvdl-output",
+                    "default_lang": "en",
+                }
+            )
 
         self.assertIn("ffmpeg_path", str(context.exception))
 
-    def test_wrong_value_type_fails(self) -> None:
+    def test_missing_default_lang_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.config_from_mapping(
+                {
+                    "output_dir": "/tmp/dbdvdl-output",
+                    "ffmpeg_path": "ffmpeg",
+                }
+            )
+
+        self.assertIn("default_lang", str(context.exception))
+
+    def test_wrong_ffmpeg_path_type_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:
             config.config_from_mapping(
                 {
                     "output_dir": "/tmp/dbdvdl-output",
                     "ffmpeg_path": 123,
+                    "default_lang": "en",
                 }
             )
 
         self.assertIn("ffmpeg_path", str(context.exception))
+
+    def test_wrong_default_lang_type_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.config_from_mapping(
+                {
+                    "output_dir": "/tmp/dbdvdl-output",
+                    "ffmpeg_path": "ffmpeg",
+                    "default_lang": 123,
+                }
+            )
+
+        self.assertIn("default_lang", str(context.exception))
+
+    def test_empty_default_lang_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_default_lang(" ")
+
+        self.assertIn("default_lang", str(context.exception))
 
     def test_relative_output_dir_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:

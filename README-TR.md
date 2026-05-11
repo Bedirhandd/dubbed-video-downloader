@@ -73,8 +73,8 @@ uv run dbdvdl init
 uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE"
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
 `langs` veya `download` kullanmadan önce gerekli kullanıcı config dosyasını oluşturun:
@@ -89,6 +89,12 @@ Aynı işlem için eşdeğer config alt komutunu da kullanabilirsiniz:
 uv run dbdvdl config init
 ```
 
+Kurulum sırasında farklı bir varsayılan dublaj dili seçmek için:
+
+```bash
+uv run dbdvdl init --default-lang tr
+```
+
 Bu komut şuraya yazar:
 
 ```text
@@ -100,9 +106,11 @@ Bu komut şuraya yazar:
 ```yaml
 output_dir: ~/Downloads/dbdvdl-output
 ffmpeg_path: ffmpeg
+default_lang: en
 ```
 
 `ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
+`default_lang`, `download` komutu `--lang` olmadan çalıştırıldığında kullanılacak dublaj dilidir.
 
 Config dosyasını görmek veya kaldırmak için:
 
@@ -115,25 +123,25 @@ Kaldırdıktan sonra yeni config oluşturmak için tekrar `uv run dbdvdl init` �
 
 Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
 
-CLI config içindeki `output_dir` altına kaydeder. `--output-dir` verirseniz
-mutlak yol kullanın; `~` desteklenir. CLI seçenekleri o çalıştırma için config
-değerlerini ezer.
+CLI config içindeki `output_dir` altına kaydeder ve `default_lang` değerini
+kullanır. `--output-dir` verirseniz mutlak yol kullanın; `~` desteklenir. CLI
+seçenekleri o çalıştırma için config değerlerini ezer.
 
 ```bash
 uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE1" \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
-  --lang en \
+  --lang tr \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg
 ```
 
-URL'yi ve istenen dublaj dilini doğrulayıp planlanan çıktı yolunu görmek için
+URL'yi ve etkin dublaj dilini doğrulayıp planlanan çıktı yolunu görmek için
 `--dry-run` kullanabilirsiniz. Bu mod indirme, birleştirme veya çıktı klasörü
 oluşturma işlemi yapmaz:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
 CLI çıktısını sade tutmak için yt-dlp uyarıları ve debug mesajları varsayılan
@@ -142,7 +150,7 @@ olarak gizlenir. Sorun giderirken `download` veya `langs` komutlarında
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --verbose
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --verbose
 ```
 
 Araç şu işlemleri yapar:
