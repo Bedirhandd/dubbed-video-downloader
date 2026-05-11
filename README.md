@@ -65,7 +65,9 @@ The project includes `yt-dlp-ejs`; Node.js is still needed to run the solver for
 
 ## Configuration
 
-Open `script.py` and edit these lines if needed:
+The CLI does not require editing files. Pass options such as `--lang`, `--output-dir`, and `--ffmpeg-path` at runtime.
+
+For legacy script usage, open `script.py` and edit these lines if needed:
 
 ```python
 DUB_LANGUAGE = "tr"   # Target dub language, e.g. "tr", "en"
@@ -83,13 +85,32 @@ VIDEO_URLS = [
 
 ## Usage
 
-Run the script with uv:
+Use the CLI with uv:
+
+```bash
+uv run dbdvdl --help
+uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
+```
+
+You can pass multiple URLs and optional output/FFmpeg settings:
+
+```bash
+uv run dbdvdl download \
+  "https://www.youtube.com/watch?v=EXAMPLE1" \
+  "https://www.youtube.com/watch?v=EXAMPLE2" \
+  --lang en \
+  --output-dir Videos \
+  --ffmpeg-path /path/to/ffmpeg
+```
+
+The legacy script entrypoint is still available:
 
 ```bash
 uv run script.py
 ```
 
-The script will:
+The tool will:
 
 1. Check if the requested dub language is available for each video.
 2. Print an error with available languages if the requested language is missing.

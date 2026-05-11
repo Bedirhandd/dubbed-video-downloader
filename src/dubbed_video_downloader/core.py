@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import yt_dlp
+
+DEFAULT_OUTPUT_DIR = Path("Videos")
+DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
+
+
+def ydl_base_opts() -> dict[str, Any]:
+    """Options needed for YouTube multi-language audio extraction."""
+    return {
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["all"],
+            },
+        },
+        "js_runtimes": {
+            "node": {},
+        },
+    }
+
+
+def get_video_info(url: str, quiet: bool = True) -> dict[str, Any]:
+    """Fetch video metadata without downloading the video."""
+    with yt_dlp.YoutubeDL({**ydl_base_opts(), "quiet": quiet}) as ydl:
+        info = ydl.extract_info(url, download=False)
+    return info
+
+
+def get_available_audio_langs(info: dict[str, Any]) -> set[str]:
+    """Return the set of available audio languages for this video."""
+    langs = set()
+    for format_info in info.get("formats", []):
+        if format_info.get("vcodec") == "none" and format_info.get("acodec") not in (
+            None,
+            "none",
+        ):
+            if format_info.get("language"):
+                langs.add(format_info["language"])
+    return langs
+
+
+def get_available_audio_langs_for_url(url: str) -> set[str]:
+    """Fetch video metadata and return available audio languages."""
+    return get_available_audio_langs(get_video_info(url))
+
+
+def ensure_lang(info: dict[str, Any], target: str) -> None:
+    """Raise an error if the requested dub language is not available."""
+    langs = get_available_audio_langs(info)
+    if target not in langs:
+        title = info.get("title")
+        if not langs:
+            raise RuntimeError(f"No multi-language audio tracks found for '{title}'.")
+        raise RuntimeError(
+            f"Requested dub language not found for '{title}'.\n"
+            f"Requested: {target}\n"
+            f"Available: {', '.join(sorted(langs))}"
+        )
+
+
+def outtmpl(lang: str, output_dir: str | Path = DEFAULT_OUTPUT_DIR) -> str:
+    """Output template: <output_dir>/<lang>/<uploader>/<title>/<title>.<ext>"""
+    return str(
+        Path(output_dir) / lang / "%(uploader)s" / "%(title)s" / "%(title)s.%(ext)s"
+    )
+
+
+def download(
+    url: str,
+    lang: str,
+    ffmpeg_path: str | Path | None = None,
+    output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+    merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
+) -> None:
+    """Download a single video with the specified dub language."""
+    info = get_video_info(url)
+    ensure_lang(info, lang)
+
+    Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
+    ydl_opts: dict[str, Any] = {
+        **ydl_base_opts(),
+        "format": f"bv*+bestaudio[language=\"{lang}\"]",
+        "outtmpl": outtmpl(lang, output_dir),
+        "restrictfilenames": True,
+        "merge_output_format": merge_output_format,
+    }
+    if ffmpeg_path:
+        ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])

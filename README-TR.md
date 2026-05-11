@@ -65,7 +65,9 @@ Projede `yt-dlp-ejs` bağımlılığı bulunur; YouTube formatlarını ve dublaj
 
 ## Yapılandırma
 
-`script.py` dosyasını açın ve gerekirse düzenleyin:
+CLI için dosya düzenlemeniz gerekmez. `--lang`, `--output-dir` ve `--ffmpeg-path` gibi seçenekleri çalıştırma sırasında verebilirsiniz.
+
+Eski script kullanımı için `script.py` dosyasını açın ve gerekirse düzenleyin:
 
 ```python
 DUB_LANGUAGE = "tr"   # İndirilecek dublaj dili, örn: "tr", "en"
@@ -83,13 +85,32 @@ VIDEO_URLS = [
 
 ## Kullanım
 
-Script'i uv ile çalıştırın:
+CLI'ı uv ile kullanın:
+
+```bash
+uv run dbdvdl --help
+uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
+```
+
+Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
+
+```bash
+uv run dbdvdl download \
+  "https://www.youtube.com/watch?v=EXAMPLE1" \
+  "https://www.youtube.com/watch?v=EXAMPLE2" \
+  --lang en \
+  --output-dir Videos \
+  --ffmpeg-path /path/to/ffmpeg
+```
+
+Eski script giriş noktası da hala kullanılabilir:
 
 ```bash
 uv run script.py
 ```
 
-Betik şu işlemleri yapar:
+Araç şu işlemleri yapar:
 
 1. Videoda istenen dublaj dili mevcut mu kontrol eder.
 2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
