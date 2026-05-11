@@ -89,6 +89,7 @@ Use the CLI with uv:
 
 ```bash
 uv run dbdvdl --help
+uv run dbdvdl --doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
 ```

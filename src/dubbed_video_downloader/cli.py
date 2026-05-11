@@ -7,9 +7,12 @@ import typer
 
 from . import __version__
 from . import core
+from . import doctor
 
 HELP_EPILOG = """
 Examples:
+
+  dbdvdl --doctor
 
   dbdvdl langs https://www.youtube.com/watch?v=VIDEO_ID
 
@@ -38,6 +41,27 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _doctor_callback(value: bool) -> None:
+    if not value:
+        return
+
+    results = doctor.run_checks()
+    name_width = max(len(result.name) for result in results)
+
+    typer.echo("System check\n")
+    for result in results:
+        status = "OK" if result.ok else "Missing"
+        color = typer.colors.GREEN if result.ok else typer.colors.RED
+        typer.echo(f"{result.name:<{name_width}}  ", nl=False)
+        typer.secho(f"{status:<7}", fg=color, nl=False)
+        typer.echo(result.detail)
+
+    if not all(result.ok for result in results):
+        raise typer.Exit(code=1)
+
+    raise typer.Exit()
+
+
 @app.callback()
 def main(
     version: Annotated[
@@ -46,6 +70,15 @@ def main(
             "--version",
             callback=_version_callback,
             help="Show the version and exit.",
+            is_eager=True,
+        ),
+    ] = False,
+    doctor_check: Annotated[
+        bool,
+        typer.Option(
+            "--doctor",
+            callback=_doctor_callback,
+            help="Run environment checks and exit.",
             is_eager=True,
         ),
     ] = False,
