@@ -9,6 +9,8 @@ from . import __version__
 from . import core
 from . import doctor
 
+CLI_DEFAULT_OUTPUT_DIR = Path("~/Downloads/dbdvdl-output")
+
 HELP_EPILOG = """
 Examples:
 
@@ -18,7 +20,7 @@ Examples:
 
   dbdvdl download https://www.youtube.com/watch?v=VIDEO_ID --lang tr
 
-  dbdvdl download URL1 URL2 --lang en --output-dir Videos
+  dbdvdl download URL1 URL2 --lang en --output-dir ~/Downloads/dbdvdl-output
 """
 
 app = typer.Typer(
@@ -60,6 +62,15 @@ def _doctor_callback(value: bool) -> None:
         raise typer.Exit(code=1)
 
     raise typer.Exit()
+
+
+def _output_dir_callback(value: Path) -> Path:
+    output_dir = value.expanduser()
+    if not output_dir.is_absolute():
+        raise typer.BadParameter(
+            "must be an absolute path. Use ~/Downloads/dbdvdl-output or /path/to/output."
+        )
+    return output_dir
 
 
 @app.callback()
@@ -104,12 +115,10 @@ def download_command(
         typer.Option(
             "--output-dir",
             "-o",
-            help="Directory where videos will be saved.",
-            file_okay=False,
-            dir_okay=True,
-            writable=True,
+            callback=_output_dir_callback,
+            help="Absolute directory where videos will be saved. Supports ~.",
         ),
-    ] = core.DEFAULT_OUTPUT_DIR,
+    ] = CLI_DEFAULT_OUTPUT_DIR,
     ffmpeg_path: Annotated[
         Path | None,
         typer.Option(

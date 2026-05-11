@@ -1,21 +1,21 @@
 # YouTube Dublajlı Video İndirici
 
-[yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.org/) kullanarak YouTube videolarını belirli bir **dublaj diliyle** (örneğin Türkçe, İngilizce veya İspanyolca) indirmenizi sağlayan basit bir Python betiği.
+[yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.org/) kullanarak YouTube videolarını belirli bir **dublaj diliyle** (örneğin Türkçe, İngilizce veya İspanyolca) indirmenizi sağlayan Python CLI aracı.
 
-Script şu durumlar için kullanılabilir:
+Araç şu durumlar için kullanılabilir:
 
 - **Dublajlı YouTube videolarını** indirmek (çok dilli ses desteği).
 - Videoyu `.mkv` formatında kaydedip seçilen ses parçasıyla birleştirmek.
 - Dosyaları **dil, kanal ve başlık** klasör yapısına göre düzenlemek.
 - Çoklu ses parçası sunan kanallarla çalışmak (örneğin MrBeast).
 
-Betik videoları `.mkv` formatında kaydeder ve şu klasör yapısını oluşturur:
+CLI videoları `.mkv` formatında kaydeder ve şu klasör yapısını oluşturur:
 
 ```text
-Videos/<dil>/<kanal>/<başlık>/<başlık>.mkv
+<çıktı-klasörü>/<dil>/<kanal>/<başlık>/<başlık>.mkv
 
 Örnek:
-Videos/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_Course.mkv
+~/Downloads/dbdvdl-output/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_Course.mkv
 ```
 
 ## Test Edilen Ortam
@@ -31,7 +31,7 @@ Videos/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_C
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Python `>=3.10` (uv proje `.python-version` dosyasını kullanabilir)
 - yt-dlp'nin YouTube JavaScript çözümleyicisi için sistem `PATH` içinde Node.js
-- **FFmpeg** sistem `PATH` içinde olmalı veya betikte `FFMPEG_PATH` ile tam yol belirtilmeli
+- **FFmpeg** sistem `PATH` içinde olmalı veya `--ffmpeg-path` ile tam yol belirtilmeli
 
 Node.js ve FFmpeg kurulu mu kontrol etmek için:
 
@@ -44,7 +44,7 @@ Yüklü değilse resmi siteden indirebilirsiniz: [https://ffmpeg.org/](https://f
 
 ## Kurulum
 
-Repoyu klonlayın veya script dosyasını indirin, sonra gerekirse uv kurun:
+Repoyu klonlayın, sonra gerekirse uv kurun:
 
 ```bash
 # macOS / Linux
@@ -63,26 +63,6 @@ uv sync
 uv `.venv/` klasörünü oluşturur ve bağımlılıkları `pyproject.toml` ile `uv.lock` üzerinden kurar.
 Projede `yt-dlp-ejs` bağımlılığı bulunur; YouTube formatlarını ve dublajlı sesleri tam görebilmek için Node.js yine de gereklidir.
 
-## Yapılandırma
-
-CLI için dosya düzenlemeniz gerekmez. `--lang`, `--output-dir` ve `--ffmpeg-path` gibi seçenekleri çalıştırma sırasında verebilirsiniz.
-
-Eski script kullanımı için `script.py` dosyasını açın ve gerekirse düzenleyin:
-
-```python
-DUB_LANGUAGE = "tr"   # İndirilecek dublaj dili, örn: "tr", "en"
-FFMPEG_PATH = None    # Örn: "C:/ffmpeg/ffmpeg.exe"
-                      # None bırakırsanız yt-dlp PATH üzerinden bulur
-VIDEO_URLS = [
-    "https://www.youtube.com/watch?v=EXAMPLE1",
-    "https://www.youtube.com/watch?v=EXAMPLE2",
-]
-```
-
-- `DUB_LANGUAGE`: istediğiniz dublaj dil kodunu girin (`"tr"`, `"en"`, vb.).
-- `FFMPEG_PATH`: FFmpeg sistem `PATH` içinde değilse tam yolunu yazın.
-- `VIDEO_URLS`: indirmek istediğiniz YouTube linklerini ekleyin.
-
 ## Kullanım
 
 CLI'ı uv ile kullanın:
@@ -96,19 +76,16 @@ uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
 
 Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
 
+CLI varsayılan olarak `~/Downloads/dbdvdl-output` altına kaydeder. `--output-dir`
+verirseniz mutlak yol kullanın; `~` desteklenir.
+
 ```bash
 uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE1" \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
   --lang en \
-  --output-dir Videos \
+  --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg
-```
-
-Eski script giriş noktası da hala kullanılabilir:
-
-```bash
-uv run script.py
 ```
 
 Araç şu işlemleri yapar:
@@ -117,7 +94,7 @@ Araç şu işlemleri yapar:
 2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
 3. Videoyu ve seçilen ses parçasını indirir.
 4. Bunları `.mkv` dosyasında birleştirir.
-5. Dosyayı ilgili klasör yapısına kaydeder.
+5. Dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör yapısına kaydeder.
 
 ## Bağımlılıkları Güncelleme
 
@@ -134,11 +111,11 @@ Bağımlılık sürümleri değiştiğinde güncellenen `uv.lock` dosyasını co
 ## Notlar
 
 - `WARNING: Unable to download format 616. Skipping...` gibi uyarılar normaldir. yt-dlp farklı kalite ID'lerini dener, bazıları çalışmayabilir. Çalışan formata otomatik düşer.
-- Çıktı klasör yapısını değiştirmek isterseniz `outtmpl()` fonksiyonunu düzenleyebilirsiniz.
+- Çıktı klasörünü değiştirmek için `--output-dir` kullanabilirsiniz.
 
 ## Yasal Uyarı
 
-- Bu betik yalnızca **kişisel ve eğitim amaçlı kullanım** için sağlanmaktadır.
+- Bu araç yalnızca **kişisel ve eğitim amaçlı kullanım** için sağlanmaktadır.
 - YouTube'un [Kullanım Şartları](https://www.youtube.com/static?template=terms) ve içerik üreticilerin haklarına saygı gösterin.
 - İzin alınmadan video indirip yeniden paylaşmak telif haklarını ihlal edebilir.
 
