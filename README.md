@@ -31,7 +31,7 @@ Example:
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Python `>=3.10` (uv can use the project `.python-version`)
 - Node.js on your system `PATH` for yt-dlp's YouTube JavaScript challenge solver
-- **FFmpeg** installed and accessible in your system `PATH`, or set with `--ffmpeg-path`
+- **FFmpeg** installed and accessible in your system `PATH`, or set in the config file
 
 Check if Node.js and FFmpeg are available:
 
@@ -69,15 +69,37 @@ Use the CLI with uv:
 
 ```bash
 uv run dbdvdl --help
-uv run dbdvdl --doctor
+uv run dbdvdl init
+uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
 ```
 
+Before using `langs` or `download`, create the required user config:
+
+```bash
+uv run dbdvdl init
+```
+
+This writes:
+
+```text
+~/.config/dubbed-video-downloader/config.yaml
+```
+
+with:
+
+```yaml
+output_dir: ~/Downloads/dbdvdl-output
+ffmpeg_path: ffmpeg
+```
+
+Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
+
 You can pass multiple URLs and optional output/FFmpeg settings:
 
-The CLI saves to `~/Downloads/dbdvdl-output` by default. If you pass
-`--output-dir`, use an absolute path; `~` is accepted.
+The CLI saves to the configured `output_dir`. If you pass `--output-dir`, use an
+absolute path; `~` is accepted. CLI options override config values for that run.
 
 ```bash
 uv run dbdvdl download \

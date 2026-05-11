@@ -1,20 +1,22 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from . import __version__
+from . import config as app_config
 from . import core
 from . import doctor
-
-CLI_DEFAULT_OUTPUT_DIR = Path("~/Downloads/dbdvdl-output")
 
 HELP_EPILOG = """
 Examples:
 
-  dbdvdl --doctor
+  dbdvdl init
+
+  dbdvdl doctor
 
   dbdvdl langs https://www.youtube.com/watch?v=VIDEO_ID
 
@@ -43,16 +45,97 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _doctor_callback(value: bool) -> None:
-    if not value:
-        return
+def _load_config_or_exit() -> app_config.AppConfig:
+    try:
+        return app_config.load_config()
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
 
+
+def _normalize_output_dir_or_exit(value: str) -> Path:
+    try:
+        return app_config.normalize_output_dir(value)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _normalize_ffmpeg_path_or_exit(value: str) -> str:
+    try:
+        return app_config.normalize_ffmpeg_path(value)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _prompt_value(value: str | None, prompt: str, default: str) -> str:
+    if value is not None:
+        return value
+    if sys.stdin.isatty():
+        return str(typer.prompt(prompt, default=default))
+    return default
+
+
+def _write_config_or_exit(output_dir: str, ffmpeg_path: str, force: bool) -> None:
+    try:
+        path = app_config.write_config(
+            output_dir=output_dir,
+            ffmpeg_path=ffmpeg_path,
+            overwrite=force,
+        )
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.secho(f"Wrote config: {path}", fg=typer.colors.GREEN)
+
+
+@app.command("init")
+def init_command(
+    output_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Absolute directory where videos will be saved. Supports ~.",
+        ),
+    ] = None,
+    ffmpeg_path: Annotated[
+        str | None,
+        typer.Option(
+            "--ffmpeg-path",
+            help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite the existing config file."),
+    ] = False,
+) -> None:
+    """Create the required user config file."""
+    selected_output_dir = _prompt_value(
+        output_dir,
+        "Output directory",
+        app_config.DEFAULT_OUTPUT_DIR,
+    )
+    selected_ffmpeg_path = _prompt_value(
+        ffmpeg_path,
+        "FFmpeg path",
+        app_config.DEFAULT_FFMPEG_PATH,
+    )
+    _write_config_or_exit(selected_output_dir, selected_ffmpeg_path, force)
+
+
+@app.command("doctor")
+def doctor_command() -> None:
+    """Run environment and config checks."""
     results = doctor.run_checks()
     name_width = max(len(result.name) for result in results)
 
     typer.echo("System check\n")
     for result in results:
-        status = "OK" if result.ok else "Missing"
+        status = "OK" if result.ok else "FAIL"
         color = typer.colors.GREEN if result.ok else typer.colors.RED
         typer.echo(f"{result.name:<{name_width}}  ", nl=False)
         typer.secho(f"{status:<7}", fg=color, nl=False)
@@ -64,15 +147,6 @@ def _doctor_callback(value: bool) -> None:
     raise typer.Exit()
 
 
-def _output_dir_callback(value: Path) -> Path:
-    output_dir = value.expanduser()
-    if not output_dir.is_absolute():
-        raise typer.BadParameter(
-            "must be an absolute path. Use ~/Downloads/dbdvdl-output or /path/to/output."
-        )
-    return output_dir
-
-
 @app.callback()
 def main(
     version: Annotated[
@@ -81,15 +155,6 @@ def main(
             "--version",
             callback=_version_callback,
             help="Show the version and exit.",
-            is_eager=True,
-        ),
-    ] = False,
-    doctor_check: Annotated[
-        bool,
-        typer.Option(
-            "--doctor",
-            callback=_doctor_callback,
-            help="Run environment checks and exit.",
             is_eager=True,
         ),
     ] = False,
@@ -111,25 +176,35 @@ def download_command(
         typer.Option("--lang", "-l", help="Target dub language code."),
     ] = "tr",
     output_dir: Annotated[
-        Path,
+        str | None,
         typer.Option(
             "--output-dir",
             "-o",
-            callback=_output_dir_callback,
             help="Absolute directory where videos will be saved. Supports ~.",
         ),
-    ] = CLI_DEFAULT_OUTPUT_DIR,
+    ] = None,
     ffmpeg_path: Annotated[
-        Path | None,
+        str | None,
         typer.Option(
             "--ffmpeg-path",
-            help="Path to the FFmpeg executable.",
-            file_okay=True,
-            dir_okay=False,
+            help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
         ),
     ] = None,
 ) -> None:
     """Download URL(s) with a dub language."""
+    loaded_config = _load_config_or_exit()
+    effective_output_dir = (
+        _normalize_output_dir_or_exit(output_dir)
+        if output_dir is not None
+        else loaded_config.output_dir
+    )
+    effective_ffmpeg_path = (
+        _normalize_ffmpeg_path_or_exit(ffmpeg_path)
+        if ffmpeg_path is not None
+        else loaded_config.ffmpeg_path
+    )
+    ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
+
     failures = 0
     for url in urls:
         typer.echo(f"\n==> Downloading: {url}")
@@ -137,8 +212,8 @@ def download_command(
             core.download(
                 url=url,
                 lang=lang,
-                ffmpeg_path=ffmpeg_path,
-                output_dir=output_dir,
+                ffmpeg_path=ffmpeg_location,
+                output_dir=effective_output_dir,
             )
             typer.secho("Finished", fg=typer.colors.GREEN)
         except Exception as exc:
@@ -160,6 +235,7 @@ def langs_command(
     ],
 ) -> None:
     """Show audio language codes for a URL."""
+    _load_config_or_exit()
     langs = core.get_available_audio_langs_for_url(url)
     if not langs:
         typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)

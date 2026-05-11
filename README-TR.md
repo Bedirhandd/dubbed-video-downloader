@@ -31,7 +31,7 @@ CLI videoları `.mkv` formatında kaydeder ve şu klasör yapısını oluşturur
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Python `>=3.10` (uv proje `.python-version` dosyasını kullanabilir)
 - yt-dlp'nin YouTube JavaScript çözümleyicisi için sistem `PATH` içinde Node.js
-- **FFmpeg** sistem `PATH` içinde olmalı veya `--ffmpeg-path` ile tam yol belirtilmeli
+- **FFmpeg** sistem `PATH` içinde olmalı veya config dosyasında belirtilmeli
 
 Node.js ve FFmpeg kurulu mu kontrol etmek için:
 
@@ -69,15 +69,38 @@ CLI'ı uv ile kullanın:
 
 ```bash
 uv run dbdvdl --help
-uv run dbdvdl --doctor
+uv run dbdvdl init
+uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
 ```
 
+`langs` veya `download` kullanmadan önce gerekli kullanıcı config dosyasını oluşturun:
+
+```bash
+uv run dbdvdl init
+```
+
+Bu komut şuraya yazar:
+
+```text
+~/.config/dubbed-video-downloader/config.yaml
+```
+
+İçerik:
+
+```yaml
+output_dir: ~/Downloads/dbdvdl-output
+ffmpeg_path: ffmpeg
+```
+
+`ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
+
 Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
 
-CLI varsayılan olarak `~/Downloads/dbdvdl-output` altına kaydeder. `--output-dir`
-verirseniz mutlak yol kullanın; `~` desteklenir.
+CLI config içindeki `output_dir` altına kaydeder. `--output-dir` verirseniz
+mutlak yol kullanın; `~` desteklenir. CLI seçenekleri o çalıştırma için config
+değerlerini ezer.
 
 ```bash
 uv run dbdvdl download \
