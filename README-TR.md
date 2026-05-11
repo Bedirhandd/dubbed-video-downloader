@@ -70,6 +70,7 @@ CLI'ı uv ile kullanın:
 ```bash
 uv run dbdvdl --help
 uv run dbdvdl init
+uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
@@ -79,6 +80,12 @@ uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
 
 ```bash
 uv run dbdvdl init
+```
+
+Aynı işlem için eşdeğer config alt komutunu da kullanabilirsiniz:
+
+```bash
+uv run dbdvdl config init
 ```
 
 Bu komut şuraya yazar:
@@ -95,6 +102,15 @@ ffmpeg_path: ffmpeg
 ```
 
 `ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
+
+Config dosyasını görmek veya kaldırmak için:
+
+```bash
+uv run dbdvdl config show
+uv run dbdvdl config remove
+```
+
+Kaldırdıktan sonra yeni config oluşturmak için tekrar `uv run dbdvdl init` çalıştırabilirsiniz.
 
 Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
 

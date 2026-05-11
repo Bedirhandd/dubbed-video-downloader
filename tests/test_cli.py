@@ -39,6 +39,140 @@ class CliTests(unittest.TestCase):
         self.assertEqual(second.exit_code, 1, second.output)
         self.assertIn("--force", second.output)
 
+    def test_config_init_writes_default_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(app, ["config", "init"], env={"HOME": tmpdir})
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                "output_dir: ~/Downloads/dbdvdl-output\nffmpeg_path: ffmpeg\n",
+            )
+
+    def test_config_show_displays_resolved_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            result = self.runner.invoke(
+                app,
+                ["config", "show"],
+                env={"HOME": tmpdir},
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn(f"Config path: {config_path}", result.output)
+        self.assertIn(
+            f"Output directory: {home / 'Downloads' / 'from-config'}",
+            result.output,
+        )
+        self.assertIn("FFmpeg path: ffmpeg", result.output)
+
+    def test_config_show_requires_existing_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["config", "show"],
+                env={"HOME": tmpdir},
+            )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("dbdvdl init", result.output)
+
+    def test_config_remove_yes_removes_config_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_dir = home / ".config" / "dubbed-video-downloader"
+            config_dir.mkdir(parents=True)
+            (config_dir / "config.yaml").write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            result = self.runner.invoke(
+                app,
+                ["config", "remove", "--yes"],
+                env={"HOME": tmpdir},
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertFalse(config_dir.exists())
+            self.assertIn(f"Removed config directory: {config_dir}", result.output)
+            self.assertIn("dbdvdl init", result.output)
+
+    def test_config_remove_yes_succeeds_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["config", "remove", "--yes"],
+                env={"HOME": tmpdir},
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Nothing to remove.", result.output)
+
+    def test_config_remove_cancels_when_user_answers_no(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_dir = home / ".config" / "dubbed-video-downloader"
+            config_dir.mkdir(parents=True)
+            (config_dir / "config.yaml").write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["config", "remove"],
+                    input="n\n",
+                    env={"HOME": tmpdir},
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue(config_dir.exists())
+            self.assertIn("Config removal cancelled.", result.output)
+
+    def test_config_remove_refuses_non_interactive_without_yes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_dir = home / ".config" / "dubbed-video-downloader"
+            config_dir.mkdir(parents=True)
+            (config_dir / "config.yaml").write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=False,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["config", "remove"],
+                    env={"HOME": tmpdir},
+                )
+
+            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertTrue(config_dir.exists())
+            self.assertIn("--yes", result.output)
+
     def test_download_requires_config_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("dubbed_video_downloader.cli.core.download") as download:

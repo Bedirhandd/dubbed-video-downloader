@@ -16,6 +16,8 @@ Examples:
 
   dbdvdl init
 
+  dbdvdl config show
+
   dbdvdl doctor
 
   dbdvdl langs https://www.youtube.com/watch?v=VIDEO_ID
@@ -37,6 +39,13 @@ app = typer.Typer(
     add_completion=False,
     rich_markup_mode="rich",
 )
+
+config_app = typer.Typer(
+    help="Manage the required user config.",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
+app.add_typer(config_app, name="config")
 
 
 def _version_callback(value: bool) -> None:
@@ -72,9 +81,13 @@ def _normalize_ffmpeg_path_or_exit(value: str) -> str:
 def _prompt_value(value: str | None, prompt: str, default: str) -> str:
     if value is not None:
         return value
-    if sys.stdin.isatty():
+    if _stdin_is_interactive():
         return str(typer.prompt(prompt, default=default))
     return default
+
+
+def _stdin_is_interactive() -> bool:
+    return sys.stdin.isatty()
 
 
 def _write_config_or_exit(output_dir: str, ffmpeg_path: str, force: bool) -> None:
@@ -89,6 +102,26 @@ def _write_config_or_exit(output_dir: str, ffmpeg_path: str, force: bool) -> Non
         raise typer.Exit(code=1) from exc
 
     typer.secho(f"Wrote config: {path}", fg=typer.colors.GREEN)
+
+
+def _init_config(output_dir: str | None, ffmpeg_path: str | None, force: bool) -> None:
+    selected_output_dir = _prompt_value(
+        output_dir,
+        "Output directory",
+        app_config.DEFAULT_OUTPUT_DIR,
+    )
+    selected_ffmpeg_path = _prompt_value(
+        ffmpeg_path,
+        "FFmpeg path",
+        app_config.DEFAULT_FFMPEG_PATH,
+    )
+    _write_config_or_exit(selected_output_dir, selected_ffmpeg_path, force)
+
+
+def _print_config_recreate_hint() -> None:
+    typer.echo("\nYou can create a new config with:")
+    typer.echo("  dbdvdl init")
+    typer.echo("  dbdvdl init --output-dir ~/Videos --ffmpeg-path /path/to/ffmpeg")
 
 
 @app.command("init")
@@ -114,17 +147,85 @@ def init_command(
     ] = False,
 ) -> None:
     """Create the required user config file."""
-    selected_output_dir = _prompt_value(
-        output_dir,
-        "Output directory",
-        app_config.DEFAULT_OUTPUT_DIR,
-    )
-    selected_ffmpeg_path = _prompt_value(
-        ffmpeg_path,
-        "FFmpeg path",
-        app_config.DEFAULT_FFMPEG_PATH,
-    )
-    _write_config_or_exit(selected_output_dir, selected_ffmpeg_path, force)
+    _init_config(output_dir, ffmpeg_path, force)
+
+
+@config_app.command("init")
+def config_init_command(
+    output_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--output-dir",
+            "-o",
+            help="Absolute directory where videos will be saved. Supports ~.",
+        ),
+    ] = None,
+    ffmpeg_path: Annotated[
+        str | None,
+        typer.Option(
+            "--ffmpeg-path",
+            help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite the existing config file."),
+    ] = False,
+) -> None:
+    """Create the required user config file."""
+    _init_config(output_dir, ffmpeg_path, force)
+
+
+@config_app.command("show")
+def config_show_command() -> None:
+    """Show the resolved user config."""
+    loaded_config = _load_config_or_exit()
+    typer.echo(f"Config path: {app_config.get_config_path()}")
+    typer.echo(f"Output directory: {loaded_config.output_dir}")
+    typer.echo(f"FFmpeg path: {loaded_config.ffmpeg_path}")
+
+
+@config_app.command("remove")
+def config_remove_command(
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Remove config without confirmation."),
+    ] = False,
+) -> None:
+    """Remove the user config directory."""
+    config_dir = app_config.get_config_dir()
+    if not config_dir.exists():
+        typer.echo(f"No config found at {config_dir}.")
+        typer.echo("Nothing to remove.")
+        return
+
+    if not yes:
+        if not _stdin_is_interactive():
+            typer.secho(
+                "Refusing to remove config non-interactively without --yes.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+        confirmed = typer.confirm(f"Remove config directory {config_dir}?")
+        if not confirmed:
+            typer.echo("Config removal cancelled.")
+            return
+
+    try:
+        removed_path = app_config.remove_config_dir(config_dir)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+    if removed_path is None:
+        typer.echo(f"No config found at {config_dir}.")
+        typer.echo("Nothing to remove.")
+        return
+
+    typer.secho(f"Removed config directory: {removed_path}", fg=typer.colors.GREEN)
+    _print_config_recreate_hint()
 
 
 @app.command("doctor")

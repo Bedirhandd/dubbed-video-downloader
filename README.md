@@ -70,6 +70,7 @@ Use the CLI with uv:
 ```bash
 uv run dbdvdl --help
 uv run dbdvdl init
+uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
@@ -79,6 +80,12 @@ Before using `langs` or `download`, create the required user config:
 
 ```bash
 uv run dbdvdl init
+```
+
+You can also use the equivalent config subcommand:
+
+```bash
+uv run dbdvdl config init
 ```
 
 This writes:
@@ -95,6 +102,15 @@ ffmpeg_path: ffmpeg
 ```
 
 Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
+
+Inspect or remove the config with:
+
+```bash
+uv run dbdvdl config show
+uv run dbdvdl config remove
+```
+
+After removing it, run `uv run dbdvdl init` again to create a fresh config.
 
 You can pass multiple URLs and optional output/FFmpeg settings:
 

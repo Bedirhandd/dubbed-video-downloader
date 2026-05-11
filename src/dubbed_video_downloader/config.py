@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,11 @@ class ConfigError(RuntimeError):
 
 
 def get_config_path() -> Path:
-    return Path.home() / ".config" / CONFIG_DIR_NAME / CONFIG_FILE_NAME
+    return get_config_dir() / CONFIG_FILE_NAME
+
+
+def get_config_dir() -> Path:
+    return Path.home() / ".config" / CONFIG_DIR_NAME
 
 
 def load_config(path: Path | None = None) -> AppConfig:
@@ -91,6 +96,16 @@ def write_config(
     )
     config_path.write_text(rendered, encoding="utf-8")
     return config_path
+
+
+def remove_config_dir(path: Path | None = None) -> Path | None:
+    config_dir = path or get_config_dir()
+    if not config_dir.exists():
+        return None
+    if not config_dir.is_dir():
+        raise ConfigError(f"{config_dir} exists but is not a directory.")
+    shutil.rmtree(config_dir)
+    return config_dir
 
 
 def normalize_output_dir(value: str) -> Path:
