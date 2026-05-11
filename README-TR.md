@@ -136,6 +136,15 @@ oluşturma işlemi yapmaz:
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
 ```
 
+CLI çıktısını sade tutmak için yt-dlp uyarıları ve debug mesajları varsayılan
+olarak gizlenir. Sorun giderirken `download` veya `langs` komutlarında
+`--verbose` kullanabilirsiniz:
+
+```bash
+uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --verbose
+```
+
 Araç şu işlemleri yapar:
 
 1. Videoda istenen dublaj dili mevcut mu kontrol eder.
@@ -160,7 +169,7 @@ Bağımlılık sürümleri değiştiğinde güncellenen `uv.lock` dosyasını co
 
 ## Notlar
 
-- `WARNING: Unable to download format 616. Skipping...` gibi uyarılar normaldir. yt-dlp farklı kalite ID'lerini dener, bazıları çalışmayabilir. Çalışan formata otomatik düşer.
+- YouTube çıkarımı başarısız olursa veya beklenmedik davranırsa, yt-dlp uyarılarını ve debug çıktısını görmek için aynı `langs` veya `download` komutunu `--verbose` ile tekrar çalıştırın.
 - Çıktı klasörünü değiştirmek için `--output-dir` kullanabilirsiniz.
 
 ## Yasal Uyarı

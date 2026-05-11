@@ -310,6 +310,14 @@ def download_command(
             help="Validate metadata and print the planned output without downloading.",
         ),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show yt-dlp warnings and debug output.",
+        ),
+    ] = False,
 ) -> None:
     """Download URL(s) with a dub language."""
     loaded_config = _load_config_or_exit()
@@ -336,6 +344,7 @@ def download_command(
                     lang=lang,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
+                    verbose=verbose,
                 )
                 _print_download_plan(plan)
                 typer.secho("Dry run OK", fg=typer.colors.GREEN)
@@ -345,6 +354,7 @@ def download_command(
                     lang=lang,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
+                    verbose=verbose,
                 )
                 typer.secho("Finished", fg=typer.colors.GREEN)
         except Exception as exc:
@@ -364,10 +374,18 @@ def langs_command(
             metavar="URL",
         ),
     ],
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show yt-dlp warnings and debug output.",
+        ),
+    ] = False,
 ) -> None:
     """Show audio language codes for a URL."""
     _load_config_or_exit()
-    langs = core.get_available_audio_langs_for_url(url)
+    langs = core.get_available_audio_langs_for_url(url, verbose=verbose)
     if not langs:
         typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
         raise typer.Exit(code=1)

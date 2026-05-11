@@ -34,9 +34,18 @@ def ydl_base_opts() -> dict[str, Any]:
     }
 
 
-def get_video_info(url: str, quiet: bool = True) -> dict[str, Any]:
+def get_video_info(
+    url: str,
+    quiet: bool = True,
+    verbose: bool = False,
+) -> dict[str, Any]:
     """Fetch video metadata without downloading the video."""
-    with yt_dlp.YoutubeDL({**ydl_base_opts(), "quiet": quiet}) as ydl:
+    with yt_dlp.YoutubeDL(
+        {
+            **ydl_base_opts(),
+            **_yt_dlp_diagnostic_opts(quiet=quiet, verbose=verbose),
+        }
+    ) as ydl:
         info = ydl.extract_info(url, download=False)
     return info
 
@@ -54,9 +63,9 @@ def get_available_audio_langs(info: dict[str, Any]) -> set[str]:
     return langs
 
 
-def get_available_audio_langs_for_url(url: str) -> set[str]:
+def get_available_audio_langs_for_url(url: str, verbose: bool = False) -> set[str]:
     """Fetch video metadata and return available audio languages."""
-    return get_available_audio_langs(get_video_info(url))
+    return get_available_audio_langs(get_video_info(url, verbose=verbose))
 
 
 def ensure_lang(info: dict[str, Any], target: str) -> None:
@@ -86,9 +95,10 @@ def plan_download(
     ffmpeg_path: str | Path | None = None,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
+    verbose: bool = False,
 ) -> DownloadPlan:
     """Validate and describe a download without writing files."""
-    info = get_video_info(url)
+    info = get_video_info(url, verbose=verbose)
     ensure_lang(info, lang)
 
     return DownloadPlan(
@@ -113,9 +123,10 @@ def download(
     ffmpeg_path: str | Path | None = None,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
+    verbose: bool = False,
 ) -> None:
     """Download a single video with the specified dub language."""
-    info = get_video_info(url)
+    info = get_video_info(url, verbose=verbose)
     ensure_lang(info, lang)
 
     Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
@@ -125,6 +136,7 @@ def download(
             ffmpeg_path=ffmpeg_path,
             output_dir=output_dir,
             merge_output_format=merge_output_format,
+            verbose=verbose,
         )
     ) as ydl:
         ydl.download([url])
@@ -136,9 +148,11 @@ def _download_ydl_opts(
     ffmpeg_path: str | Path | None,
     output_dir: str | Path,
     merge_output_format: str,
+    verbose: bool,
 ) -> dict[str, Any]:
     ydl_opts: dict[str, Any] = {
         **ydl_base_opts(),
+        **_yt_dlp_diagnostic_opts(verbose=verbose),
         "format": f"bv*+bestaudio[language=\"{lang}\"]",
         "outtmpl": outtmpl(lang, output_dir),
         "restrictfilenames": True,
@@ -163,6 +177,7 @@ def _planned_output_path(
         ffmpeg_path=ffmpeg_path,
         output_dir=output_dir,
         merge_output_format=merge_output_format,
+        verbose=False,
     )
 
     with yt_dlp.YoutubeDL({**ydl_opts, "quiet": True}) as ydl:
@@ -175,3 +190,17 @@ def _planned_output_path(
 
 def _optional_string(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _yt_dlp_diagnostic_opts(
+    *,
+    verbose: bool,
+    quiet: bool | None = None,
+) -> dict[str, Any]:
+    opts: dict[str, Any] = {
+        "verbose": verbose,
+        "no_warnings": not verbose,
+    }
+    if quiet is not None:
+        opts["quiet"] = False if verbose else quiet
+    return opts

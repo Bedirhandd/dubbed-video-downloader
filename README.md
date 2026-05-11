@@ -134,6 +134,14 @@ planned output path without downloading, merging, or creating output folders:
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --dry-run
 ```
 
+By default, yt-dlp warnings and debug messages are hidden to keep CLI output
+focused. Use `--verbose` on `download` or `langs` when troubleshooting:
+
+```bash
+uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --lang tr --verbose
+```
+
 The tool will:
 
 1. Check if the requested dub language is available for each video.
@@ -162,7 +170,7 @@ Contributions and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 ## Notes
 
-- If the CLI prints warnings like `WARNING: Unable to download format 616. Skipping...`, this is normal. yt-dlp tries multiple format IDs, and some may be unavailable. It automatically falls back to a working format.
+- If YouTube extraction fails or behaves unexpectedly, rerun the same `langs` or `download` command with `--verbose` to show yt-dlp warnings and debug output.
 - Output paths can be customized with `--output-dir`.
 
 ## Legal Disclaimer

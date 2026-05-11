@@ -187,11 +187,12 @@ class CliTests(unittest.TestCase):
         self.assertIn("dbdvdl init", result.output)
         download.assert_not_called()
 
-    def test_download_help_includes_dry_run(self) -> None:
+    def test_download_help_includes_dry_run_and_verbose(self) -> None:
         result = self.runner.invoke(app, ["download", "--help"])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--dry-run", result.output)
+        self.assertIn("--verbose", result.output)
 
     def test_download_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -229,6 +230,39 @@ class CliTests(unittest.TestCase):
             lang="en",
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
+            verbose=False,
+        )
+
+    def test_download_verbose_passes_through_to_core_download(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--verbose",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        download.assert_called_once_with(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="tr",
+            ffmpeg_path=None,
+            output_dir=home / "Downloads" / "from-config",
+            verbose=True,
         )
 
     def test_download_dry_run_requires_config_before_network_work(self) -> None:
@@ -299,10 +333,54 @@ class CliTests(unittest.TestCase):
             lang="en",
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
+            verbose=False,
         )
         download.assert_not_called()
         self.assertIn("Dry run: no files will be downloaded or created.", result.output)
         self.assertIn(f"Output: {planned_output}", result.output)
+
+    def test_download_dry_run_verbose_passes_through_to_core_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.plan_download",
+                return_value=core.DownloadPlan(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    title="Title",
+                    uploader="Channel",
+                    available_langs=("tr",),
+                    output_path=home / "Downloads" / "from-config" / "tr" / "Title.mkv",
+                ),
+            ) as plan:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                        "--verbose",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        plan.assert_called_once_with(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="tr",
+            ffmpeg_path=None,
+            output_dir=home / "Downloads" / "from-config",
+            verbose=True,
+        )
 
     def test_download_dry_run_reports_plan_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -352,6 +430,74 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
         langs.assert_not_called()
+
+    def test_langs_help_includes_verbose(self) -> None:
+        result = self.runner.invoke(app, ["langs", "--help"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("--verbose", result.output)
+
+    def test_langs_passes_verbose_false_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                return_value={"tr", "en"},
+            ) as langs:
+                result = self.runner.invoke(
+                    app,
+                    ["langs", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        langs.assert_called_once_with(
+            "https://www.youtube.com/watch?v=EXAMPLE",
+            verbose=False,
+        )
+        self.assertIn("en", result.output)
+        self.assertIn("tr", result.output)
+
+    def test_langs_passes_verbose_true(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                return_value={"tr"},
+            ) as langs:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "langs",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--verbose",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        langs.assert_called_once_with(
+            "https://www.youtube.com/watch?v=EXAMPLE",
+            verbose=True,
+        )
 
 
 if __name__ == "__main__":
