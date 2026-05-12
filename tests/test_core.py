@@ -35,7 +35,7 @@ class CoreTests(unittest.TestCase):
         )
         self.assertTrue(callable(opts["retry_sleep_functions"]["http"]))
 
-    def test_get_video_info_enables_verbose_ytdlp_output(self) -> None:
+    def test_get_video_info_enables_verbose_ytdlp_output_without_debug(self) -> None:
         with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
             ydl = youtube_dl.return_value.__enter__.return_value
             ydl.extract_info.return_value = {"formats": []}
@@ -43,6 +43,21 @@ class CoreTests(unittest.TestCase):
             core.get_video_info(
                 "https://www.youtube.com/watch?v=EXAMPLE",
                 verbose=True,
+            )
+
+        opts = youtube_dl.call_args.args[0]
+        self.assertFalse(opts["quiet"])
+        self.assertFalse(opts["no_warnings"])
+        self.assertFalse(opts["verbose"])
+
+    def test_get_video_info_enables_debug_ytdlp_output(self) -> None:
+        with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
+            ydl = youtube_dl.return_value.__enter__.return_value
+            ydl.extract_info.return_value = {"formats": []}
+
+            core.get_video_info(
+                "https://www.youtube.com/watch?v=EXAMPLE",
+                debug=True,
             )
 
         opts = youtube_dl.call_args.args[0]
@@ -241,6 +256,7 @@ class CoreTests(unittest.TestCase):
                 )
 
         opts = youtube_dl.call_args.args[0]
+        self.assertTrue(opts["quiet"])
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
         self.assertEqual(opts["format"], 'bv*+bestaudio[language="tr"]')
@@ -281,7 +297,7 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("merge_output_format", opts)
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
-    def test_download_enables_verbose_ytdlp_output(self) -> None:
+    def test_download_enables_verbose_ytdlp_output_without_debug(self) -> None:
         info = {
             "title": "A Title",
             "formats": [
@@ -306,6 +322,36 @@ class CoreTests(unittest.TestCase):
                 )
 
         opts = youtube_dl.call_args.args[0]
+        self.assertFalse(opts["quiet"])
+        self.assertFalse(opts["no_warnings"])
+        self.assertFalse(opts["verbose"])
+
+    def test_download_enables_debug_ytdlp_output(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    debug=True,
+                )
+
+        opts = youtube_dl.call_args.args[0]
+        self.assertFalse(opts["quiet"])
         self.assertFalse(opts["no_warnings"])
         self.assertTrue(opts["verbose"])
 

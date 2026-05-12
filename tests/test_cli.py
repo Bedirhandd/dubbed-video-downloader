@@ -312,6 +312,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--dry-run", result.output)
         self.assertIn("--verbose", result.output)
+        self.assertIn("--debug", result.output)
         self.assertIn("--mode", result.output)
         self.assertIn("--retry-on-network-failure", result.output)
         self.assertIn("Overrides config", result.output)
@@ -364,6 +365,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
             verbose=False,
+            debug=False,
             retry_on_network_failure=6,
         )
 
@@ -401,6 +403,44 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
+            debug=False,
+            retry_on_network_failure=3,
+        )
+
+    def test_download_debug_passes_through_to_core_download(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--debug",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        download.assert_called_once_with(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="en",
+            download_mode=core.DownloadMode.VIDEO,
+            ffmpeg_path=None,
+            output_dir=home / "Downloads" / "from-config",
+            verbose=False,
+            debug=True,
             retry_on_network_failure=3,
         )
 
@@ -544,6 +584,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
             verbose=False,
+            debug=False,
             retry_on_network_failure=6,
         )
         download.assert_not_called()
@@ -639,6 +680,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
+            debug=False,
             retry_on_network_failure=3,
         )
 
@@ -677,6 +719,45 @@ class CliTests(unittest.TestCase):
         plan.assert_called_once()
         download.assert_not_called()
         self.assertIn("Error: missing language", result.output)
+        self.assertNotIn("Traceback", result.output)
+
+    def test_download_dry_run_reports_traceback_with_debug(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("dubbed_video_downloader.cli.core.download") as download,
+                patch(
+                    "dubbed_video_downloader.cli.core.plan_download",
+                    side_effect=RuntimeError("missing language"),
+                ) as plan,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                        "--debug",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        plan.assert_called_once()
+        download.assert_not_called()
+        self.assertIn("Error: missing language", result.output)
+        self.assertIn("Traceback", result.output)
 
     def test_langs_requires_config_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -698,6 +779,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--verbose", result.output)
+        self.assertIn("--debug", result.output)
         self.assertIn("--retry-on-network-failure", result.output)
 
     def test_langs_passes_verbose_false_by_default(self) -> None:
@@ -728,6 +810,7 @@ class CliTests(unittest.TestCase):
         langs.assert_called_once_with(
             "https://www.youtube.com/watch?v=EXAMPLE",
             verbose=False,
+            debug=False,
             retry_on_network_failure=3,
         )
         self.assertIn("en", result.output)
@@ -768,7 +851,44 @@ class CliTests(unittest.TestCase):
         langs.assert_called_once_with(
             "https://www.youtube.com/watch?v=EXAMPLE",
             verbose=True,
+            debug=False,
             retry_on_network_failure=6,
+        )
+
+    def test_langs_passes_debug_true(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                return_value={"tr"},
+            ) as langs:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "langs",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--debug",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        langs.assert_called_once_with(
+            "https://www.youtube.com/watch?v=EXAMPLE",
+            verbose=False,
+            debug=True,
+            retry_on_network_failure=3,
         )
 
 

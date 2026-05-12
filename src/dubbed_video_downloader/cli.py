@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import traceback
 from pathlib import Path
 from typing import Annotated
 
@@ -486,7 +487,14 @@ def download_command(
         typer.Option(
             "--verbose",
             "-v",
-            help="Show yt-dlp warnings and debug output.",
+            help="Show yt-dlp progress, info, and warnings.",
+        ),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help="Show yt-dlp debug output and error tracebacks.",
         ),
     ] = False,
     retry_on_network_failure: Annotated[
@@ -539,6 +547,7 @@ def download_command(
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,
+                    debug=debug,
                     retry_on_network_failure=effective_retry_on_network_failure,
                 )
                 _print_download_plan(plan)
@@ -551,12 +560,15 @@ def download_command(
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,
+                    debug=debug,
                     retry_on_network_failure=effective_retry_on_network_failure,
                 )
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
         except Exception as exc:
             failures += 1
             typer.secho(f"Error: {exc}", fg=typer.colors.RED, bold=True, err=True)
+            if debug:
+                traceback.print_exception(exc, file=sys.stderr)
 
     if failures:
         raise typer.Exit(code=1)
@@ -576,7 +588,14 @@ def langs_command(
         typer.Option(
             "--verbose",
             "-v",
-            help="Show yt-dlp warnings and debug output.",
+            help="Show yt-dlp progress, info, and warnings.",
+        ),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help="Show yt-dlp debug output.",
         ),
     ] = False,
     retry_on_network_failure: Annotated[
@@ -597,6 +616,7 @@ def langs_command(
     langs = core.get_available_audio_langs_for_url(
         url,
         verbose=verbose,
+        debug=debug,
         retry_on_network_failure=effective_retry_on_network_failure,
     )
     if not langs:

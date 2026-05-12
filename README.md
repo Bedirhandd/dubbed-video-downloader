@@ -167,12 +167,21 @@ or creating output folders:
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-By default, yt-dlp warnings and debug messages are hidden to keep CLI output
-focused. Use `--verbose` on `download` or `langs` when troubleshooting:
+By default, yt-dlp progress, info, warnings, and debug messages are hidden to
+keep CLI output focused. Use `--verbose` on `download` or `langs` to show
+yt-dlp progress, info, and warnings:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --verbose
+```
+
+Use `--debug` for deeper troubleshooting. This enables yt-dlp debug output and
+prints tracebacks for per-URL download failures:
+
+```bash
+uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --debug
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --debug
 ```
 
 In video mode, the tool will:
@@ -207,7 +216,7 @@ Contributions and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 ## Notes
 
-- If YouTube extraction fails or behaves unexpectedly, rerun the same `langs` or `download` command with `--verbose` to show yt-dlp warnings and debug output.
+- If YouTube extraction fails or behaves unexpectedly, rerun the same `langs` or `download` command with `--verbose` to show yt-dlp progress and warnings, or `--debug` for debug logs and tracebacks.
 - Output paths can be customized with `--output-dir`.
 
 ## Legal Disclaimer

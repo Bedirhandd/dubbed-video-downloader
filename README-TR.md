@@ -169,13 +169,21 @@ veya çıktı klasörü oluşturma işlemi yapmaz:
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-CLI çıktısını sade tutmak için yt-dlp uyarıları ve debug mesajları varsayılan
-olarak gizlenir. Sorun giderirken `download` veya `langs` komutlarında
-`--verbose` kullanabilirsiniz:
+CLI çıktısını sade tutmak için yt-dlp ilerleme, bilgi, uyarı ve debug mesajları
+varsayılan olarak gizlenir. yt-dlp ilerleme, bilgi ve uyarılarını görmek için
+`download` veya `langs` komutlarında `--verbose` kullanabilirsiniz:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --verbose
+```
+
+Daha ayrıntılı sorun giderme için `--debug` kullanabilirsiniz. Bu seçenek
+yt-dlp debug çıktısını açar ve URL bazlı indirme hatalarında traceback yazdırır:
+
+```bash
+uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --debug
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --debug
 ```
 
 Video modunda araç şu işlemleri yapar:
@@ -205,7 +213,7 @@ Bağımlılık sürümleri değiştiğinde güncellenen `uv.lock` dosyasını co
 
 ## Notlar
 
-- YouTube çıkarımı başarısız olursa veya beklenmedik davranırsa, yt-dlp uyarılarını ve debug çıktısını görmek için aynı `langs` veya `download` komutunu `--verbose` ile tekrar çalıştırın.
+- YouTube çıkarımı başarısız olursa veya beklenmedik davranırsa, yt-dlp ilerleme ve uyarılarını görmek için aynı `langs` veya `download` komutunu `--verbose` ile, debug logları ve traceback için `--debug` ile tekrar çalıştırın.
 - Çıktı klasörünü değiştirmek için `--output-dir` kullanabilirsiniz.
 
 ## Yasal Uyarı

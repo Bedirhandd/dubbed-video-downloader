@@ -43,8 +43,8 @@ def ydl_base_opts() -> dict[str, Any]:
 
 def get_video_info(
     url: str,
-    quiet: bool = True,
     verbose: bool = False,
+    debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> dict[str, Any]:
     """Fetch video metadata without downloading the video."""
@@ -52,7 +52,7 @@ def get_video_info(
         {
             **ydl_base_opts(),
             **_network_retry_ydl_opts(retry_on_network_failure),
-            **_yt_dlp_diagnostic_opts(quiet=quiet, verbose=verbose),
+            **_yt_dlp_output_opts(verbose=verbose, debug=debug),
         }
     ) as ydl:
         info = ydl.extract_info(url, download=False)
@@ -75,6 +75,7 @@ def get_available_audio_langs(info: dict[str, Any]) -> set[str]:
 def get_available_audio_langs_for_url(
     url: str,
     verbose: bool = False,
+    debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> set[str]:
     """Fetch video metadata and return available audio languages."""
@@ -82,6 +83,7 @@ def get_available_audio_langs_for_url(
         get_video_info(
             url,
             verbose=verbose,
+            debug=debug,
             retry_on_network_failure=retry_on_network_failure,
         )
     )
@@ -116,6 +118,7 @@ def plan_download(
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
     verbose: bool = False,
+    debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> DownloadPlan:
     """Validate and describe a download without writing files."""
@@ -123,6 +126,7 @@ def plan_download(
     info = get_video_info(
         url,
         verbose=verbose,
+        debug=debug,
         retry_on_network_failure=retry_on_network_failure,
     )
     ensure_lang(info, lang)
@@ -141,6 +145,8 @@ def plan_download(
             ffmpeg_path=ffmpeg_path,
             output_dir=output_dir,
             merge_output_format=merge_output_format,
+            verbose=verbose,
+            debug=debug,
             retry_on_network_failure=retry_on_network_failure,
         ),
     )
@@ -154,6 +160,7 @@ def download(
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
     verbose: bool = False,
+    debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> None:
     """Download a single URL with the specified dub language and mode."""
@@ -161,6 +168,7 @@ def download(
     info = get_video_info(
         url,
         verbose=verbose,
+        debug=debug,
         retry_on_network_failure=retry_on_network_failure,
     )
     ensure_lang(info, lang)
@@ -174,6 +182,7 @@ def download(
             output_dir=output_dir,
             merge_output_format=merge_output_format,
             verbose=verbose,
+            debug=debug,
             retry_on_network_failure=retry_on_network_failure,
         )
     ) as ydl:
@@ -188,13 +197,14 @@ def _download_ydl_opts(
     output_dir: str | Path,
     merge_output_format: str,
     verbose: bool,
+    debug: bool,
     retry_on_network_failure: int,
 ) -> dict[str, Any]:
     selected_download_mode = normalize_download_mode(download_mode)
     ydl_opts: dict[str, Any] = {
         **ydl_base_opts(),
         **_network_retry_ydl_opts(retry_on_network_failure),
-        **_yt_dlp_diagnostic_opts(verbose=verbose),
+        **_yt_dlp_output_opts(verbose=verbose, debug=debug),
         "format": _download_format(lang, selected_download_mode),
         "outtmpl": outtmpl(lang, output_dir),
         "restrictfilenames": True,
@@ -214,6 +224,8 @@ def _planned_output_path(
     ffmpeg_path: str | Path | None,
     output_dir: str | Path,
     merge_output_format: str,
+    verbose: bool,
+    debug: bool,
     retry_on_network_failure: int,
 ) -> Path:
     planned_info = _copy_info_for_planning(info)
@@ -223,11 +235,12 @@ def _planned_output_path(
         ffmpeg_path=ffmpeg_path,
         output_dir=output_dir,
         merge_output_format=merge_output_format,
-        verbose=False,
+        verbose=verbose,
+        debug=debug,
         retry_on_network_failure=retry_on_network_failure,
     )
 
-    with yt_dlp.YoutubeDL({**ydl_opts, "quiet": True}) as ydl:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         selected_info = ydl.process_ie_result(planned_info, download=False)
         filename = ydl.prepare_filename(selected_info)
 
@@ -257,18 +270,28 @@ def _optional_string(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _yt_dlp_diagnostic_opts(
+def _yt_dlp_output_opts(
     *,
     verbose: bool,
-    quiet: bool | None = None,
+    debug: bool,
 ) -> dict[str, Any]:
-    opts: dict[str, Any] = {
-        "verbose": verbose,
-        "no_warnings": not verbose,
+    if debug:
+        return {
+            "quiet": False,
+            "no_warnings": False,
+            "verbose": True,
+        }
+    if verbose:
+        return {
+            "quiet": False,
+            "no_warnings": False,
+            "verbose": False,
+        }
+    return {
+        "quiet": True,
+        "no_warnings": True,
+        "verbose": False,
     }
-    if quiet is not None:
-        opts["quiet"] = False if verbose else quiet
-    return opts
 
 
 def _network_retry_ydl_opts(retry_on_network_failure: int) -> dict[str, Any]:
