@@ -28,6 +28,8 @@ class ConfigTests(unittest.TestCase):
                 "ffmpeg_path: $HOME/bin/ffmpeg\n"
                 "default_lang: en\n"
                 "default_download_mode: audio\n"
+                "default_video_quality: 720p\n"
+                "default_audio_quality: low\n"
                 "retry_on_network_failure: 5\n",
                 encoding="utf-8",
             )
@@ -39,6 +41,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.ffmpeg_path, str(home / "bin" / "ffmpeg"))
         self.assertEqual(loaded_config.default_lang, "en")
         self.assertEqual(loaded_config.default_download_mode, config.DownloadMode.AUDIO)
+        self.assertEqual(loaded_config.default_video_quality.label, "720p")
+        self.assertEqual(loaded_config.default_audio_quality.label, "low")
         self.assertEqual(loaded_config.retry_on_network_failure, 5)
 
     def test_missing_optional_keys_use_defaults(self) -> None:
@@ -58,6 +62,14 @@ class ConfigTests(unittest.TestCase):
             config.DEFAULT_DOWNLOAD_MODE,
         )
         self.assertEqual(
+            loaded_config.default_video_quality,
+            config.DEFAULT_VIDEO_QUALITY,
+        )
+        self.assertEqual(
+            loaded_config.default_audio_quality,
+            config.DEFAULT_AUDIO_QUALITY,
+        )
+        self.assertEqual(
             loaded_config.retry_on_network_failure,
             config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
         )
@@ -69,6 +81,8 @@ class ConfigTests(unittest.TestCase):
                 "ffmpeg_path": "ffmpeg",
                 "default_lang": "en",
                 "default_download_mode": "audio",
+                "default_video_quality": "1080p",
+                "default_audio_quality": "medium",
                 "retry_on_network_failure": 4,
                 "future": "accepted",
             }
@@ -78,6 +92,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.ffmpeg_path, "ffmpeg")
         self.assertEqual(loaded_config.default_lang, "en")
         self.assertEqual(loaded_config.default_download_mode, config.DownloadMode.AUDIO)
+        self.assertEqual(loaded_config.default_video_quality.label, "1080p")
+        self.assertEqual(loaded_config.default_audio_quality.label, "medium")
         self.assertEqual(loaded_config.retry_on_network_failure, 4)
 
     def test_missing_ffmpeg_path_fails(self) -> None:
@@ -153,6 +169,47 @@ class ConfigTests(unittest.TestCase):
             config.normalize_download_mode(123)
 
         self.assertIn("default_download_mode", str(context.exception))
+
+    def test_video_quality_accepts_presets_and_exact_resolutions(self) -> None:
+        self.assertEqual(config.normalize_video_quality("best").label, "best")
+        self.assertEqual(config.normalize_video_quality(" medium ").label, "medium")
+        self.assertEqual(config.normalize_video_quality("720P").label, "720p")
+
+    def test_invalid_video_quality_fails(self) -> None:
+        for value in ("1p", "0p", "-100p", "720", "720 p", "", "abc"):
+            with self.subTest(value=value):
+                with self.assertRaises(config.ConfigError) as context:
+                    config.normalize_video_quality(value)
+
+                self.assertIn("default_video_quality", str(context.exception))
+
+    def test_wrong_video_quality_type_fails(self) -> None:
+        for value in (None, True, ["720p"], {"quality": "720p"}):
+            with self.subTest(value=value):
+                with self.assertRaises(config.ConfigError) as context:
+                    config.normalize_video_quality(value)
+
+                self.assertIn("default_video_quality", str(context.exception))
+
+    def test_audio_quality_accepts_presets(self) -> None:
+        self.assertEqual(config.normalize_audio_quality("best").label, "best")
+        self.assertEqual(config.normalize_audio_quality(" LOW ").label, "low")
+
+    def test_invalid_audio_quality_fails(self) -> None:
+        for value in ("128k", "720p", "", "abc"):
+            with self.subTest(value=value):
+                with self.assertRaises(config.ConfigError) as context:
+                    config.normalize_audio_quality(value)
+
+                self.assertIn("default_audio_quality", str(context.exception))
+
+    def test_wrong_audio_quality_type_fails(self) -> None:
+        for value in (None, False, ["best"], {"quality": "best"}):
+            with self.subTest(value=value):
+                with self.assertRaises(config.ConfigError) as context:
+                    config.normalize_audio_quality(value)
+
+                self.assertIn("default_audio_quality", str(context.exception))
 
     def test_zero_retry_on_network_failure_is_allowed(self) -> None:
         self.assertEqual(config.normalize_retry_on_network_failure(0), 0)

@@ -8,6 +8,7 @@ from typing import Any
 
 import yaml
 
+from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode as _normalize_download_mode
 
@@ -17,6 +18,8 @@ DEFAULT_OUTPUT_DIR = "~/Downloads/dbdvdl-output"
 DEFAULT_FFMPEG_PATH = "ffmpeg"
 DEFAULT_LANG = "en"
 DEFAULT_DOWNLOAD_MODE = DownloadMode.VIDEO
+DEFAULT_VIDEO_QUALITY = quality.DEFAULT_VIDEO_QUALITY
+DEFAULT_AUDIO_QUALITY = quality.DEFAULT_AUDIO_QUALITY
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
 
 
@@ -26,6 +29,8 @@ class AppConfig:
     ffmpeg_path: str
     default_lang: str
     default_download_mode: DownloadMode
+    default_video_quality: quality.VideoQuality
+    default_audio_quality: quality.AudioQuality
     retry_on_network_failure: int
 
 
@@ -87,12 +92,22 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
         "default_download_mode",
         DEFAULT_DOWNLOAD_MODE,
     )
+    default_video_quality = raw_config.get(
+        "default_video_quality",
+        DEFAULT_VIDEO_QUALITY,
+    )
+    default_audio_quality = raw_config.get(
+        "default_audio_quality",
+        DEFAULT_AUDIO_QUALITY,
+    )
 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
         ffmpeg_path=normalize_ffmpeg_path(ffmpeg_path),
         default_lang=normalize_default_lang(default_lang),
         default_download_mode=normalize_download_mode(default_download_mode),
+        default_video_quality=normalize_video_quality(default_video_quality),
+        default_audio_quality=normalize_audio_quality(default_audio_quality),
         retry_on_network_failure=normalize_retry_on_network_failure(
             retry_on_network_failure
         ),
@@ -105,6 +120,8 @@ def write_config(
     ffmpeg_path: str,
     default_lang: str,
     default_download_mode: str | DownloadMode = DEFAULT_DOWNLOAD_MODE,
+    default_video_quality: str | quality.VideoQuality = DEFAULT_VIDEO_QUALITY,
+    default_audio_quality: str | quality.AudioQuality = DEFAULT_AUDIO_QUALITY,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     path: Path | None = None,
     overwrite: bool = False,
@@ -119,6 +136,8 @@ def write_config(
     normalize_ffmpeg_path(ffmpeg_path)
     normalized_default_lang = normalize_default_lang(default_lang)
     normalized_default_download_mode = normalize_download_mode(default_download_mode)
+    normalized_default_video_quality = normalize_video_quality(default_video_quality)
+    normalized_default_audio_quality = normalize_audio_quality(default_audio_quality)
     normalized_retry_on_network_failure = normalize_retry_on_network_failure(
         retry_on_network_failure
     )
@@ -130,6 +149,8 @@ def write_config(
             "ffmpeg_path": ffmpeg_path,
             "default_lang": normalized_default_lang,
             "default_download_mode": normalized_default_download_mode.value,
+            "default_video_quality": normalized_default_video_quality.label,
+            "default_audio_quality": normalized_default_audio_quality.label,
             "retry_on_network_failure": normalized_retry_on_network_failure,
         },
         sort_keys=False,
@@ -181,6 +202,20 @@ def normalize_download_mode(value: Any) -> DownloadMode:
     try:
         return _normalize_download_mode(value, key="default_download_mode")
     except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
+
+
+def normalize_video_quality(value: Any) -> quality.VideoQuality:
+    try:
+        return quality.normalize_video_quality(value, key="default_video_quality")
+    except quality.QualityError as exc:
+        raise ConfigError(str(exc)) from exc
+
+
+def normalize_audio_quality(value: Any) -> quality.AudioQuality:
+    try:
+        return quality.normalize_audio_quality(value, key="default_audio_quality")
+    except quality.QualityError as exc:
         raise ConfigError(str(exc)) from exc
 
 

@@ -11,6 +11,7 @@ from . import __version__
 from . import config as app_config
 from . import core
 from . import doctor
+from . import quality
 from .download_mode import DownloadMode
 
 HELP_EPILOG = """
@@ -26,7 +27,9 @@ Examples:
 
   dbdvdl download https://www.youtube.com/watch?v=VIDEO_ID
 
-  dbdvdl download URL1 URL2 --lang tr --mode video --output-dir ~/Downloads/dbdvdl-output
+  dbdvdl download URL1 URL2 --lang tr --mode video --video-quality 720p --output-dir ~/Downloads/dbdvdl-output
+
+  dbdvdl qualities https://www.youtube.com/watch?v=VIDEO_ID --lang tr
 """
 
 app = typer.Typer(
@@ -96,6 +99,22 @@ def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_video_quality_or_exit(value: str) -> quality.VideoQuality:
+    try:
+        return quality.normalize_video_quality(value)
+    except quality.QualityError as exc:
+        typer.secho(f"Input error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _normalize_audio_quality_or_exit(value: str) -> quality.AudioQuality:
+    try:
+        return quality.normalize_audio_quality(value)
+    except quality.QualityError as exc:
+        typer.secho(f"Input error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _normalize_retry_on_network_failure_or_exit(value: int) -> int:
     try:
         return app_config.normalize_retry_on_network_failure(value)
@@ -137,6 +156,32 @@ def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
     return app_config.DEFAULT_DOWNLOAD_MODE
 
 
+def _prompt_video_quality(value: str | None) -> str:
+    if value is not None:
+        return value
+    if _stdin_is_interactive():
+        return str(
+            typer.prompt(
+                "Default video quality",
+                default=app_config.DEFAULT_VIDEO_QUALITY.label,
+            )
+        )
+    return app_config.DEFAULT_VIDEO_QUALITY.label
+
+
+def _prompt_audio_quality(value: str | None) -> str:
+    if value is not None:
+        return value
+    if _stdin_is_interactive():
+        return str(
+            typer.prompt(
+                "Default audio quality",
+                default=app_config.DEFAULT_AUDIO_QUALITY.label,
+            )
+        )
+    return app_config.DEFAULT_AUDIO_QUALITY.label
+
+
 def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
@@ -146,6 +191,8 @@ def _write_config_or_exit(
     ffmpeg_path: str,
     default_lang: str,
     default_download_mode: DownloadMode | str,
+    default_video_quality: str,
+    default_audio_quality: str,
     retry_on_network_failure: int,
     force: bool,
 ) -> None:
@@ -155,6 +202,8 @@ def _write_config_or_exit(
             ffmpeg_path=ffmpeg_path,
             default_lang=default_lang,
             default_download_mode=default_download_mode,
+            default_video_quality=default_video_quality,
+            default_audio_quality=default_audio_quality,
             retry_on_network_failure=retry_on_network_failure,
             overwrite=force,
         )
@@ -170,6 +219,8 @@ def _init_config(
     ffmpeg_path: str | None,
     default_lang: str | None,
     default_download_mode: DownloadMode | None,
+    default_video_quality: str | None,
+    default_audio_quality: str | None,
     retry_on_network_failure: int | None,
     force: bool,
 ) -> None:
@@ -189,6 +240,8 @@ def _init_config(
         app_config.DEFAULT_LANG,
     )
     selected_default_download_mode = _prompt_download_mode(default_download_mode)
+    selected_default_video_quality = _prompt_video_quality(default_video_quality)
+    selected_default_audio_quality = _prompt_audio_quality(default_audio_quality)
     selected_retry_on_network_failure = _prompt_retry_on_network_failure(
         retry_on_network_failure
     )
@@ -197,6 +250,8 @@ def _init_config(
         selected_ffmpeg_path,
         selected_default_lang,
         selected_default_download_mode,
+        selected_default_video_quality,
+        selected_default_audio_quality,
         selected_retry_on_network_failure,
         force,
     )
@@ -208,7 +263,8 @@ def _print_config_recreate_hint() -> None:
     typer.echo(
         "  dbdvdl init --output-dir ~/Videos "
         "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
-        "--default-download-mode video --retry-on-network-failure 3"
+        "--default-download-mode video --default-video-quality best "
+        "--default-audio-quality best --retry-on-network-failure 3"
     )
 
 
@@ -233,9 +289,49 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
         _print_label_value("Channel", plan.uploader)
     _print_label_value("Language", plan.lang)
     _print_label_value("Mode", plan.download_mode.value)
+    if plan.video_quality:
+        _print_label_value(
+            "Video quality",
+            _format_quality_selection(plan.video_quality, plan.selected_video_quality),
+        )
+    _print_label_value(
+        "Audio quality",
+        _format_quality_selection(plan.audio_quality, plan.selected_audio_quality),
+    )
     if plan.available_langs:
         _print_label_value("Available languages", ", ".join(plan.available_langs))
+    _print_quality_notes(plan.quality_notes)
     _print_label_value("Output", plan.output_path)
+
+
+def _format_quality_selection(requested: str, selected: str | None) -> str:
+    if selected and selected != requested:
+        return f"{requested} (selected {selected})"
+    return requested
+
+
+def _print_quality_notes(notes: tuple[str, ...]) -> None:
+    for note in notes:
+        typer.secho("Note: ", fg=typer.colors.YELLOW, bold=True, nl=False)
+        typer.echo(note)
+
+
+def _print_quality_report(report: core.QualityReport) -> None:
+    if report.title:
+        _print_label_value("Title", report.title)
+    if report.uploader:
+        _print_label_value("Channel", report.uploader)
+    _print_label_value("Language", report.lang)
+    if report.available_langs:
+        _print_label_value("Available languages", ", ".join(report.available_langs))
+    _print_label_value(
+        "Video qualities",
+        ", ".join(report.video_qualities) if report.video_qualities else "none found",
+    )
+    _print_label_value(
+        "Audio qualities",
+        ", ".join(report.audio_qualities) if report.audio_qualities else "none found",
+    )
 
 
 @app.command("init")
@@ -269,6 +365,20 @@ def init_command(
             help="Default download mode to use when --mode is omitted.",
         ),
     ] = None,
+    default_video_quality: Annotated[
+        str | None,
+        typer.Option(
+            "--default-video-quality",
+            help="Default video quality for video downloads.",
+        ),
+    ] = None,
+    default_audio_quality: Annotated[
+        str | None,
+        typer.Option(
+            "--default-audio-quality",
+            help="Default dubbed audio quality.",
+        ),
+    ] = None,
     retry_on_network_failure: Annotated[
         int | None,
         typer.Option(
@@ -287,6 +397,8 @@ def init_command(
         ffmpeg_path,
         default_lang,
         default_download_mode,
+        default_video_quality,
+        default_audio_quality,
         retry_on_network_failure,
         force,
     )
@@ -323,6 +435,20 @@ def config_init_command(
             help="Default download mode to use when --mode is omitted.",
         ),
     ] = None,
+    default_video_quality: Annotated[
+        str | None,
+        typer.Option(
+            "--default-video-quality",
+            help="Default video quality for video downloads.",
+        ),
+    ] = None,
+    default_audio_quality: Annotated[
+        str | None,
+        typer.Option(
+            "--default-audio-quality",
+            help="Default dubbed audio quality.",
+        ),
+    ] = None,
     retry_on_network_failure: Annotated[
         int | None,
         typer.Option(
@@ -341,6 +467,8 @@ def config_init_command(
         ffmpeg_path,
         default_lang,
         default_download_mode,
+        default_video_quality,
+        default_audio_quality,
         retry_on_network_failure,
         force,
     )
@@ -355,6 +483,8 @@ def config_show_command() -> None:
     typer.echo(f"FFmpeg path: {loaded_config.ffmpeg_path}")
     typer.echo(f"Default language: {loaded_config.default_lang}")
     typer.echo(f"Default download mode: {loaded_config.default_download_mode.value}")
+    typer.echo(f"Default video quality: {loaded_config.default_video_quality.label}")
+    typer.echo(f"Default audio quality: {loaded_config.default_audio_quality.label}")
     typer.echo(f"Retry on network failure: {loaded_config.retry_on_network_failure}")
 
 
@@ -475,6 +605,20 @@ def download_command(
             help="Path to the FFmpeg executable, or `ffmpeg` to use PATH.",
         ),
     ] = None,
+    video_quality: Annotated[
+        str | None,
+        typer.Option(
+            "--video-quality",
+            help="Video quality for video mode: best, medium, low, or a resolution like 720p.",
+        ),
+    ] = None,
+    audio_quality: Annotated[
+        str | None,
+        typer.Option(
+            "--audio-quality",
+            help="Dubbed audio quality: best, medium, or low.",
+        ),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -528,6 +672,24 @@ def download_command(
         if mode is not None
         else loaded_config.default_download_mode
     )
+    if video_quality is not None and effective_download_mode == DownloadMode.AUDIO:
+        typer.secho(
+            "Input error: --video-quality can only be used with --mode video.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    effective_video_quality = (
+        _normalize_video_quality_or_exit(video_quality)
+        if video_quality is not None
+        else loaded_config.default_video_quality
+    )
+    effective_audio_quality = (
+        _normalize_audio_quality_or_exit(audio_quality)
+        if audio_quality is not None
+        else loaded_config.default_audio_quality
+    )
     effective_retry_on_network_failure = (
         _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
         if retry_on_network_failure is not None
@@ -546,6 +708,8 @@ def download_command(
                     download_mode=effective_download_mode,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
+                    video_quality=effective_video_quality,
+                    audio_quality=effective_audio_quality,
                     verbose=verbose,
                     debug=debug,
                     retry_on_network_failure=effective_retry_on_network_failure,
@@ -553,16 +717,20 @@ def download_command(
                 _print_download_plan(plan)
                 typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
             else:
-                core.download(
+                download_result = core.download(
                     url=url,
                     lang=effective_lang,
                     download_mode=effective_download_mode,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
+                    video_quality=effective_video_quality,
+                    audio_quality=effective_audio_quality,
                     verbose=verbose,
                     debug=debug,
                     retry_on_network_failure=effective_retry_on_network_failure,
                 )
+                if isinstance(download_result, core.DownloadResult):
+                    _print_quality_notes(download_result.quality_notes)
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
         except Exception as exc:
             failures += 1
@@ -625,3 +793,65 @@ def langs_command(
 
     for lang in sorted(langs):
         typer.echo(lang)
+
+
+@app.command("qualities")
+def qualities_command(
+    url: Annotated[
+        str,
+        typer.Argument(
+            help="YouTube video URL to inspect.",
+            metavar="URL",
+        ),
+    ],
+    lang: Annotated[
+        str | None,
+        typer.Option(
+            "--lang",
+            "-l",
+            help="Target dub language code. Overrides config default.",
+        ),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            "-v",
+            help="Show yt-dlp progress, info, and warnings.",
+        ),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help="Show yt-dlp debug output.",
+        ),
+    ] = False,
+    retry_on_network_failure: Annotated[
+        int | None,
+        typer.Option(
+            "--retry-on-network-failure",
+            help="Network retries for metadata and extraction.",
+        ),
+    ] = None,
+) -> None:
+    """Show available video qualities and dubbed audio quality candidates."""
+    loaded_config = _load_config_or_exit()
+    effective_lang = (
+        _normalize_default_lang_or_exit(lang)
+        if lang is not None
+        else loaded_config.default_lang
+    )
+    effective_retry_on_network_failure = (
+        _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
+        if retry_on_network_failure is not None
+        else loaded_config.retry_on_network_failure
+    )
+    report = core.get_quality_report(
+        url,
+        effective_lang,
+        verbose=verbose,
+        debug=debug,
+        retry_on_network_failure=effective_retry_on_network_failure,
+    )
+    _print_quality_report(report)

@@ -78,12 +78,14 @@ uv run dbdvdl init
 uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
+uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --mode audio
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --video-quality 720p
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-`langs` veya `download` kullanmadan önce gerekli kullanıcı config dosyasını oluşturun:
+`langs`, `qualities` veya `download` kullanmadan önce gerekli kullanıcı config dosyasını oluşturun:
 
 ```bash
 uv run dbdvdl init
@@ -120,6 +122,8 @@ output_dir: ~/Downloads/dbdvdl-output
 ffmpeg_path: ffmpeg
 default_lang: en
 default_download_mode: video
+default_video_quality: best
+default_audio_quality: best
 retry_on_network_failure: 3
 ```
 
@@ -127,6 +131,11 @@ retry_on_network_failure: 3
 `default_lang`, `download` komutu `--lang` olmadan çalıştırıldığında kullanılacak dublaj dilidir.
 `default_download_mode`, `download` komutu `--mode` olmadan çalıştırıldığında
 kullanılacak indirme modudur. Desteklenen değerler `video` ve `audio`.
+`default_video_quality`, `--video-quality` verilmediğinde video modundaki
+çözünürlük seçimini belirler. Desteklenen değerler `best`, `medium`, `low` veya
+`2160p`, `1080p`, `720p` gibi tam çözünürlüklerdir.
+`default_audio_quality`, `--audio-quality` verilmediğinde seçilen dublaj ses
+akışının kalitesini belirler. Desteklenen değerler `best`, `medium` ve `low`.
 `retry_on_network_failure`, geçici metadata, çıkarım ve medya indirme hatalarında
 kaç kez yeniden deneneceğini belirler. Network retry davranışını kapatmak için
 `0` kullanabilirsiniz.
@@ -153,17 +162,40 @@ uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
   --lang tr \
   --mode video \
+  --video-quality 1080p \
+  --audio-quality best \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg \
   --retry-on-network-failure 5
 ```
 
 CLI seçenekleri o çalıştırma için config değerlerini ezer; buna
-`--mode` ve `--retry-on-network-failure` da dahildir.
+`--mode`, `--video-quality`, `--audio-quality` ve
+`--retry-on-network-failure` da dahildir.
 
-URL'yi, etkin dublaj dilini ve etkin indirme modunu doğrulayıp planlanan çıktı
-yolunu görmek için `--dry-run` kullanabilirsiniz. Bu mod indirme, birleştirme
-veya çıktı klasörü oluşturma işlemi yapmaz:
+Belirli bir URL ve dublaj dili için kullanılabilir kalite seçeneklerini görmek
+için `qualities` komutunu kullanabilirsiniz:
+
+```bash
+uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
+```
+
+Kalite davranışı açık çözünürlüklerde bilinçli olarak katıdır:
+
+- `best`, yt-dlp'nin en iyi eşleşen akışını kullanır.
+- Video `medium`, `720p` hedefine en yakın mevcut yüksekliği seçer.
+- Video `low`, mevcut en düşük video yüksekliğini seçer.
+- `1080p` gibi tam video değerleri tam eşleşme ister; yoksa komut mevcut
+  yükseklikleri yazdırarak hata verir.
+- Audio `medium`, bitrate metadata'sı varsa seçilen dilde `128k` değerine en
+  yakın ses akışını seçer; metadata yoksa not düşerek `best` kullanır.
+- Audio `low`, bitrate metadata'sı varsa seçilen dildeki en düşük bitrate'i
+  seçer; metadata yoksa not düşerek yt-dlp'nin en kötü eşleşen audio selector'ını
+  kullanır.
+
+URL'yi, etkin dublaj dilini, etkin indirme modunu ve kaliteyi doğrulayıp
+planlanan çıktı yolunu görmek için `--dry-run` kullanabilirsiniz. Bu mod indirme,
+birleştirme veya çıktı klasörü oluşturma işlemi yapmaz:
 
 ```bash
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
@@ -190,12 +222,14 @@ Video modunda araç şu işlemleri yapar:
 
 1. Videoda istenen dublaj dili mevcut mu kontrol eder.
 2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
-3. Videoyu ve seçilen ses parçasını indirir.
-4. Bunları `.mkv` dosyasında birleştirir.
-5. Dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör yapısına kaydeder.
+3. İstenen video kalitesini ve dublaj ses kalitesini seçer.
+4. Videoyu ve seçilen ses parçasını indirir.
+5. Bunları `.mkv` dosyasında birleştirir.
+6. Dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör yapısına kaydeder.
 
 Ses modunda araç yalnızca seçilen dublajlı ses akışını indirir ve yt-dlp'nin
-seçtiği doğal ses uzantısıyla aynı klasör yapısına kaydeder.
+seçtiği doğal ses uzantısıyla aynı klasör yapısına kaydeder. `--video-quality`
+yalnızca video modunda geçerlidir.
 
 `--dry-run` ile araç doğrulama ve çıktı yolu önizlemesinden sonra durur.
 

@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
+from dubbed_video_downloader import config
 from dubbed_video_downloader import core
+from dubbed_video_downloader import quality
 from dubbed_video_downloader.cli import app
 
 
@@ -32,6 +34,8 @@ class CliTests(unittest.TestCase):
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: en\n"
                 "default_download_mode: video\n"
+                "default_video_quality: best\n"
+                "default_audio_quality: best\n"
                 "retry_on_network_failure: 3\n",
             )
 
@@ -61,6 +65,8 @@ class CliTests(unittest.TestCase):
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: en\n"
                 "default_download_mode: video\n"
+                "default_video_quality: best\n"
+                "default_audio_quality: best\n"
                 "retry_on_network_failure: 3\n",
             )
 
@@ -144,6 +150,31 @@ class CliTests(unittest.TestCase):
                 config_path.read_text(encoding="utf-8"),
             )
 
+    def test_init_writes_custom_default_qualities(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                [
+                    "init",
+                    "--default-video-quality",
+                    "720p",
+                    "--default-audio-quality",
+                    "low",
+                ],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            written_config = config_path.read_text(encoding="utf-8")
+            self.assertIn("default_video_quality: 720p\n", written_config)
+            self.assertIn("default_audio_quality: low\n", written_config)
+
     def test_init_writes_custom_retry_on_network_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.runner.invoke(
@@ -193,6 +224,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("FFmpeg path: ffmpeg", result.output)
         self.assertIn("Default language: en", result.output)
         self.assertIn("Default download mode: video", result.output)
+        self.assertIn("Default video quality: best", result.output)
+        self.assertIn("Default audio quality: best", result.output)
         self.assertIn("Retry on network failure: 3", result.output)
 
     def test_config_show_requires_existing_config(self) -> None:
@@ -314,6 +347,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("--verbose", result.output)
         self.assertIn("--debug", result.output)
         self.assertIn("--mode", result.output)
+        self.assertIn("--video-quality", result.output)
+        self.assertIn("--audio-quality", result.output)
         self.assertIn("--retry-on-network-failure", result.output)
         self.assertIn("Overrides config", result.output)
         self.assertIn("default.", result.output)
@@ -331,6 +366,8 @@ class CliTests(unittest.TestCase):
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: tr\n"
                 "default_download_mode: audio\n"
+                "default_video_quality: low\n"
+                "default_audio_quality: medium\n"
                 "retry_on_network_failure: 4\n",
                 encoding="utf-8",
             )
@@ -347,6 +384,10 @@ class CliTests(unittest.TestCase):
                         "en",
                         "--mode",
                         "video",
+                        "--video-quality",
+                        "720p",
+                        "--audio-quality",
+                        "low",
                         "--output-dir",
                         str(override_output),
                         "--ffmpeg-path",
@@ -364,6 +405,11 @@ class CliTests(unittest.TestCase):
             download_mode=core.DownloadMode.VIDEO,
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
+            video_quality=quality.VideoQuality(
+                quality.VideoQualityKind.EXACT,
+                720,
+            ),
+            audio_quality=quality.AudioQuality(quality.AudioQualityKind.LOW),
             verbose=False,
             debug=False,
             retry_on_network_failure=6,
@@ -402,6 +448,8 @@ class CliTests(unittest.TestCase):
             download_mode=core.DownloadMode.AUDIO,
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
+            video_quality=config.DEFAULT_VIDEO_QUALITY,
+            audio_quality=config.DEFAULT_AUDIO_QUALITY,
             verbose=True,
             debug=False,
             retry_on_network_failure=3,
@@ -439,6 +487,8 @@ class CliTests(unittest.TestCase):
             download_mode=core.DownloadMode.VIDEO,
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
+            video_quality=config.DEFAULT_VIDEO_QUALITY,
+            audio_quality=config.DEFAULT_AUDIO_QUALITY,
             verbose=False,
             debug=True,
             retry_on_network_failure=3,
@@ -522,6 +572,99 @@ class CliTests(unittest.TestCase):
         self.assertIn("mp3", result.output)
         download.assert_not_called()
 
+    def test_download_rejects_video_quality_in_audio_mode_before_network_work(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "default_download_mode: audio\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--video-quality",
+                        "720p",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("--video-quality", result.output)
+        download.assert_not_called()
+
+    def test_download_rejects_invalid_audio_quality_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--audio-quality",
+                        "128k",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("audio_quality", result.output)
+        download.assert_not_called()
+
+    def test_download_rejects_invalid_video_quality_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--video-quality",
+                        "-100p",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("video_quality", result.output)
+        download.assert_not_called()
+
     def test_download_dry_run_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -583,6 +726,8 @@ class CliTests(unittest.TestCase):
             download_mode=core.DownloadMode.AUDIO,
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
+            video_quality=config.DEFAULT_VIDEO_QUALITY,
+            audio_quality=config.DEFAULT_AUDIO_QUALITY,
             verbose=False,
             debug=False,
             retry_on_network_failure=6,
@@ -679,6 +824,8 @@ class CliTests(unittest.TestCase):
             download_mode=core.DownloadMode.VIDEO,
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
+            video_quality=config.DEFAULT_VIDEO_QUALITY,
+            audio_quality=config.DEFAULT_AUDIO_QUALITY,
             verbose=True,
             debug=False,
             retry_on_network_failure=3,
@@ -890,6 +1037,70 @@ class CliTests(unittest.TestCase):
             debug=True,
             retry_on_network_failure=3,
         )
+
+    def test_qualities_requires_config_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("dubbed_video_downloader.cli.core.get_quality_report") as report:
+                result = self.runner.invoke(
+                    app,
+                    ["qualities", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("dbdvdl init", result.output)
+        report.assert_not_called()
+
+    def test_qualities_uses_config_and_allows_lang_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "retry_on_network_failure: 4\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_quality_report",
+                return_value=core.QualityReport(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    title="Title",
+                    uploader="Channel",
+                    available_langs=("en", "tr"),
+                    video_qualities=("360p", "720p"),
+                    audio_qualities=("50k", "160k"),
+                ),
+            ) as report:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "qualities",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--lang",
+                        "tr",
+                        "--retry-on-network-failure",
+                        "6",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        report.assert_called_once_with(
+            "https://www.youtube.com/watch?v=EXAMPLE",
+            "tr",
+            verbose=False,
+            debug=False,
+            retry_on_network_failure=6,
+        )
+        self.assertIn("Video qualities: 360p, 720p", result.output)
+        self.assertIn("Audio qualities: 50k, 160k", result.output)
 
 
 if __name__ == "__main__":

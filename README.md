@@ -77,12 +77,14 @@ uv run dbdvdl init
 uv run dbdvdl config show
 uv run dbdvdl doctor
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
+uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE"
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --mode audio
+uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --video-quality 720p
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-Before using `langs` or `download`, create the required user config:
+Before using `langs`, `qualities`, or `download`, create the required user config:
 
 ```bash
 uv run dbdvdl init
@@ -119,6 +121,8 @@ output_dir: ~/Downloads/dbdvdl-output
 ffmpeg_path: ffmpeg
 default_lang: en
 default_download_mode: video
+default_video_quality: best
+default_audio_quality: best
 retry_on_network_failure: 3
 ```
 
@@ -126,6 +130,11 @@ Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it t
 Use `default_lang` as the dub language when `download` is run without `--lang`.
 Use `default_download_mode` as the mode when `download` is run without
 `--mode`. Supported values are `video` and `audio`.
+Use `default_video_quality` for video-mode resolution selection when
+`--video-quality` is omitted. Supported values are `best`, `medium`, `low`, or
+an exact resolution such as `2160p`, `1080p`, or `720p`.
+Use `default_audio_quality` for the selected dubbed audio stream when
+`--audio-quality` is omitted. Supported values are `best`, `medium`, and `low`.
 Use `retry_on_network_failure` to control how many times transient metadata,
 extraction, and media download failures are retried. Set it to `0` to disable
 network retries.
@@ -151,17 +160,41 @@ uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
   --lang tr \
   --mode video \
+  --video-quality 1080p \
+  --audio-quality best \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg \
   --retry-on-network-failure 5
 ```
 
 CLI options override config values for that run, including
-`--mode` and `--retry-on-network-failure`.
+`--mode`, `--video-quality`, `--audio-quality`, and
+`--retry-on-network-failure`.
+
+Use `qualities` to inspect the choices available for a specific URL and dub
+language:
+
+```bash
+uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
+```
+
+Quality behavior is intentionally strict for explicit resolutions:
+
+- `best` uses yt-dlp's best matching stream.
+- Video `medium` chooses the available height closest to `720p`.
+- Video `low` chooses the lowest available video height.
+- Video exact values such as `1080p` require that exact height; if unavailable,
+  the command fails and prints the available heights.
+- Audio `medium` chooses the selected-language audio stream closest to `128k`
+  when bitrate metadata is available; otherwise it falls back to `best` with a
+  note.
+- Audio `low` chooses the lowest selected-language audio bitrate when metadata
+  is available; otherwise it uses yt-dlp's worst matching audio selector with a
+  note.
 
 Use `--dry-run` to validate the URL, effective dub language, and effective
-download mode, then print the planned output path without downloading, merging,
-or creating output folders:
+download mode and quality, then print the planned output path without
+downloading, merging, or creating output folders:
 
 ```bash
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
@@ -188,13 +221,14 @@ In video mode, the tool will:
 
 1. Check if the requested dub language is available for each video.
 2. Print an error with available languages if the requested language is missing.
-3. Download the video and the requested audio stream.
-4. Merge them into `.mkv`.
-5. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
+3. Select the requested video quality and dubbed audio quality.
+4. Download the video and the requested audio stream.
+5. Merge them into `.mkv`.
+6. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
 
 In audio mode, the tool downloads only the selected dubbed audio stream and
 saves it under the same folder structure with the native audio extension chosen
-by yt-dlp.
+by yt-dlp. `--video-quality` is only valid in video mode.
 
 With `--dry-run`, the tool stops after validation and output path preview.
 

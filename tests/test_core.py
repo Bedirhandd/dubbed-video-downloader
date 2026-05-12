@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from dubbed_video_downloader import core
+from dubbed_video_downloader import quality
 
 
 class CoreTests(unittest.TestCase):
@@ -203,6 +204,120 @@ class CoreTests(unittest.TestCase):
             output_dir / "tr" / "Example_Channel" / "A_Title" / "A_Title.webm",
         )
 
+    def test_plan_download_medium_video_uses_single_available_height(self) -> None:
+        info = {
+            "id": "example",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "video-480",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 480,
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "tr-audio",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "ext": "webm",
+                    "url": "https://example.test/tr.webm",
+                    "tbr": 128,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "planned-output"
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                    video_quality="medium",
+                    audio_quality="low",
+                )
+
+        self.assertEqual(plan.video_quality, "medium")
+        self.assertEqual(plan.selected_video_quality, "480p")
+        self.assertEqual(plan.audio_quality, "low")
+        self.assertEqual(plan.selected_audio_quality, "128k")
+
+    def test_plan_download_exact_video_quality_missing_fails_with_available_heights(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 360,
+                },
+                {
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 720,
+                },
+                {
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with self.assertRaises(quality.QualityError) as context:
+                core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    video_quality="1080p",
+                )
+
+        self.assertIn("Requested video quality 1080p", str(context.exception))
+        self.assertIn("360p, 720p", str(context.exception))
+
+    def test_plan_download_audio_medium_falls_back_when_bitrate_is_missing(
+        self,
+    ) -> None:
+        info = {
+            "id": "example",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "tr-audio",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "ext": "webm",
+                    "url": "https://example.test/tr.webm",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "planned-output"
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    download_mode=core.DownloadMode.AUDIO,
+                    output_dir=output_dir,
+                    audio_quality="medium",
+                )
+
+        self.assertEqual(plan.audio_quality, "medium")
+        self.assertEqual(plan.selected_audio_quality, "best")
+        self.assertIn("bitrate metadata is unavailable", plan.quality_notes[0])
+
     def test_plan_download_raises_when_requested_language_is_missing(self) -> None:
         info = {
             "title": "A Title",
@@ -295,6 +410,60 @@ class CoreTests(unittest.TestCase):
         opts = youtube_dl.call_args.args[0]
         self.assertEqual(opts["format"], 'bestaudio[language="tr"]')
         self.assertNotIn("merge_output_format", opts)
+        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+    def test_download_video_and_audio_quality_build_safe_selector(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "format_id": "video-360",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 360,
+                },
+                {
+                    "format_id": "video-720",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 720,
+                },
+                {
+                    "format_id": "tr-audio-low",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "abr": 50,
+                },
+                {
+                    "format_id": "tr-audio-high",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "abr": 160,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    video_quality="medium",
+                    audio_quality="low",
+                )
+
+        opts = youtube_dl.call_args.args[0]
+        self.assertEqual(
+            opts["format"],
+            'bv*[height=720]+bestaudio[language="tr"][format_id="tr-audio-low"]',
+        )
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
     def test_download_enables_verbose_ytdlp_output_without_debug(self) -> None:
