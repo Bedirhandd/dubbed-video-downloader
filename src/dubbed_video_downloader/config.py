@@ -13,6 +13,7 @@ CONFIG_FILE_NAME = "config.yaml"
 DEFAULT_OUTPUT_DIR = "~/Downloads/dbdvdl-output"
 DEFAULT_FFMPEG_PATH = "ffmpeg"
 DEFAULT_LANG = "en"
+DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class AppConfig:
     output_dir: Path
     ffmpeg_path: str
     default_lang: str
+    retry_on_network_failure: int
 
 
 class ConfigError(RuntimeError):
@@ -72,11 +74,18 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
         "default_lang",
         location,
     )
+    retry_on_network_failure = raw_config.get(
+        "retry_on_network_failure",
+        DEFAULT_RETRY_ON_NETWORK_FAILURE,
+    )
 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
         ffmpeg_path=normalize_ffmpeg_path(ffmpeg_path),
         default_lang=normalize_default_lang(default_lang),
+        retry_on_network_failure=normalize_retry_on_network_failure(
+            retry_on_network_failure
+        ),
     )
 
 
@@ -85,6 +94,7 @@ def write_config(
     output_dir: str,
     ffmpeg_path: str,
     default_lang: str,
+    retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     path: Path | None = None,
     overwrite: bool = False,
 ) -> Path:
@@ -97,6 +107,9 @@ def write_config(
     normalize_output_dir(output_dir)
     normalize_ffmpeg_path(ffmpeg_path)
     normalized_default_lang = normalize_default_lang(default_lang)
+    normalized_retry_on_network_failure = normalize_retry_on_network_failure(
+        retry_on_network_failure
+    )
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = yaml.safe_dump(
@@ -104,6 +117,7 @@ def write_config(
             "output_dir": output_dir,
             "ffmpeg_path": ffmpeg_path,
             "default_lang": normalized_default_lang,
+            "retry_on_network_failure": normalized_retry_on_network_failure,
         },
         sort_keys=False,
     )
@@ -148,6 +162,14 @@ def normalize_ffmpeg_path(value: str) -> str:
 
 def normalize_default_lang(value: str) -> str:
     return _clean_string(value, "default_lang")
+
+
+def normalize_retry_on_network_failure(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError("retry_on_network_failure must be a non-negative integer.")
+    if value < 0:
+        raise ConfigError("retry_on_network_failure must be a non-negative integer.")
+    return value
 
 
 def ffmpeg_location_for_yt_dlp(ffmpeg_path: str) -> str | None:

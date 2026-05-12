@@ -26,7 +26,8 @@ class ConfigTests(unittest.TestCase):
             config_path.write_text(
                 "output_dir: ~/Videos\n"
                 "ffmpeg_path: $HOME/bin/ffmpeg\n"
-                "default_lang: en\n",
+                "default_lang: en\n"
+                "retry_on_network_failure: 5\n",
                 encoding="utf-8",
             )
 
@@ -36,6 +37,24 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.output_dir, home / "Videos")
         self.assertEqual(loaded_config.ffmpeg_path, str(home / "bin" / "ffmpeg"))
         self.assertEqual(loaded_config.default_lang, "en")
+        self.assertEqual(loaded_config.retry_on_network_failure, 5)
+
+    def test_missing_retry_on_network_failure_uses_default(self) -> None:
+        loaded_config = config.config_from_mapping(
+            {
+                "output_dir": "/tmp/dbdvdl-output",
+                "ffmpeg_path": "ffmpeg",
+                "default_lang": "en",
+            }
+        )
+
+        self.assertEqual(loaded_config.output_dir, Path("/tmp/dbdvdl-output"))
+        self.assertEqual(loaded_config.ffmpeg_path, "ffmpeg")
+        self.assertEqual(loaded_config.default_lang, "en")
+        self.assertEqual(
+            loaded_config.retry_on_network_failure,
+            config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
+        )
 
     def test_unknown_keys_are_ignored(self) -> None:
         loaded_config = config.config_from_mapping(
@@ -43,6 +62,7 @@ class ConfigTests(unittest.TestCase):
                 "output_dir": "/tmp/dbdvdl-output",
                 "ffmpeg_path": "ffmpeg",
                 "default_lang": "en",
+                "retry_on_network_failure": 4,
                 "future": "accepted",
             }
         )
@@ -50,6 +70,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.output_dir, Path("/tmp/dbdvdl-output"))
         self.assertEqual(loaded_config.ffmpeg_path, "ffmpeg")
         self.assertEqual(loaded_config.default_lang, "en")
+        self.assertEqual(loaded_config.retry_on_network_failure, 4)
 
     def test_missing_ffmpeg_path_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:
@@ -102,6 +123,27 @@ class ConfigTests(unittest.TestCase):
             config.normalize_default_lang(" ")
 
         self.assertIn("default_lang", str(context.exception))
+
+    def test_zero_retry_on_network_failure_is_allowed(self) -> None:
+        self.assertEqual(config.normalize_retry_on_network_failure(0), 0)
+
+    def test_negative_retry_on_network_failure_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_retry_on_network_failure(-1)
+
+        self.assertIn("retry_on_network_failure", str(context.exception))
+
+    def test_string_retry_on_network_failure_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_retry_on_network_failure("3")
+
+        self.assertIn("retry_on_network_failure", str(context.exception))
+
+    def test_bool_retry_on_network_failure_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_retry_on_network_failure(True)
+
+        self.assertIn("retry_on_network_failure", str(context.exception))
 
     def test_relative_output_dir_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:

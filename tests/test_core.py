@@ -25,6 +25,15 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(opts["quiet"])
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
+        self.assertEqual(opts["retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
+        self.assertEqual(opts["fragment_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
+        self.assertEqual(opts["extractor_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
+        self.assertNotIn("file_access_retries", opts)
+        self.assertEqual(
+            set(opts["retry_sleep_functions"]),
+            {"http", "fragment", "extractor"},
+        )
+        self.assertTrue(callable(opts["retry_sleep_functions"]["http"]))
 
     def test_get_video_info_enables_verbose_ytdlp_output(self) -> None:
         with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
@@ -40,6 +49,30 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(opts["quiet"])
         self.assertFalse(opts["no_warnings"])
         self.assertTrue(opts["verbose"])
+
+    def test_get_video_info_uses_custom_network_retry_count(self) -> None:
+        with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
+            ydl = youtube_dl.return_value.__enter__.return_value
+            ydl.extract_info.return_value = {"formats": []}
+
+            core.get_video_info(
+                "https://www.youtube.com/watch?v=EXAMPLE",
+                retry_on_network_failure=2,
+            )
+
+        opts = youtube_dl.call_args.args[0]
+        self.assertEqual(opts["retries"], 2)
+        self.assertEqual(opts["fragment_retries"], 2)
+        self.assertEqual(opts["extractor_retries"], 2)
+
+    def test_get_video_info_rejects_invalid_network_retry_count(self) -> None:
+        with self.assertRaises(ValueError) as context:
+            core.get_video_info(
+                "https://www.youtube.com/watch?v=EXAMPLE",
+                retry_on_network_failure=-1,
+            )
+
+        self.assertIn("retry_on_network_failure", str(context.exception))
 
     def test_plan_download_returns_output_preview_without_creating_directories(
         self,
@@ -131,11 +164,16 @@ class CoreTests(unittest.TestCase):
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
                     output_dir=Path(tmpdir),
+                    retry_on_network_failure=2,
                 )
 
         opts = youtube_dl.call_args.args[0]
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
+        self.assertEqual(opts["retries"], 2)
+        self.assertEqual(opts["fragment_retries"], 2)
+        self.assertEqual(opts["extractor_retries"], 2)
+        self.assertNotIn("file_access_retries", opts)
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
     def test_download_enables_verbose_ytdlp_output(self) -> None:

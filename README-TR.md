@@ -107,10 +107,14 @@ Bu komut şuraya yazar:
 output_dir: ~/Downloads/dbdvdl-output
 ffmpeg_path: ffmpeg
 default_lang: en
+retry_on_network_failure: 3
 ```
 
 `ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
 `default_lang`, `download` komutu `--lang` olmadan çalıştırıldığında kullanılacak dublaj dilidir.
+`retry_on_network_failure`, geçici metadata, çıkarım ve medya indirme hatalarında
+kaç kez yeniden deneneceğini belirler. Network retry davranışını kapatmak için
+`0` kullanabilirsiniz.
 
 Config dosyasını görmek veya kaldırmak için:
 
@@ -133,8 +137,12 @@ uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
   --lang tr \
   --output-dir ~/Downloads/dbdvdl-output \
-  --ffmpeg-path /path/to/ffmpeg
+  --ffmpeg-path /path/to/ffmpeg \
+  --retry-on-network-failure 5
 ```
+
+CLI seçenekleri o çalıştırma için config değerlerini ezer; buna
+`--retry-on-network-failure` da dahildir.
 
 URL'yi ve etkin dublaj dilini doğrulayıp planlanan çıktı yolunu görmek için
 `--dry-run` kullanabilirsiniz. Bu mod indirme, birleştirme veya çıktı klasörü

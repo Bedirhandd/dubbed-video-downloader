@@ -30,7 +30,8 @@ class CliTests(unittest.TestCase):
                 config_path.read_text(encoding="utf-8"),
                 "output_dir: ~/Downloads/dbdvdl-output\n"
                 "ffmpeg_path: ffmpeg\n"
-                "default_lang: en\n",
+                "default_lang: en\n"
+                "retry_on_network_failure: 3\n",
             )
 
     def test_init_refuses_overwrite_without_force(self) -> None:
@@ -57,7 +58,8 @@ class CliTests(unittest.TestCase):
                 config_path.read_text(encoding="utf-8"),
                 "output_dir: ~/Downloads/dbdvdl-output\n"
                 "ffmpeg_path: ffmpeg\n"
-                "default_lang: en\n",
+                "default_lang: en\n"
+                "retry_on_network_failure: 3\n",
             )
 
     def test_init_writes_custom_default_lang(self) -> None:
@@ -100,6 +102,26 @@ class CliTests(unittest.TestCase):
                 config_path.read_text(encoding="utf-8"),
             )
 
+    def test_init_writes_custom_retry_on_network_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["init", "--retry-on-network-failure", "5"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "retry_on_network_failure: 5\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
     def test_config_show_displays_resolved_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -128,6 +150,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("FFmpeg path: ffmpeg", result.output)
         self.assertIn("Default language: en", result.output)
+        self.assertIn("Retry on network failure: 3", result.output)
 
     def test_config_show_requires_existing_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -246,6 +269,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--dry-run", result.output)
         self.assertIn("--verbose", result.output)
+        self.assertIn("--retry-on-network-failure", result.output)
         self.assertIn("Overrides config", result.output)
         self.assertIn("default.", result.output)
         self.assertNotIn("[default: tr]", result.output)
@@ -260,7 +284,8 @@ class CliTests(unittest.TestCase):
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
                 "ffmpeg_path: ffmpeg\n"
-                "default_lang: tr\n",
+                "default_lang: tr\n"
+                "retry_on_network_failure: 4\n",
                 encoding="utf-8",
             )
             override_output = home / "Videos" / "override"
@@ -278,6 +303,8 @@ class CliTests(unittest.TestCase):
                         str(override_output),
                         "--ffmpeg-path",
                         str(override_ffmpeg),
+                        "--retry-on-network-failure",
+                        "6",
                     ],
                     env={"HOME": tmpdir},
                 )
@@ -289,6 +316,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
             verbose=False,
+            retry_on_network_failure=6,
         )
 
     def test_download_verbose_passes_through_to_core_download(self) -> None:
@@ -323,6 +351,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
+            retry_on_network_failure=3,
         )
 
     def test_download_dry_run_requires_config_before_network_work(self) -> None:
@@ -342,6 +371,36 @@ class CliTests(unittest.TestCase):
         self.assertIn("dbdvdl init", result.output)
         plan.assert_not_called()
 
+    def test_download_rejects_negative_retry_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--retry-on-network-failure",
+                        "-1",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("retry_on_network_failure", result.output)
+        download.assert_not_called()
+
     def test_download_dry_run_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -352,7 +411,8 @@ class CliTests(unittest.TestCase):
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
                 "ffmpeg_path: ffmpeg\n"
-                "default_lang: tr\n",
+                "default_lang: tr\n"
+                "retry_on_network_failure: 4\n",
                 encoding="utf-8",
             )
             override_output = home / "Videos" / "override"
@@ -385,6 +445,8 @@ class CliTests(unittest.TestCase):
                         "--ffmpeg-path",
                         str(override_ffmpeg),
                         "--dry-run",
+                        "--retry-on-network-failure",
+                        "6",
                     ],
                     env={"HOME": tmpdir},
                 )
@@ -396,6 +458,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
             verbose=False,
+            retry_on_network_failure=6,
         )
         download.assert_not_called()
         self.assertIn("Dry run: no files will be downloaded or created.", result.output)
@@ -486,6 +549,7 @@ class CliTests(unittest.TestCase):
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
+            retry_on_network_failure=3,
         )
 
     def test_download_dry_run_reports_plan_failures(self) -> None:
@@ -544,6 +608,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--verbose", result.output)
+        self.assertIn("--retry-on-network-failure", result.output)
 
     def test_langs_passes_verbose_false_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -573,6 +638,7 @@ class CliTests(unittest.TestCase):
         langs.assert_called_once_with(
             "https://www.youtube.com/watch?v=EXAMPLE",
             verbose=False,
+            retry_on_network_failure=3,
         )
         self.assertIn("en", result.output)
         self.assertIn("tr", result.output)
@@ -587,7 +653,8 @@ class CliTests(unittest.TestCase):
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
                 "ffmpeg_path: ffmpeg\n"
-                "default_lang: en\n",
+                "default_lang: en\n"
+                "retry_on_network_failure: 4\n",
                 encoding="utf-8",
             )
 
@@ -601,6 +668,8 @@ class CliTests(unittest.TestCase):
                         "langs",
                         "https://www.youtube.com/watch?v=EXAMPLE",
                         "--verbose",
+                        "--retry-on-network-failure",
+                        "6",
                     ],
                     env={"HOME": tmpdir},
                 )
@@ -609,6 +678,7 @@ class CliTests(unittest.TestCase):
         langs.assert_called_once_with(
             "https://www.youtube.com/watch?v=EXAMPLE",
             verbose=True,
+            retry_on_network_failure=6,
         )
 
 

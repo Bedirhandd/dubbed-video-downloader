@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ import yt_dlp
 
 DEFAULT_OUTPUT_DIR = Path("Videos")
 DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
+DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
+MAX_RETRY_SLEEP_SECONDS = 8.0
 
 
 @dataclass(frozen=True)
@@ -38,11 +41,13 @@ def get_video_info(
     url: str,
     quiet: bool = True,
     verbose: bool = False,
+    retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> dict[str, Any]:
     """Fetch video metadata without downloading the video."""
     with yt_dlp.YoutubeDL(
         {
             **ydl_base_opts(),
+            **_network_retry_ydl_opts(retry_on_network_failure),
             **_yt_dlp_diagnostic_opts(quiet=quiet, verbose=verbose),
         }
     ) as ydl:
@@ -63,9 +68,19 @@ def get_available_audio_langs(info: dict[str, Any]) -> set[str]:
     return langs
 
 
-def get_available_audio_langs_for_url(url: str, verbose: bool = False) -> set[str]:
+def get_available_audio_langs_for_url(
+    url: str,
+    verbose: bool = False,
+    retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
+) -> set[str]:
     """Fetch video metadata and return available audio languages."""
-    return get_available_audio_langs(get_video_info(url, verbose=verbose))
+    return get_available_audio_langs(
+        get_video_info(
+            url,
+            verbose=verbose,
+            retry_on_network_failure=retry_on_network_failure,
+        )
+    )
 
 
 def ensure_lang(info: dict[str, Any], target: str) -> None:
@@ -96,9 +111,14 @@ def plan_download(
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
     verbose: bool = False,
+    retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> DownloadPlan:
     """Validate and describe a download without writing files."""
-    info = get_video_info(url, verbose=verbose)
+    info = get_video_info(
+        url,
+        verbose=verbose,
+        retry_on_network_failure=retry_on_network_failure,
+    )
     ensure_lang(info, lang)
 
     return DownloadPlan(
@@ -113,6 +133,7 @@ def plan_download(
             ffmpeg_path=ffmpeg_path,
             output_dir=output_dir,
             merge_output_format=merge_output_format,
+            retry_on_network_failure=retry_on_network_failure,
         ),
     )
 
@@ -124,9 +145,14 @@ def download(
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
     verbose: bool = False,
+    retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> None:
     """Download a single video with the specified dub language."""
-    info = get_video_info(url, verbose=verbose)
+    info = get_video_info(
+        url,
+        verbose=verbose,
+        retry_on_network_failure=retry_on_network_failure,
+    )
     ensure_lang(info, lang)
 
     Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
@@ -137,6 +163,7 @@ def download(
             output_dir=output_dir,
             merge_output_format=merge_output_format,
             verbose=verbose,
+            retry_on_network_failure=retry_on_network_failure,
         )
     ) as ydl:
         ydl.download([url])
@@ -149,9 +176,11 @@ def _download_ydl_opts(
     output_dir: str | Path,
     merge_output_format: str,
     verbose: bool,
+    retry_on_network_failure: int,
 ) -> dict[str, Any]:
     ydl_opts: dict[str, Any] = {
         **ydl_base_opts(),
+        **_network_retry_ydl_opts(retry_on_network_failure),
         **_yt_dlp_diagnostic_opts(verbose=verbose),
         "format": f"bv*+bestaudio[language=\"{lang}\"]",
         "outtmpl": outtmpl(lang, output_dir),
@@ -170,6 +199,7 @@ def _planned_output_path(
     ffmpeg_path: str | Path | None,
     output_dir: str | Path,
     merge_output_format: str,
+    retry_on_network_failure: int,
 ) -> Path:
     planned_info = {**info, "ext": merge_output_format}
     ydl_opts = _download_ydl_opts(
@@ -178,6 +208,7 @@ def _planned_output_path(
         output_dir=output_dir,
         merge_output_format=merge_output_format,
         verbose=False,
+        retry_on_network_failure=retry_on_network_failure,
     )
 
     with yt_dlp.YoutubeDL({**ydl_opts, "quiet": True}) as ydl:
@@ -204,3 +235,30 @@ def _yt_dlp_diagnostic_opts(
     if quiet is not None:
         opts["quiet"] = False if verbose else quiet
     return opts
+
+
+def _network_retry_ydl_opts(retry_on_network_failure: int) -> dict[str, Any]:
+    retry_count = _validate_retry_on_network_failure(retry_on_network_failure)
+    return {
+        "retries": retry_count,
+        "fragment_retries": retry_count,
+        "extractor_retries": retry_count,
+        "retry_sleep_functions": {
+            "http": _retry_sleep_seconds,
+            "fragment": _retry_sleep_seconds,
+            "extractor": _retry_sleep_seconds,
+        },
+    }
+
+
+def _validate_retry_on_network_failure(value: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("retry_on_network_failure must be a non-negative integer.")
+    if value < 0:
+        raise ValueError("retry_on_network_failure must be a non-negative integer.")
+    return value
+
+
+def _retry_sleep_seconds(attempt: int) -> float:
+    base_delay = min(2**attempt, MAX_RETRY_SLEEP_SECONDS)
+    return base_delay + random.random()

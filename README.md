@@ -107,10 +107,14 @@ with:
 output_dir: ~/Downloads/dbdvdl-output
 ffmpeg_path: ffmpeg
 default_lang: en
+retry_on_network_failure: 3
 ```
 
 Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
 Use `default_lang` as the dub language when `download` is run without `--lang`.
+Use `retry_on_network_failure` to control how many times transient metadata,
+extraction, and media download failures are retried. Set it to `0` to disable
+network retries.
 
 Inspect or remove the config with:
 
@@ -133,8 +137,12 @@ uv run dbdvdl download \
   "https://www.youtube.com/watch?v=EXAMPLE2" \
   --lang tr \
   --output-dir ~/Downloads/dbdvdl-output \
-  --ffmpeg-path /path/to/ffmpeg
+  --ffmpeg-path /path/to/ffmpeg \
+  --retry-on-network-failure 5
 ```
+
+CLI options override config values for that run, including
+`--retry-on-network-failure`.
 
 Use `--dry-run` to validate the URL and effective dub language, then print the
 planned output path without downloading, merging, or creating output folders:

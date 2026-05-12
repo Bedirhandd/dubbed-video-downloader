@@ -86,12 +86,32 @@ def _normalize_default_lang_or_exit(value: str) -> str:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_retry_on_network_failure_or_exit(value: int) -> int:
+    try:
+        return app_config.normalize_retry_on_network_failure(value)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _prompt_value(value: str | None, prompt: str, default: str) -> str:
     if value is not None:
         return value
     if _stdin_is_interactive():
         return str(typer.prompt(prompt, default=default))
     return default
+
+
+def _prompt_retry_on_network_failure(value: int | None) -> int:
+    if value is not None:
+        return value
+    if _stdin_is_interactive():
+        return typer.prompt(
+            "Retry on network failure",
+            default=app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
+            type=int,
+        )
+    return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
 
 
 def _stdin_is_interactive() -> bool:
@@ -102,6 +122,7 @@ def _write_config_or_exit(
     output_dir: str,
     ffmpeg_path: str,
     default_lang: str,
+    retry_on_network_failure: int,
     force: bool,
 ) -> None:
     try:
@@ -109,6 +130,7 @@ def _write_config_or_exit(
             output_dir=output_dir,
             ffmpeg_path=ffmpeg_path,
             default_lang=default_lang,
+            retry_on_network_failure=retry_on_network_failure,
             overwrite=force,
         )
     except app_config.ConfigError as exc:
@@ -122,6 +144,7 @@ def _init_config(
     output_dir: str | None,
     ffmpeg_path: str | None,
     default_lang: str | None,
+    retry_on_network_failure: int | None,
     force: bool,
 ) -> None:
     selected_output_dir = _prompt_value(
@@ -139,10 +162,14 @@ def _init_config(
         "Default language",
         app_config.DEFAULT_LANG,
     )
+    selected_retry_on_network_failure = _prompt_retry_on_network_failure(
+        retry_on_network_failure
+    )
     _write_config_or_exit(
         selected_output_dir,
         selected_ffmpeg_path,
         selected_default_lang,
+        selected_retry_on_network_failure,
         force,
     )
 
@@ -152,7 +179,8 @@ def _print_config_recreate_hint() -> None:
     typer.echo("  dbdvdl init")
     typer.echo(
         "  dbdvdl init --output-dir ~/Videos "
-        "--ffmpeg-path /path/to/ffmpeg --default-lang tr"
+        "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
+        "--retry-on-network-failure 3"
     )
 
 
@@ -205,13 +233,26 @@ def init_command(
             help="Default dub language code to use when --lang is omitted.",
         ),
     ] = None,
+    retry_on_network_failure: Annotated[
+        int | None,
+        typer.Option(
+            "--retry-on-network-failure",
+            help="Network retries for metadata, extraction, and media downloads.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
     ] = False,
 ) -> None:
     """Create the required user config file."""
-    _init_config(output_dir, ffmpeg_path, default_lang, force)
+    _init_config(
+        output_dir,
+        ffmpeg_path,
+        default_lang,
+        retry_on_network_failure,
+        force,
+    )
 
 
 @config_app.command("init")
@@ -238,13 +279,26 @@ def config_init_command(
             help="Default dub language code to use when --lang is omitted.",
         ),
     ] = None,
+    retry_on_network_failure: Annotated[
+        int | None,
+        typer.Option(
+            "--retry-on-network-failure",
+            help="Network retries for metadata, extraction, and media downloads.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
     ] = False,
 ) -> None:
     """Create the required user config file."""
-    _init_config(output_dir, ffmpeg_path, default_lang, force)
+    _init_config(
+        output_dir,
+        ffmpeg_path,
+        default_lang,
+        retry_on_network_failure,
+        force,
+    )
 
 
 @config_app.command("show")
@@ -255,6 +309,7 @@ def config_show_command() -> None:
     typer.echo(f"Output directory: {loaded_config.output_dir}")
     typer.echo(f"FFmpeg path: {loaded_config.ffmpeg_path}")
     typer.echo(f"Default language: {loaded_config.default_lang}")
+    typer.echo(f"Retry on network failure: {loaded_config.retry_on_network_failure}")
 
 
 @config_app.command("remove")
@@ -382,6 +437,13 @@ def download_command(
             help="Show yt-dlp warnings and debug output.",
         ),
     ] = False,
+    retry_on_network_failure: Annotated[
+        int | None,
+        typer.Option(
+            "--retry-on-network-failure",
+            help="Network retries for metadata, extraction, and media downloads.",
+        ),
+    ] = None,
 ) -> None:
     """Download URL(s) with a dub language."""
     loaded_config = _load_config_or_exit()
@@ -401,6 +463,11 @@ def download_command(
         if lang is not None
         else loaded_config.default_lang
     )
+    effective_retry_on_network_failure = (
+        _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
+        if retry_on_network_failure is not None
+        else loaded_config.retry_on_network_failure
+    )
 
     failures = 0
     for url in urls:
@@ -414,6 +481,7 @@ def download_command(
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,
+                    retry_on_network_failure=effective_retry_on_network_failure,
                 )
                 _print_download_plan(plan)
                 typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
@@ -424,6 +492,7 @@ def download_command(
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,
+                    retry_on_network_failure=effective_retry_on_network_failure,
                 )
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
         except Exception as exc:
@@ -451,10 +520,26 @@ def langs_command(
             help="Show yt-dlp warnings and debug output.",
         ),
     ] = False,
+    retry_on_network_failure: Annotated[
+        int | None,
+        typer.Option(
+            "--retry-on-network-failure",
+            help="Network retries for metadata and extraction.",
+        ),
+    ] = None,
 ) -> None:
     """Show audio language codes for a URL."""
-    _load_config_or_exit()
-    langs = core.get_available_audio_langs_for_url(url, verbose=verbose)
+    loaded_config = _load_config_or_exit()
+    effective_retry_on_network_failure = (
+        _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
+        if retry_on_network_failure is not None
+        else loaded_config.retry_on_network_failure
+    )
+    langs = core.get_available_audio_langs_for_url(
+        url,
+        verbose=verbose,
+        retry_on_network_failure=effective_retry_on_network_failure,
+    )
     if not langs:
         typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
         raise typer.Exit(code=1)
