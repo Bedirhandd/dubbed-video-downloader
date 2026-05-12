@@ -31,6 +31,7 @@ class CliTests(unittest.TestCase):
                 "output_dir: ~/Downloads/dbdvdl-output\n"
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: en\n"
+                "default_download_mode: video\n"
                 "retry_on_network_failure: 3\n",
             )
 
@@ -59,6 +60,7 @@ class CliTests(unittest.TestCase):
                 "output_dir: ~/Downloads/dbdvdl-output\n"
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: en\n"
+                "default_download_mode: video\n"
                 "retry_on_network_failure: 3\n",
             )
 
@@ -99,6 +101,46 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertIn(
                 "default_lang: tr\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
+    def test_init_writes_custom_default_download_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["init", "--default-download-mode", "audio"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_download_mode: audio\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
+    def test_config_init_writes_custom_default_download_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["config", "init", "--default-download-mode", "audio"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_download_mode: audio\n",
                 config_path.read_text(encoding="utf-8"),
             )
 
@@ -150,6 +192,7 @@ class CliTests(unittest.TestCase):
         )
         self.assertIn("FFmpeg path: ffmpeg", result.output)
         self.assertIn("Default language: en", result.output)
+        self.assertIn("Default download mode: video", result.output)
         self.assertIn("Retry on network failure: 3", result.output)
 
     def test_config_show_requires_existing_config(self) -> None:
@@ -269,6 +312,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--dry-run", result.output)
         self.assertIn("--verbose", result.output)
+        self.assertIn("--mode", result.output)
         self.assertIn("--retry-on-network-failure", result.output)
         self.assertIn("Overrides config", result.output)
         self.assertIn("default.", result.output)
@@ -285,6 +329,7 @@ class CliTests(unittest.TestCase):
                 "output_dir: ~/Downloads/from-config\n"
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: tr\n"
+                "default_download_mode: audio\n"
                 "retry_on_network_failure: 4\n",
                 encoding="utf-8",
             )
@@ -299,6 +344,8 @@ class CliTests(unittest.TestCase):
                         "https://www.youtube.com/watch?v=EXAMPLE",
                         "--lang",
                         "en",
+                        "--mode",
+                        "video",
                         "--output-dir",
                         str(override_output),
                         "--ffmpeg-path",
@@ -313,6 +360,7 @@ class CliTests(unittest.TestCase):
         download.assert_called_once_with(
             url="https://www.youtube.com/watch?v=EXAMPLE",
             lang="en",
+            download_mode=core.DownloadMode.VIDEO,
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
             verbose=False,
@@ -329,7 +377,8 @@ class CliTests(unittest.TestCase):
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
                 "ffmpeg_path: ffmpeg\n"
-                "default_lang: en\n",
+                "default_lang: en\n"
+                "default_download_mode: audio\n",
                 encoding="utf-8",
             )
 
@@ -348,6 +397,7 @@ class CliTests(unittest.TestCase):
         download.assert_called_once_with(
             url="https://www.youtube.com/watch?v=EXAMPLE",
             lang="en",
+            download_mode=core.DownloadMode.AUDIO,
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,
@@ -401,6 +451,37 @@ class CliTests(unittest.TestCase):
         self.assertIn("retry_on_network_failure", result.output)
         download.assert_not_called()
 
+    def test_download_rejects_invalid_mode_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--mode",
+                        "mp3",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn("--mode", result.output)
+        self.assertIn("mp3", result.output)
+        download.assert_not_called()
+
     def test_download_dry_run_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -412,6 +493,7 @@ class CliTests(unittest.TestCase):
                 "output_dir: ~/Downloads/from-config\n"
                 "ffmpeg_path: ffmpeg\n"
                 "default_lang: tr\n"
+                "default_download_mode: video\n"
                 "retry_on_network_failure: 4\n",
                 encoding="utf-8",
             )
@@ -426,6 +508,7 @@ class CliTests(unittest.TestCase):
                     return_value=core.DownloadPlan(
                         url="https://www.youtube.com/watch?v=EXAMPLE",
                         lang="en",
+                        download_mode=core.DownloadMode.AUDIO,
                         title="Title",
                         uploader="Channel",
                         available_langs=("en", "tr"),
@@ -440,6 +523,8 @@ class CliTests(unittest.TestCase):
                         "https://www.youtube.com/watch?v=EXAMPLE",
                         "--lang",
                         "en",
+                        "--mode",
+                        "audio",
                         "--output-dir",
                         str(override_output),
                         "--ffmpeg-path",
@@ -455,6 +540,7 @@ class CliTests(unittest.TestCase):
         plan.assert_called_once_with(
             url="https://www.youtube.com/watch?v=EXAMPLE",
             lang="en",
+            download_mode=core.DownloadMode.AUDIO,
             ffmpeg_path=str(override_ffmpeg),
             output_dir=override_output,
             verbose=False,
@@ -462,6 +548,7 @@ class CliTests(unittest.TestCase):
         )
         download.assert_not_called()
         self.assertIn("Dry run: no files will be downloaded or created.", result.output)
+        self.assertIn("Mode: audio", result.output)
         self.assertIn(f"Output: {planned_output}", result.output)
 
     def test_download_dry_run_uses_color_when_enabled(self) -> None:
@@ -483,6 +570,7 @@ class CliTests(unittest.TestCase):
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
+                    download_mode=core.DownloadMode.VIDEO,
                     title="Title",
                     uploader="Channel",
                     available_langs=("en",),
@@ -525,6 +613,7 @@ class CliTests(unittest.TestCase):
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
+                    download_mode=core.DownloadMode.VIDEO,
                     title="Title",
                     uploader="Channel",
                     available_langs=("en",),
@@ -546,6 +635,7 @@ class CliTests(unittest.TestCase):
         plan.assert_called_once_with(
             url="https://www.youtube.com/watch?v=EXAMPLE",
             lang="en",
+            download_mode=core.DownloadMode.VIDEO,
             ffmpeg_path=None,
             output_dir=home / "Downloads" / "from-config",
             verbose=True,

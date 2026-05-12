@@ -7,6 +7,9 @@ from typing import Any
 
 import yt_dlp
 
+from .download_mode import DownloadMode
+from .download_mode import normalize_download_mode
+
 DEFAULT_OUTPUT_DIR = Path("Videos")
 DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
@@ -21,6 +24,7 @@ class DownloadPlan:
     uploader: str | None
     available_langs: tuple[str, ...]
     output_path: Path
+    download_mode: DownloadMode = DownloadMode.VIDEO
 
 
 def ydl_base_opts() -> dict[str, Any]:
@@ -107,6 +111,7 @@ def outtmpl(lang: str, output_dir: str | Path = DEFAULT_OUTPUT_DIR) -> str:
 def plan_download(
     url: str,
     lang: str,
+    download_mode: DownloadMode | str = DownloadMode.VIDEO,
     ffmpeg_path: str | Path | None = None,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
@@ -114,6 +119,7 @@ def plan_download(
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> DownloadPlan:
     """Validate and describe a download without writing files."""
+    selected_download_mode = normalize_download_mode(download_mode)
     info = get_video_info(
         url,
         verbose=verbose,
@@ -124,12 +130,14 @@ def plan_download(
     return DownloadPlan(
         url=url,
         lang=lang,
+        download_mode=selected_download_mode,
         title=_optional_string(info.get("title")),
         uploader=_optional_string(info.get("uploader")),
         available_langs=tuple(sorted(get_available_audio_langs(info))),
         output_path=_planned_output_path(
             info=info,
             lang=lang,
+            download_mode=selected_download_mode,
             ffmpeg_path=ffmpeg_path,
             output_dir=output_dir,
             merge_output_format=merge_output_format,
@@ -141,13 +149,15 @@ def plan_download(
 def download(
     url: str,
     lang: str,
+    download_mode: DownloadMode | str = DownloadMode.VIDEO,
     ffmpeg_path: str | Path | None = None,
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     merge_output_format: str = DEFAULT_MERGE_OUTPUT_FORMAT,
     verbose: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> None:
-    """Download a single video with the specified dub language."""
+    """Download a single URL with the specified dub language and mode."""
+    selected_download_mode = normalize_download_mode(download_mode)
     info = get_video_info(
         url,
         verbose=verbose,
@@ -159,6 +169,7 @@ def download(
     with yt_dlp.YoutubeDL(
         _download_ydl_opts(
             lang=lang,
+            download_mode=selected_download_mode,
             ffmpeg_path=ffmpeg_path,
             output_dir=output_dir,
             merge_output_format=merge_output_format,
@@ -172,21 +183,24 @@ def download(
 def _download_ydl_opts(
     *,
     lang: str,
+    download_mode: DownloadMode | str,
     ffmpeg_path: str | Path | None,
     output_dir: str | Path,
     merge_output_format: str,
     verbose: bool,
     retry_on_network_failure: int,
 ) -> dict[str, Any]:
+    selected_download_mode = normalize_download_mode(download_mode)
     ydl_opts: dict[str, Any] = {
         **ydl_base_opts(),
         **_network_retry_ydl_opts(retry_on_network_failure),
         **_yt_dlp_diagnostic_opts(verbose=verbose),
-        "format": f"bv*+bestaudio[language=\"{lang}\"]",
+        "format": _download_format(lang, selected_download_mode),
         "outtmpl": outtmpl(lang, output_dir),
         "restrictfilenames": True,
-        "merge_output_format": merge_output_format,
     }
+    if selected_download_mode == DownloadMode.VIDEO:
+        ydl_opts["merge_output_format"] = merge_output_format
     if ffmpeg_path:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
     return ydl_opts
@@ -196,14 +210,16 @@ def _planned_output_path(
     *,
     info: dict[str, Any],
     lang: str,
+    download_mode: DownloadMode | str,
     ffmpeg_path: str | Path | None,
     output_dir: str | Path,
     merge_output_format: str,
     retry_on_network_failure: int,
 ) -> Path:
-    planned_info = {**info, "ext": merge_output_format}
+    planned_info = _copy_info_for_planning(info)
     ydl_opts = _download_ydl_opts(
         lang=lang,
+        download_mode=download_mode,
         ffmpeg_path=ffmpeg_path,
         output_dir=output_dir,
         merge_output_format=merge_output_format,
@@ -212,11 +228,29 @@ def _planned_output_path(
     )
 
     with yt_dlp.YoutubeDL({**ydl_opts, "quiet": True}) as ydl:
-        filename = ydl.prepare_filename(planned_info)
+        selected_info = ydl.process_ie_result(planned_info, download=False)
+        filename = ydl.prepare_filename(selected_info)
 
     if not filename:
         raise RuntimeError("Could not determine planned output path.")
     return Path(filename)
+
+
+def _download_format(lang: str, download_mode: DownloadMode) -> str:
+    if download_mode == DownloadMode.AUDIO:
+        return f"bestaudio[language=\"{lang}\"]"
+    return f"bv*+bestaudio[language=\"{lang}\"]"
+
+
+def _copy_info_for_planning(info: dict[str, Any]) -> dict[str, Any]:
+    planned_info = dict(info)
+    formats = info.get("formats")
+    if isinstance(formats, list):
+        planned_info["formats"] = [
+            dict(format_info) if isinstance(format_info, dict) else format_info
+            for format_info in formats
+        ]
+    return planned_info
 
 
 def _optional_string(value: Any) -> str | None:

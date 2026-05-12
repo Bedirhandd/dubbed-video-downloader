@@ -10,6 +10,7 @@ from . import __version__
 from . import config as app_config
 from . import core
 from . import doctor
+from .download_mode import DownloadMode
 
 HELP_EPILOG = """
 Examples:
@@ -24,12 +25,12 @@ Examples:
 
   dbdvdl download https://www.youtube.com/watch?v=VIDEO_ID
 
-  dbdvdl download URL1 URL2 --lang tr --output-dir ~/Downloads/dbdvdl-output
+  dbdvdl download URL1 URL2 --lang tr --mode video --output-dir ~/Downloads/dbdvdl-output
 """
 
 app = typer.Typer(
     help=(
-        "Download YouTube videos with a selected dubbed audio track.\n\n"
+        "Download YouTube video or audio with a selected dubbed audio track.\n\n"
         "Use `langs` to inspect available audio languages, then `download` with "
         "the language code you want."
     ),
@@ -86,6 +87,14 @@ def _normalize_default_lang_or_exit(value: str) -> str:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
+    try:
+        return app_config.normalize_download_mode(value)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _normalize_retry_on_network_failure_or_exit(value: int) -> int:
     try:
         return app_config.normalize_retry_on_network_failure(value)
@@ -114,6 +123,19 @@ def _prompt_retry_on_network_failure(value: int | None) -> int:
     return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
 
 
+def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
+    if value is not None:
+        return value
+    if _stdin_is_interactive():
+        return str(
+            typer.prompt(
+                "Default download mode",
+                default=app_config.DEFAULT_DOWNLOAD_MODE.value,
+            )
+        )
+    return app_config.DEFAULT_DOWNLOAD_MODE
+
+
 def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
@@ -122,6 +144,7 @@ def _write_config_or_exit(
     output_dir: str,
     ffmpeg_path: str,
     default_lang: str,
+    default_download_mode: DownloadMode | str,
     retry_on_network_failure: int,
     force: bool,
 ) -> None:
@@ -130,6 +153,7 @@ def _write_config_or_exit(
             output_dir=output_dir,
             ffmpeg_path=ffmpeg_path,
             default_lang=default_lang,
+            default_download_mode=default_download_mode,
             retry_on_network_failure=retry_on_network_failure,
             overwrite=force,
         )
@@ -144,6 +168,7 @@ def _init_config(
     output_dir: str | None,
     ffmpeg_path: str | None,
     default_lang: str | None,
+    default_download_mode: DownloadMode | None,
     retry_on_network_failure: int | None,
     force: bool,
 ) -> None:
@@ -162,6 +187,7 @@ def _init_config(
         "Default language",
         app_config.DEFAULT_LANG,
     )
+    selected_default_download_mode = _prompt_download_mode(default_download_mode)
     selected_retry_on_network_failure = _prompt_retry_on_network_failure(
         retry_on_network_failure
     )
@@ -169,6 +195,7 @@ def _init_config(
         selected_output_dir,
         selected_ffmpeg_path,
         selected_default_lang,
+        selected_default_download_mode,
         selected_retry_on_network_failure,
         force,
     )
@@ -180,7 +207,7 @@ def _print_config_recreate_hint() -> None:
     typer.echo(
         "  dbdvdl init --output-dir ~/Videos "
         "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
-        "--retry-on-network-failure 3"
+        "--default-download-mode video --retry-on-network-failure 3"
     )
 
 
@@ -204,6 +231,7 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
     if plan.uploader:
         _print_label_value("Channel", plan.uploader)
     _print_label_value("Language", plan.lang)
+    _print_label_value("Mode", plan.download_mode.value)
     if plan.available_langs:
         _print_label_value("Available languages", ", ".join(plan.available_langs))
     _print_label_value("Output", plan.output_path)
@@ -216,7 +244,7 @@ def init_command(
         typer.Option(
             "--output-dir",
             "-o",
-            help="Absolute directory where videos will be saved. Supports ~.",
+            help="Absolute directory where downloads will be saved. Supports ~.",
         ),
     ] = None,
     ffmpeg_path: Annotated[
@@ -231,6 +259,13 @@ def init_command(
         typer.Option(
             "--default-lang",
             help="Default dub language code to use when --lang is omitted.",
+        ),
+    ] = None,
+    default_download_mode: Annotated[
+        DownloadMode | None,
+        typer.Option(
+            "--default-download-mode",
+            help="Default download mode to use when --mode is omitted.",
         ),
     ] = None,
     retry_on_network_failure: Annotated[
@@ -250,6 +285,7 @@ def init_command(
         output_dir,
         ffmpeg_path,
         default_lang,
+        default_download_mode,
         retry_on_network_failure,
         force,
     )
@@ -262,7 +298,7 @@ def config_init_command(
         typer.Option(
             "--output-dir",
             "-o",
-            help="Absolute directory where videos will be saved. Supports ~.",
+            help="Absolute directory where downloads will be saved. Supports ~.",
         ),
     ] = None,
     ffmpeg_path: Annotated[
@@ -277,6 +313,13 @@ def config_init_command(
         typer.Option(
             "--default-lang",
             help="Default dub language code to use when --lang is omitted.",
+        ),
+    ] = None,
+    default_download_mode: Annotated[
+        DownloadMode | None,
+        typer.Option(
+            "--default-download-mode",
+            help="Default download mode to use when --mode is omitted.",
         ),
     ] = None,
     retry_on_network_failure: Annotated[
@@ -296,6 +339,7 @@ def config_init_command(
         output_dir,
         ffmpeg_path,
         default_lang,
+        default_download_mode,
         retry_on_network_failure,
         force,
     )
@@ -309,6 +353,7 @@ def config_show_command() -> None:
     typer.echo(f"Output directory: {loaded_config.output_dir}")
     typer.echo(f"FFmpeg path: {loaded_config.ffmpeg_path}")
     typer.echo(f"Default language: {loaded_config.default_lang}")
+    typer.echo(f"Default download mode: {loaded_config.default_download_mode.value}")
     typer.echo(f"Retry on network failure: {loaded_config.retry_on_network_failure}")
 
 
@@ -407,12 +452,19 @@ def download_command(
             help="Target dub language code. Overrides config default.",
         ),
     ] = None,
+    mode: Annotated[
+        DownloadMode | None,
+        typer.Option(
+            "--mode",
+            help="Download mode. Overrides config default.",
+        ),
+    ] = None,
     output_dir: Annotated[
         str | None,
         typer.Option(
             "--output-dir",
             "-o",
-            help="Absolute directory where videos will be saved. Supports ~.",
+            help="Absolute directory where downloads will be saved. Supports ~.",
         ),
     ] = None,
     ffmpeg_path: Annotated[
@@ -463,6 +515,11 @@ def download_command(
         if lang is not None
         else loaded_config.default_lang
     )
+    effective_download_mode = (
+        _normalize_download_mode_or_exit(mode)
+        if mode is not None
+        else loaded_config.default_download_mode
+    )
     effective_retry_on_network_failure = (
         _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
         if retry_on_network_failure is not None
@@ -478,6 +535,7 @@ def download_command(
                 plan = core.plan_download(
                     url=url,
                     lang=effective_lang,
+                    download_mode=effective_download_mode,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,
@@ -489,6 +547,7 @@ def download_command(
                 core.download(
                     url=url,
                     lang=effective_lang,
+                    download_mode=effective_download_mode,
                     ffmpeg_path=ffmpeg_location,
                     output_dir=effective_output_dir,
                     verbose=verbose,

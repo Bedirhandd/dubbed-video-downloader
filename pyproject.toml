@@ -1,7 +1,7 @@
 [project]
 name = "dubbed-video-downloader"
 version = "0.1.0"
-description = "Download YouTube videos with a selected dubbed audio track."
+description = "Download YouTube videos or audio with a selected dubbed audio track."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

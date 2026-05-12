@@ -8,11 +8,15 @@ from typing import Any
 
 import yaml
 
+from .download_mode import DownloadMode
+from .download_mode import normalize_download_mode as _normalize_download_mode
+
 CONFIG_DIR_NAME = "dubbed-video-downloader"
 CONFIG_FILE_NAME = "config.yaml"
 DEFAULT_OUTPUT_DIR = "~/Downloads/dbdvdl-output"
 DEFAULT_FFMPEG_PATH = "ffmpeg"
 DEFAULT_LANG = "en"
+DEFAULT_DOWNLOAD_MODE = DownloadMode.VIDEO
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
 
 
@@ -21,6 +25,7 @@ class AppConfig:
     output_dir: Path
     ffmpeg_path: str
     default_lang: str
+    default_download_mode: DownloadMode
     retry_on_network_failure: int
 
 
@@ -78,11 +83,16 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
         "retry_on_network_failure",
         DEFAULT_RETRY_ON_NETWORK_FAILURE,
     )
+    default_download_mode = raw_config.get(
+        "default_download_mode",
+        DEFAULT_DOWNLOAD_MODE,
+    )
 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
         ffmpeg_path=normalize_ffmpeg_path(ffmpeg_path),
         default_lang=normalize_default_lang(default_lang),
+        default_download_mode=normalize_download_mode(default_download_mode),
         retry_on_network_failure=normalize_retry_on_network_failure(
             retry_on_network_failure
         ),
@@ -94,6 +104,7 @@ def write_config(
     output_dir: str,
     ffmpeg_path: str,
     default_lang: str,
+    default_download_mode: str | DownloadMode = DEFAULT_DOWNLOAD_MODE,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     path: Path | None = None,
     overwrite: bool = False,
@@ -107,6 +118,7 @@ def write_config(
     normalize_output_dir(output_dir)
     normalize_ffmpeg_path(ffmpeg_path)
     normalized_default_lang = normalize_default_lang(default_lang)
+    normalized_default_download_mode = normalize_download_mode(default_download_mode)
     normalized_retry_on_network_failure = normalize_retry_on_network_failure(
         retry_on_network_failure
     )
@@ -117,6 +129,7 @@ def write_config(
             "output_dir": output_dir,
             "ffmpeg_path": ffmpeg_path,
             "default_lang": normalized_default_lang,
+            "default_download_mode": normalized_default_download_mode.value,
             "retry_on_network_failure": normalized_retry_on_network_failure,
         },
         sort_keys=False,
@@ -162,6 +175,13 @@ def normalize_ffmpeg_path(value: str) -> str:
 
 def normalize_default_lang(value: str) -> str:
     return _clean_string(value, "default_lang")
+
+
+def normalize_download_mode(value: Any) -> DownloadMode:
+    try:
+        return _normalize_download_mode(value, key="default_download_mode")
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
 
 
 def normalize_retry_on_network_failure(value: Any) -> int:

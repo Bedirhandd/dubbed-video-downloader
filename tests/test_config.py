@@ -27,6 +27,7 @@ class ConfigTests(unittest.TestCase):
                 "output_dir: ~/Videos\n"
                 "ffmpeg_path: $HOME/bin/ffmpeg\n"
                 "default_lang: en\n"
+                "default_download_mode: audio\n"
                 "retry_on_network_failure: 5\n",
                 encoding="utf-8",
             )
@@ -37,9 +38,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.output_dir, home / "Videos")
         self.assertEqual(loaded_config.ffmpeg_path, str(home / "bin" / "ffmpeg"))
         self.assertEqual(loaded_config.default_lang, "en")
+        self.assertEqual(loaded_config.default_download_mode, config.DownloadMode.AUDIO)
         self.assertEqual(loaded_config.retry_on_network_failure, 5)
 
-    def test_missing_retry_on_network_failure_uses_default(self) -> None:
+    def test_missing_optional_keys_use_defaults(self) -> None:
         loaded_config = config.config_from_mapping(
             {
                 "output_dir": "/tmp/dbdvdl-output",
@@ -52,6 +54,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.ffmpeg_path, "ffmpeg")
         self.assertEqual(loaded_config.default_lang, "en")
         self.assertEqual(
+            loaded_config.default_download_mode,
+            config.DEFAULT_DOWNLOAD_MODE,
+        )
+        self.assertEqual(
             loaded_config.retry_on_network_failure,
             config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
         )
@@ -62,6 +68,7 @@ class ConfigTests(unittest.TestCase):
                 "output_dir": "/tmp/dbdvdl-output",
                 "ffmpeg_path": "ffmpeg",
                 "default_lang": "en",
+                "default_download_mode": "audio",
                 "retry_on_network_failure": 4,
                 "future": "accepted",
             }
@@ -70,6 +77,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.output_dir, Path("/tmp/dbdvdl-output"))
         self.assertEqual(loaded_config.ffmpeg_path, "ffmpeg")
         self.assertEqual(loaded_config.default_lang, "en")
+        self.assertEqual(loaded_config.default_download_mode, config.DownloadMode.AUDIO)
         self.assertEqual(loaded_config.retry_on_network_failure, 4)
 
     def test_missing_ffmpeg_path_fails(self) -> None:
@@ -123,6 +131,28 @@ class ConfigTests(unittest.TestCase):
             config.normalize_default_lang(" ")
 
         self.assertIn("default_lang", str(context.exception))
+
+    def test_download_mode_accepts_video_and_audio(self) -> None:
+        self.assertEqual(
+            config.normalize_download_mode("video"),
+            config.DownloadMode.VIDEO,
+        )
+        self.assertEqual(
+            config.normalize_download_mode("audio"),
+            config.DownloadMode.AUDIO,
+        )
+
+    def test_invalid_download_mode_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_download_mode("mp3")
+
+        self.assertIn("default_download_mode", str(context.exception))
+
+    def test_wrong_download_mode_type_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_download_mode(123)
+
+        self.assertIn("default_download_mode", str(context.exception))
 
     def test_zero_retry_on_network_failure_is_allowed(self) -> None:
         self.assertEqual(config.normalize_retry_on_network_failure(0), 0)

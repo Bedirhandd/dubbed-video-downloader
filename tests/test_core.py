@@ -78,18 +78,36 @@ class CoreTests(unittest.TestCase):
         self,
     ) -> None:
         info = {
+            "id": "example",
+            "extractor": "youtube",
             "title": "A Title",
             "uploader": "Example Channel",
             "formats": [
                 {
+                    "format_id": "video",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "tr-audio",
                     "vcodec": "none",
                     "acodec": "mp4a.40.2",
                     "language": "tr",
+                    "ext": "m4a",
+                    "url": "https://example.test/tr.m4a",
+                    "tbr": 128,
                 },
                 {
+                    "format_id": "en-audio",
                     "vcodec": "none",
                     "acodec": "mp4a.40.2",
                     "language": "en",
+                    "ext": "m4a",
+                    "url": "https://example.test/en.m4a",
+                    "tbr": 128,
                 },
             ],
         }
@@ -107,12 +125,67 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(plan.url, "https://www.youtube.com/watch?v=EXAMPLE")
         self.assertEqual(plan.lang, "tr")
+        self.assertEqual(plan.download_mode, core.DownloadMode.VIDEO)
         self.assertEqual(plan.title, "A Title")
         self.assertEqual(plan.uploader, "Example Channel")
         self.assertEqual(plan.available_langs, ("en", "tr"))
         self.assertEqual(
             plan.output_path,
             output_dir / "tr" / "Example_Channel" / "A_Title" / "A_Title.mkv",
+        )
+
+    def test_plan_download_audio_mode_uses_native_audio_extension(self) -> None:
+        info = {
+            "id": "example",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "video",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "tr-audio-low",
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                    "ext": "m4a",
+                    "url": "https://example.test/tr-low.m4a",
+                    "tbr": 50,
+                },
+                {
+                    "format_id": "tr-audio-high",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "ext": "webm",
+                    "url": "https://example.test/tr-high.webm",
+                    "tbr": 160,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "planned-output"
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    download_mode=core.DownloadMode.AUDIO,
+                    output_dir=output_dir,
+                )
+
+            self.assertFalse(output_dir.exists())
+
+        self.assertEqual(plan.download_mode, core.DownloadMode.AUDIO)
+        self.assertEqual(
+            plan.output_path,
+            output_dir / "tr" / "Example_Channel" / "A_Title" / "A_Title.webm",
         )
 
     def test_plan_download_raises_when_requested_language_is_missing(self) -> None:
@@ -170,10 +243,42 @@ class CoreTests(unittest.TestCase):
         opts = youtube_dl.call_args.args[0]
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
+        self.assertEqual(opts["format"], 'bv*+bestaudio[language="tr"]')
+        self.assertEqual(opts["merge_output_format"], "mkv")
         self.assertEqual(opts["retries"], 2)
         self.assertEqual(opts["fragment_retries"], 2)
         self.assertEqual(opts["extractor_retries"], 2)
         self.assertNotIn("file_access_retries", opts)
+        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+    def test_download_audio_mode_uses_audio_only_selector(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    download_mode=core.DownloadMode.AUDIO,
+                    output_dir=Path(tmpdir),
+                )
+
+        opts = youtube_dl.call_args.args[0]
+        self.assertEqual(opts["format"], 'bestaudio[language="tr"]')
+        self.assertNotIn("merge_output_format", opts)
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
     def test_download_enables_verbose_ytdlp_output(self) -> None:
