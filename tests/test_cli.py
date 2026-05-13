@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from dubbed_video_downloader import config
 from dubbed_video_downloader import core
+from dubbed_video_downloader import errors
 from dubbed_video_downloader import quality
 from dubbed_video_downloader.cli import app
 
@@ -1038,6 +1039,68 @@ class CliTests(unittest.TestCase):
             retry_on_network_failure=3,
         )
 
+    def test_langs_reports_metadata_error_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                side_effect=errors.MetadataExtractionError("metadata failed"),
+            ) as langs:
+                result = self.runner.invoke(
+                    app,
+                    ["langs", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        langs.assert_called_once()
+        self.assertIn("Error: metadata failed", result.output)
+        self.assertNotIn("Traceback", result.output)
+
+    def test_langs_reports_metadata_error_traceback_with_debug(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                side_effect=errors.MetadataExtractionError("metadata failed"),
+            ) as langs:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "langs",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--debug",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        langs.assert_called_once()
+        self.assertIn("Error: metadata failed", result.output)
+        self.assertIn("Traceback", result.output)
+
     def test_qualities_requires_config_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch("dubbed_video_downloader.cli.core.get_quality_report") as report:
@@ -1050,6 +1113,68 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
         report.assert_not_called()
+
+    def test_qualities_reports_domain_error_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_quality_report",
+                side_effect=errors.LanguageUnavailableError("missing language"),
+            ) as report:
+                result = self.runner.invoke(
+                    app,
+                    ["qualities", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        report.assert_called_once()
+        self.assertIn("Error: missing language", result.output)
+        self.assertNotIn("Traceback", result.output)
+
+    def test_qualities_reports_domain_error_traceback_with_debug(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_quality_report",
+                side_effect=errors.LanguageUnavailableError("missing language"),
+            ) as report:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "qualities",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--debug",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        report.assert_called_once()
+        self.assertIn("Error: missing language", result.output)
+        self.assertIn("Traceback", result.output)
 
     def test_qualities_uses_config_and_allows_lang_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any
 
 import yt_dlp
+from yt_dlp.utils import YoutubeDLError
 
+from . import errors
 from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode
@@ -70,14 +72,19 @@ def get_video_info(
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
 ) -> dict[str, Any]:
     """Fetch video metadata without downloading the video."""
-    with yt_dlp.YoutubeDL(
-        {
-            **ydl_base_opts(),
-            **_network_retry_ydl_opts(retry_on_network_failure),
-            **_yt_dlp_output_opts(verbose=verbose, debug=debug),
-        }
-    ) as ydl:
-        info = ydl.extract_info(url, download=False)
+    try:
+        with yt_dlp.YoutubeDL(
+            {
+                **ydl_base_opts(),
+                **_network_retry_ydl_opts(retry_on_network_failure),
+                **_yt_dlp_output_opts(verbose=verbose, debug=debug),
+            }
+        ) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except YoutubeDLError as exc:
+        raise errors.MetadataExtractionError(
+            f"Could not extract video metadata: {exc}"
+        ) from exc
     return info
 
 
@@ -146,8 +153,10 @@ def ensure_lang(info: dict[str, Any], target: str) -> None:
     if target not in langs:
         title = info.get("title")
         if not langs:
-            raise RuntimeError(f"No multi-language audio tracks found for '{title}'.")
-        raise RuntimeError(
+            raise errors.LanguageUnavailableError(
+                f"No multi-language audio tracks found for '{title}'."
+            )
+        raise errors.LanguageUnavailableError(
             f"Requested dub language not found for '{title}'.\n"
             f"Requested: {target}\n"
             f"Available: {', '.join(sorted(langs))}"

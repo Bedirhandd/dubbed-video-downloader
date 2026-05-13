@@ -11,6 +11,7 @@ from . import __version__
 from . import config as app_config
 from . import core
 from . import doctor
+from . import errors
 from . import quality
 from .download_mode import DownloadMode
 
@@ -121,6 +122,12 @@ def _normalize_retry_on_network_failure_or_exit(value: int) -> int:
     except app_config.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
+
+
+def _print_command_error(exc: BaseException, *, debug: bool) -> None:
+    typer.secho(f"Error: {exc}", fg=typer.colors.RED, bold=True, err=True)
+    if debug:
+        traceback.print_exception(exc, file=sys.stderr)
 
 
 def _prompt_value(value: str | None, prompt: str, default: str) -> str:
@@ -734,9 +741,7 @@ def download_command(
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
         except Exception as exc:
             failures += 1
-            typer.secho(f"Error: {exc}", fg=typer.colors.RED, bold=True, err=True)
-            if debug:
-                traceback.print_exception(exc, file=sys.stderr)
+            _print_command_error(exc, debug=debug)
 
     if failures:
         raise typer.Exit(code=1)
@@ -781,12 +786,16 @@ def langs_command(
         if retry_on_network_failure is not None
         else loaded_config.retry_on_network_failure
     )
-    langs = core.get_available_audio_langs_for_url(
-        url,
-        verbose=verbose,
-        debug=debug,
-        retry_on_network_failure=effective_retry_on_network_failure,
-    )
+    try:
+        langs = core.get_available_audio_langs_for_url(
+            url,
+            verbose=verbose,
+            debug=debug,
+            retry_on_network_failure=effective_retry_on_network_failure,
+        )
+    except errors.DubbedVideoDownloaderError as exc:
+        _print_command_error(exc, debug=debug)
+        raise typer.Exit(code=1) from exc
     if not langs:
         typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
         raise typer.Exit(code=1)
@@ -847,11 +856,15 @@ def qualities_command(
         if retry_on_network_failure is not None
         else loaded_config.retry_on_network_failure
     )
-    report = core.get_quality_report(
-        url,
-        effective_lang,
-        verbose=verbose,
-        debug=debug,
-        retry_on_network_failure=effective_retry_on_network_failure,
-    )
+    try:
+        report = core.get_quality_report(
+            url,
+            effective_lang,
+            verbose=verbose,
+            debug=debug,
+            retry_on_network_failure=effective_retry_on_network_failure,
+        )
+    except errors.DubbedVideoDownloaderError as exc:
+        _print_command_error(exc, debug=debug)
+        raise typer.Exit(code=1) from exc
     _print_quality_report(report)

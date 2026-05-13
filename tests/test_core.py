@@ -5,7 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from yt_dlp.utils import YoutubeDLError
+
 from dubbed_video_downloader import core
+from dubbed_video_downloader import errors
 from dubbed_video_downloader import quality
 
 
@@ -80,6 +83,19 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(opts["retries"], 2)
         self.assertEqual(opts["fragment_retries"], 2)
         self.assertEqual(opts["extractor_retries"], 2)
+
+    def test_get_video_info_wraps_ytdlp_metadata_failures(self) -> None:
+        cause = YoutubeDLError("metadata failed")
+        with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
+            ydl = youtube_dl.return_value.__enter__.return_value
+            ydl.extract_info.side_effect = cause
+
+            with self.assertRaises(errors.MetadataExtractionError) as context:
+                core.get_video_info("https://www.youtube.com/watch?v=EXAMPLE")
+
+        self.assertIs(context.exception.__cause__, cause)
+        self.assertIn("Could not extract video metadata", str(context.exception))
+        self.assertIn("metadata failed", str(context.exception))
 
     def test_get_video_info_rejects_invalid_network_retry_count(self) -> None:
         with self.assertRaises(ValueError) as context:
@@ -435,7 +451,7 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
             with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-                with self.assertRaises(RuntimeError) as context:
+                with self.assertRaises(errors.LanguageUnavailableError) as context:
                     core.plan_download(
                         url="https://www.youtube.com/watch?v=EXAMPLE",
                         lang="tr",
