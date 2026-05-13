@@ -194,7 +194,7 @@ def get_available_video_heights(info: dict[str, Any]) -> tuple[int, ...]:
     heights = {
         height
         for format_info in _format_items(info)
-        if _is_video_format(format_info)
+        if _is_video_only_format(format_info)
         for height in [_positive_int(format_info.get("height"))]
         if height is not None
     }
@@ -256,7 +256,7 @@ def _resolve_video_selector(
     video_quality: VideoQuality,
 ) -> tuple[str, str, tuple[str, ...]]:
     if video_quality.kind == VideoQualityKind.BEST:
-        return "bv*", video_quality.label, ()
+        return "bv", video_quality.label, ()
 
     heights = get_available_video_heights(info)
     if not heights:
@@ -362,7 +362,7 @@ def _audio_candidate_selector(
 
 
 def _video_height_selector(height: int) -> str:
-    return f"bv*[height={height}]"
+    return f"bv[height={height}]"
 
 
 def _closest_height(heights: tuple[int, ...], target: int) -> int:
@@ -376,8 +376,11 @@ def _format_items(info: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     return tuple(format_info for format_info in formats if isinstance(format_info, dict))
 
 
-def _is_video_format(format_info: dict[str, Any]) -> bool:
-    return format_info.get("vcodec") not in (None, "none")
+def _is_video_only_format(format_info: dict[str, Any]) -> bool:
+    return (
+        format_info.get("vcodec") not in (None, "none")
+        and format_info.get("acodec") == "none"
+    )
 
 
 def _is_audio_format(format_info: dict[str, Any], lang: str) -> bool:

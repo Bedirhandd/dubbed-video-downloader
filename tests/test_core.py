@@ -248,6 +248,107 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(plan.audio_quality, "low")
         self.assertEqual(plan.selected_audio_quality, "128k")
 
+    def test_available_video_heights_ignore_progressive_formats(self) -> None:
+        info = {
+            "formats": [
+                {
+                    "format_id": "progressive-720",
+                    "vcodec": "avc1.64001f",
+                    "acodec": "mp4a.40.2",
+                    "height": 720,
+                },
+                {
+                    "format_id": "video-480",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 480,
+                },
+            ],
+        }
+
+        self.assertEqual(quality.get_available_video_heights(info), (480,))
+
+    def test_plan_download_medium_video_ignores_progressive_heights(self) -> None:
+        info = {
+            "id": "example",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "progressive-720",
+                    "vcodec": "avc1.64001f",
+                    "acodec": "mp4a.40.2",
+                    "height": 720,
+                    "ext": "mp4",
+                    "url": "https://example.test/progressive.mp4",
+                    "tbr": 1500,
+                },
+                {
+                    "format_id": "video-480",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "height": 480,
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "tr-audio",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "ext": "webm",
+                    "url": "https://example.test/tr.webm",
+                    "tbr": 128,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "planned-output"
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                    video_quality="medium",
+                )
+
+        self.assertEqual(plan.video_quality, "medium")
+        self.assertEqual(plan.selected_video_quality, "480p")
+
+    def test_plan_download_exact_video_quality_rejects_progressive_only_height(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "format_id": "progressive-720",
+                    "vcodec": "avc1.64001f",
+                    "acodec": "mp4a.40.2",
+                    "height": 720,
+                },
+                {
+                    "format_id": "tr-audio",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with self.assertRaises(quality.QualityError) as context:
+                core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    video_quality="720p",
+                )
+
+        self.assertIn("No usable video qualities were found", str(context.exception))
+
     def test_plan_download_exact_video_quality_missing_fails_with_available_heights(
         self,
     ) -> None:
@@ -374,7 +475,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(opts["quiet"])
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
-        self.assertEqual(opts["format"], 'bv*+bestaudio[language="tr"]')
+        self.assertEqual(opts["format"], 'bv+bestaudio[language="tr"]')
         self.assertEqual(opts["merge_output_format"], "mkv")
         self.assertEqual(opts["retries"], 2)
         self.assertEqual(opts["fragment_retries"], 2)
@@ -416,6 +517,12 @@ class CoreTests(unittest.TestCase):
         info = {
             "title": "A Title",
             "formats": [
+                {
+                    "format_id": "progressive-720",
+                    "vcodec": "avc1.64001f",
+                    "acodec": "mp4a.40.2",
+                    "height": 720,
+                },
                 {
                     "format_id": "video-360",
                     "vcodec": "vp9",
@@ -462,7 +569,7 @@ class CoreTests(unittest.TestCase):
         opts = youtube_dl.call_args.args[0]
         self.assertEqual(
             opts["format"],
-            'bv*[height=720]+bestaudio[language="tr"][format_id="tr-audio-low"]',
+            'bv[height=720]+bestaudio[language="tr"][format_id="tr-audio-low"]',
         )
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 

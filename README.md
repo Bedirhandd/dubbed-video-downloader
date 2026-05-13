@@ -178,11 +178,13 @@ language:
 uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
 ```
 
-Quality behavior is intentionally strict for explicit resolutions:
+Quality behavior is intentionally strict for dubbed video output:
 
-- `best` uses yt-dlp's best matching stream.
-- Video `medium` chooses the available height closest to `720p`.
-- Video `low` chooses the lowest available video height.
+- Video mode selects a video-only stream and merges it with the requested
+  dubbed audio stream.
+- `best` uses yt-dlp's best matching video-only stream.
+- Video `medium` chooses the available video-only height closest to `720p`.
+- Video `low` chooses the lowest available video-only height.
 - Video exact values such as `1080p` require that exact height; if unavailable,
   the command fails and prints the available heights.
 - Audio `medium` chooses the selected-language audio stream closest to `128k`
