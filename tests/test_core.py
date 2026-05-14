@@ -1184,6 +1184,152 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
             self.assertFalse(staging_output_dir.exists())
 
+    def test_download_skip_finalization_race_preserves_existing_final_output(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
+            staged_output_path = (
+                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            )
+            original_link = core.os.link
+
+            def download_to_staging(urls: list[str]) -> None:
+                staged_output_path.parent.mkdir(parents=True)
+                staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            def create_output_before_link(src, dst) -> None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text("external media", encoding="utf-8")
+                original_link(src, dst)
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch(
+                    "dubbed_video_downloader.core._new_staging_output_dir",
+                    return_value=staging_output_dir,
+                ),
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=create_output_before_link,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                ydl.download.side_effect = download_to_staging
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
+
+            self.assertEqual(result.status, core.DownloadStatus.SKIPPED)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
+            self.assertFalse(staging_output_dir.exists())
+
+    def test_download_fail_finalization_race_reports_existing_final_output(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
+            staged_output_path = (
+                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            )
+            original_link = core.os.link
+
+            def download_to_staging(urls: list[str]) -> None:
+                staged_output_path.parent.mkdir(parents=True)
+                staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            def create_output_before_link(src, dst) -> None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text("external media", encoding="utf-8")
+                original_link(src, dst)
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch(
+                    "dubbed_video_downloader.core._new_staging_output_dir",
+                    return_value=staging_output_dir,
+                ),
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=create_output_before_link,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                ydl.download.side_effect = download_to_staging
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=output_dir,
+                        exists_behavior=core.FileExistsBehavior.FAIL,
+                    )
+
+            self.assertIn("Output already exists", str(context.exception))
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
+            self.assertFalse(staging_output_dir.exists())
+
+    def test_finalize_overwrite_replaces_existing_final_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            output_path.parent.mkdir(parents=True)
+            staged_output_path.parent.mkdir(parents=True)
+            output_path.write_text("external media", encoding="utf-8")
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            status = core._finalize_staged_download(
+                staged_output_path=staged_output_path,
+                final_output_path=output_path,
+                exists_behavior=core.FileExistsBehavior.OVERWRITE,
+            )
+
+            self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"),
+                "downloaded media",
+            )
+            self.assertFalse(staged_output_path.exists())
+
     def test_stale_incomplete_cleanup_removes_unlocked_runs_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

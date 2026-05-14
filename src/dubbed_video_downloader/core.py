@@ -653,21 +653,45 @@ def _finalize_staged_download(
             f"Completed staged download is missing: {staged_output_path}"
         )
 
-    if _output_path_exists(final_output_path):
-        if exists_behavior == FileExistsBehavior.SKIP:
-            return DownloadStatus.SKIPPED
-        if exists_behavior == FileExistsBehavior.FAIL:
-            raise errors.DownloadError(f"Output already exists: {final_output_path}")
+    if _handle_existing_output(final_output_path, exists_behavior):
+        return DownloadStatus.SKIPPED
 
     try:
         final_output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
 
+    if exists_behavior != FileExistsBehavior.OVERWRITE:
+        return _finalize_staged_download_without_overwriting(
+            staged_output_path=staged_output_path,
+            final_output_path=final_output_path,
+            exists_behavior=exists_behavior,
+        )
+
     try:
         staged_output_path.replace(final_output_path)
     except OSError as exc:
         raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+    return DownloadStatus.DOWNLOADED
+
+
+def _finalize_staged_download_without_overwriting(
+    *,
+    staged_output_path: Path,
+    final_output_path: Path,
+    exists_behavior: FileExistsBehavior,
+) -> DownloadStatus:
+    try:
+        os.link(staged_output_path, final_output_path)
+    except FileExistsError as exc:
+        if _handle_existing_output(final_output_path, exists_behavior):
+            return DownloadStatus.SKIPPED
+        raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+    except OSError as exc:
+        raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+
+    with contextlib.suppress(FileNotFoundError, OSError):
+        staged_output_path.unlink()
     return DownloadStatus.DOWNLOADED
 
 
