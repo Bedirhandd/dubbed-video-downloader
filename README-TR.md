@@ -153,10 +153,15 @@ Config dosyasını görmek veya kaldırmak için:
 
 ```bash
 uv run dbdvdl config show
-uv run dbdvdl config remove
+uv run dbdvdl config remove -y
 ```
 
+Onay sorulmasını istiyorsanız `-y` vermeyin; scriptlerde `--yes` de
+kullanabilirsiniz. Non-interactive ortamlarda `config remove` için `-y` veya
+`--yes` gerekir.
 Kaldırdıktan sonra yeni config oluşturmak için tekrar `uv run dbdvdl init` çalıştırabilirsiniz.
+`dbdvdl init` default değerlerle veya açıkça verilen flaglerle non-interactive
+çalışabilir; mevcut config dosyasını değiştirmek için `--force` kullanın.
 
 Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
 

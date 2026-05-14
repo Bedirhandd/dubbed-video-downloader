@@ -306,6 +306,34 @@ class CliTests(unittest.TestCase):
             self.assertIn(f"Removed config directory: {config_dir}", result.output)
             self.assertIn("dbdvdl init", result.output)
 
+    def test_config_remove_short_yes_removes_config_directory_non_interactively(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_dir = home / ".config" / "dubbed-video-downloader"
+            config_dir.mkdir(parents=True)
+            (config_dir / "config.yaml").write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=False,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["config", "remove", "-y"],
+                    env={"HOME": tmpdir},
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertFalse(config_dir.exists())
+            self.assertIn(f"Removed config directory: {config_dir}", result.output)
+
     def test_config_remove_yes_succeeds_when_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.runner.invoke(

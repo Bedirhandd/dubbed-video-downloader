@@ -152,10 +152,14 @@ Inspect or remove the config with:
 
 ```bash
 uv run dbdvdl config show
-uv run dbdvdl config remove
+uv run dbdvdl config remove -y
 ```
 
+Omit `-y` to be prompted before removal, or use `--yes` in scripts. In
+non-interactive environments, `config remove` requires `-y` or `--yes`.
 After removing it, run `uv run dbdvdl init` again to create a fresh config.
+`dbdvdl init` can also run non-interactively with defaults or explicit flags;
+use `--force` to replace an existing config file.
 
 You can pass multiple URLs and optional output/FFmpeg settings:
 
