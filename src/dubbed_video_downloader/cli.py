@@ -14,6 +14,7 @@ from . import doctor
 from . import errors
 from . import quality
 from .download_mode import DownloadMode
+from .exists_behavior import FileExistsBehavior
 
 HELP_EPILOG = """
 Examples:
@@ -124,6 +125,16 @@ def _normalize_retry_on_network_failure_or_exit(value: int) -> int:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_exists_behavior_or_exit(
+    value: FileExistsBehavior | str,
+) -> FileExistsBehavior:
+    try:
+        return app_config.normalize_exists_behavior(value)
+    except app_config.ConfigError as exc:
+        typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _print_command_error(exc: BaseException, *, debug: bool) -> None:
     typer.secho(f"Error: {exc}", fg=typer.colors.RED, bold=True, err=True)
     if debug:
@@ -189,6 +200,21 @@ def _prompt_audio_quality(value: str | None) -> str:
     return app_config.DEFAULT_AUDIO_QUALITY.label
 
 
+def _prompt_exists_behavior(
+    value: FileExistsBehavior | None,
+) -> FileExistsBehavior | str:
+    if value is not None:
+        return value
+    if _stdin_is_interactive():
+        return str(
+            typer.prompt(
+                "Default existing-file behavior",
+                default=app_config.DEFAULT_EXISTS_BEHAVIOR.value,
+            )
+        )
+    return app_config.DEFAULT_EXISTS_BEHAVIOR
+
+
 def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
@@ -201,6 +227,7 @@ def _write_config_or_exit(
     default_video_quality: str,
     default_audio_quality: str,
     retry_on_network_failure: int,
+    default_exists_behavior: FileExistsBehavior | str,
     force: bool,
 ) -> None:
     try:
@@ -212,6 +239,7 @@ def _write_config_or_exit(
             default_video_quality=default_video_quality,
             default_audio_quality=default_audio_quality,
             retry_on_network_failure=retry_on_network_failure,
+            default_exists_behavior=default_exists_behavior,
             overwrite=force,
         )
     except app_config.ConfigError as exc:
@@ -229,6 +257,7 @@ def _init_config(
     default_video_quality: str | None,
     default_audio_quality: str | None,
     retry_on_network_failure: int | None,
+    default_exists_behavior: FileExistsBehavior | None,
     force: bool,
 ) -> None:
     selected_output_dir = _prompt_value(
@@ -252,6 +281,7 @@ def _init_config(
     selected_retry_on_network_failure = _prompt_retry_on_network_failure(
         retry_on_network_failure
     )
+    selected_default_exists_behavior = _prompt_exists_behavior(default_exists_behavior)
     _write_config_or_exit(
         selected_output_dir,
         selected_ffmpeg_path,
@@ -260,6 +290,7 @@ def _init_config(
         selected_default_video_quality,
         selected_default_audio_quality,
         selected_retry_on_network_failure,
+        selected_default_exists_behavior,
         force,
     )
 
@@ -271,7 +302,8 @@ def _print_config_recreate_hint() -> None:
         "  dbdvdl init --output-dir ~/Videos "
         "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
         "--default-download-mode video --default-video-quality best "
-        "--default-audio-quality best --retry-on-network-failure 3"
+        "--default-audio-quality best --retry-on-network-failure 3 "
+        "--default-exists-behavior skip"
     )
 
 
@@ -309,6 +341,13 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
         _print_label_value("Available languages", ", ".join(plan.available_langs))
     _print_quality_notes(plan.quality_notes)
     _print_label_value("Output", plan.output_path)
+    _print_label_value("If output exists", plan.exists_behavior.value)
+    _print_label_value("Output exists", "yes" if plan.output_exists else "no")
+    if plan.output_exists:
+        if plan.exists_behavior == FileExistsBehavior.SKIP:
+            typer.secho("Would skip existing output.", fg=typer.colors.YELLOW)
+        elif plan.exists_behavior == FileExistsBehavior.OVERWRITE:
+            typer.secho("Would overwrite existing output.", fg=typer.colors.YELLOW)
 
 
 def _format_quality_selection(requested: str, selected: str | None) -> str:
@@ -393,6 +432,13 @@ def init_command(
             help="Network retries for metadata, extraction, and media downloads.",
         ),
     ] = None,
+    default_exists_behavior: Annotated[
+        FileExistsBehavior | None,
+        typer.Option(
+            "--default-exists-behavior",
+            help="Default behavior when the planned output file already exists.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
@@ -407,6 +453,7 @@ def init_command(
         default_video_quality,
         default_audio_quality,
         retry_on_network_failure,
+        default_exists_behavior,
         force,
     )
 
@@ -463,6 +510,13 @@ def config_init_command(
             help="Network retries for metadata, extraction, and media downloads.",
         ),
     ] = None,
+    default_exists_behavior: Annotated[
+        FileExistsBehavior | None,
+        typer.Option(
+            "--default-exists-behavior",
+            help="Default behavior when the planned output file already exists.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
@@ -477,6 +531,7 @@ def config_init_command(
         default_video_quality,
         default_audio_quality,
         retry_on_network_failure,
+        default_exists_behavior,
         force,
     )
 
@@ -493,6 +548,9 @@ def config_show_command() -> None:
     typer.echo(f"Default video quality: {loaded_config.default_video_quality.label}")
     typer.echo(f"Default audio quality: {loaded_config.default_audio_quality.label}")
     typer.echo(f"Retry on network failure: {loaded_config.retry_on_network_failure}")
+    typer.echo(
+        f"Default exists behavior: {loaded_config.default_exists_behavior.value}"
+    )
 
 
 @config_app.command("remove")
@@ -655,6 +713,13 @@ def download_command(
             help="Network retries for metadata, extraction, and media downloads.",
         ),
     ] = None,
+    if_exists: Annotated[
+        FileExistsBehavior | None,
+        typer.Option(
+            "--if-exists",
+            help="Behavior when the planned output file already exists. Overrides config default.",
+        ),
+    ] = None,
 ) -> None:
     """Download URL(s) with a dub language."""
     loaded_config = _load_config_or_exit()
@@ -702,6 +767,11 @@ def download_command(
         if retry_on_network_failure is not None
         else loaded_config.retry_on_network_failure
     )
+    effective_exists_behavior = (
+        _normalize_exists_behavior_or_exit(if_exists)
+        if if_exists is not None
+        else loaded_config.default_exists_behavior
+    )
 
     failures = 0
     for url in urls:
@@ -720,8 +790,16 @@ def download_command(
                     verbose=verbose,
                     debug=debug,
                     retry_on_network_failure=effective_retry_on_network_failure,
+                    exists_behavior=effective_exists_behavior,
                 )
                 _print_download_plan(plan)
+                if (
+                    plan.output_exists
+                    and plan.exists_behavior == FileExistsBehavior.FAIL
+                ):
+                    raise errors.DownloadError(
+                        f"Output already exists: {plan.output_path}"
+                    )
                 typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
             else:
                 download_result = core.download(
@@ -735,9 +813,17 @@ def download_command(
                     verbose=verbose,
                     debug=debug,
                     retry_on_network_failure=effective_retry_on_network_failure,
+                    exists_behavior=effective_exists_behavior,
                 )
                 if isinstance(download_result, core.DownloadResult):
                     _print_quality_notes(download_result.quality_notes)
+                    if download_result.status == core.DownloadStatus.SKIPPED:
+                        typer.secho("Skipped", fg=typer.colors.YELLOW, bold=True)
+                        if download_result.output_path is not None:
+                            typer.echo(
+                                f"Output already exists: {download_result.output_path}"
+                            )
+                        continue
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
         except errors.DubbedVideoDownloaderError as exc:
             failures += 1

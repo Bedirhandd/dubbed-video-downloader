@@ -108,6 +108,12 @@ To choose audio-only downloads by default during setup:
 uv run dbdvdl init --default-download-mode audio
 ```
 
+To choose how existing output files are handled by default:
+
+```bash
+uv run dbdvdl init --default-exists-behavior fail
+```
+
 This writes:
 
 ```text
@@ -124,6 +130,7 @@ default_download_mode: video
 default_video_quality: best
 default_audio_quality: best
 retry_on_network_failure: 3
+default_exists_behavior: skip
 ```
 
 Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
@@ -138,6 +145,8 @@ Use `default_audio_quality` for the selected dubbed audio stream when
 Use `retry_on_network_failure` to control how many times transient metadata,
 extraction, and media download failures are retried. Set it to `0` to disable
 network retries.
+Use `default_exists_behavior` to control what happens when the planned output
+file already exists. Supported values are `skip`, `fail`, and `overwrite`.
 
 Inspect or remove the config with:
 
@@ -151,8 +160,9 @@ After removing it, run `uv run dbdvdl init` again to create a fresh config.
 You can pass multiple URLs and optional output/FFmpeg settings:
 
 The CLI saves to the configured `output_dir` and uses the configured
-`default_lang` and `default_download_mode`. If you pass `--output-dir`, use an
-absolute path; `~` is accepted. CLI options override config values for that run.
+`default_lang`, `default_download_mode`, and `default_exists_behavior`. If you
+pass `--output-dir`, use an absolute path; `~` is accepted. CLI options
+override config values for that run.
 
 ```bash
 uv run dbdvdl download \
@@ -164,12 +174,26 @@ uv run dbdvdl download \
   --audio-quality best \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg \
-  --retry-on-network-failure 5
+  --retry-on-network-failure 5 \
+  --if-exists skip
 ```
 
 CLI options override config values for that run, including
 `--mode`, `--video-quality`, `--audio-quality`, and
-`--retry-on-network-failure`.
+`--retry-on-network-failure`, and `--if-exists`.
+
+Existing output behavior is explicit:
+
+```bash
+uv run dbdvdl download URL --if-exists skip
+uv run dbdvdl download URL --if-exists fail
+uv run dbdvdl download URL --if-exists overwrite
+```
+
+- `skip` is the default and finishes successfully without downloading when the
+  final output file already exists.
+- `fail` stops that URL with an error when the final output file already exists.
+- `overwrite` replaces the final output file using yt-dlp's overwrite behavior.
 
 Use `qualities` to inspect the choices available for a specific URL and dub
 language:
@@ -195,8 +219,8 @@ Quality behavior is intentionally strict for dubbed video output:
   note.
 
 Use `--dry-run` to validate the URL, effective dub language, and effective
-download mode and quality, then print the planned output path without
-downloading, merging, or creating output folders:
+download mode, quality, and existing-output behavior, then print the planned
+output path without downloading, merging, or creating output folders:
 
 ```bash
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
@@ -224,15 +248,17 @@ In video mode, the tool will:
 1. Check if the requested dub language is available for each video.
 2. Print an error with available languages if the requested language is missing.
 3. Select the requested video quality and dubbed audio quality.
-4. Download the video and the requested audio stream.
-5. Merge them into `.mkv`.
-6. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
+4. Check the planned output path against the selected `--if-exists` behavior.
+5. Download the video and the requested audio stream.
+6. Merge them into `.mkv`.
+7. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
 
 In audio mode, the tool downloads only the selected dubbed audio stream and
 saves it under the same folder structure with the native audio extension chosen
 by yt-dlp. `--video-quality` is only valid in video mode.
 
-With `--dry-run`, the tool stops after validation and output path preview.
+With `--dry-run`, the tool stops after validation, output path preview, and
+existing-output preview.
 
 ## Updating Dependencies
 

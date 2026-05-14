@@ -12,6 +12,8 @@ from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode as _normalize_download_mode
 from .errors import ConfigError
+from .exists_behavior import FileExistsBehavior
+from .exists_behavior import normalize_exists_behavior as _normalize_exists_behavior
 
 CONFIG_DIR_NAME = "dubbed-video-downloader"
 CONFIG_FILE_NAME = "config.yaml"
@@ -22,6 +24,7 @@ DEFAULT_DOWNLOAD_MODE = DownloadMode.VIDEO
 DEFAULT_VIDEO_QUALITY = quality.DEFAULT_VIDEO_QUALITY
 DEFAULT_AUDIO_QUALITY = quality.DEFAULT_AUDIO_QUALITY
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
+DEFAULT_EXISTS_BEHAVIOR = FileExistsBehavior.SKIP
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,7 @@ class AppConfig:
     default_video_quality: quality.VideoQuality
     default_audio_quality: quality.AudioQuality
     retry_on_network_failure: int
+    default_exists_behavior: FileExistsBehavior
 
 
 def get_config_path() -> Path:
@@ -97,6 +101,10 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
         "default_audio_quality",
         DEFAULT_AUDIO_QUALITY,
     )
+    default_exists_behavior = raw_config.get(
+        "default_exists_behavior",
+        DEFAULT_EXISTS_BEHAVIOR,
+    )
 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
@@ -108,6 +116,7 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
         retry_on_network_failure=normalize_retry_on_network_failure(
             retry_on_network_failure
         ),
+        default_exists_behavior=normalize_exists_behavior(default_exists_behavior),
     )
 
 
@@ -120,6 +129,7 @@ def write_config(
     default_video_quality: str | quality.VideoQuality = DEFAULT_VIDEO_QUALITY,
     default_audio_quality: str | quality.AudioQuality = DEFAULT_AUDIO_QUALITY,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
+    default_exists_behavior: str | FileExistsBehavior = DEFAULT_EXISTS_BEHAVIOR,
     path: Path | None = None,
     overwrite: bool = False,
 ) -> Path:
@@ -138,6 +148,9 @@ def write_config(
     normalized_retry_on_network_failure = normalize_retry_on_network_failure(
         retry_on_network_failure
     )
+    normalized_default_exists_behavior = normalize_exists_behavior(
+        default_exists_behavior
+    )
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = yaml.safe_dump(
@@ -149,6 +162,7 @@ def write_config(
             "default_video_quality": normalized_default_video_quality.label,
             "default_audio_quality": normalized_default_audio_quality.label,
             "retry_on_network_failure": normalized_retry_on_network_failure,
+            "default_exists_behavior": normalized_default_exists_behavior.value,
         },
         sort_keys=False,
     )
@@ -222,6 +236,13 @@ def normalize_retry_on_network_failure(value: Any) -> int:
     if value < 0:
         raise ConfigError("retry_on_network_failure must be a non-negative integer.")
     return value
+
+
+def normalize_exists_behavior(value: Any) -> FileExistsBehavior:
+    try:
+        return _normalize_exists_behavior(value, key="default_exists_behavior")
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
 
 
 def ffmpeg_location_for_yt_dlp(ffmpeg_path: str) -> str | None:

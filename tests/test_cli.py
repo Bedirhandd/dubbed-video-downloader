@@ -37,7 +37,8 @@ class CliTests(unittest.TestCase):
                 "default_download_mode: video\n"
                 "default_video_quality: best\n"
                 "default_audio_quality: best\n"
-                "retry_on_network_failure: 3\n",
+                "retry_on_network_failure: 3\n"
+                "default_exists_behavior: skip\n",
             )
 
     def test_init_refuses_overwrite_without_force(self) -> None:
@@ -68,7 +69,8 @@ class CliTests(unittest.TestCase):
                 "default_download_mode: video\n"
                 "default_video_quality: best\n"
                 "default_audio_quality: best\n"
-                "retry_on_network_failure: 3\n",
+                "retry_on_network_failure: 3\n"
+                "default_exists_behavior: skip\n",
             )
 
     def test_init_writes_custom_default_lang(self) -> None:
@@ -196,6 +198,46 @@ class CliTests(unittest.TestCase):
                 config_path.read_text(encoding="utf-8"),
             )
 
+    def test_init_writes_custom_default_exists_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["init", "--default-exists-behavior", "overwrite"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_exists_behavior: overwrite\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
+    def test_config_init_writes_custom_default_exists_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["config", "init", "--default-exists-behavior", "fail"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_exists_behavior: fail\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
     def test_config_show_displays_resolved_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -228,6 +270,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Default video quality: best", result.output)
         self.assertIn("Default audio quality: best", result.output)
         self.assertIn("Retry on network failure: 3", result.output)
+        self.assertIn("Default exists behavior: skip", result.output)
 
     def test_config_show_requires_existing_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -350,7 +393,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("--mode", result.output)
         self.assertIn("--video-quality", result.output)
         self.assertIn("--audio-quality", result.output)
-        self.assertIn("--retry-on-network-failure", result.output)
+        self.assertIn("--retry-on-network", result.output)
+        self.assertIn("--if-exists", result.output)
         self.assertIn("Overrides config", result.output)
         self.assertIn("default.", result.output)
         self.assertNotIn("[default: tr]", result.output)
@@ -369,7 +413,8 @@ class CliTests(unittest.TestCase):
                 "default_download_mode: audio\n"
                 "default_video_quality: low\n"
                 "default_audio_quality: medium\n"
-                "retry_on_network_failure: 4\n",
+                "retry_on_network_failure: 4\n"
+                "default_exists_behavior: fail\n",
                 encoding="utf-8",
             )
             override_output = home / "Videos" / "override"
@@ -395,6 +440,8 @@ class CliTests(unittest.TestCase):
                         str(override_ffmpeg),
                         "--retry-on-network-failure",
                         "6",
+                        "--if-exists",
+                        "overwrite",
                     ],
                     env={"HOME": tmpdir},
                 )
@@ -414,6 +461,7 @@ class CliTests(unittest.TestCase):
             verbose=False,
             debug=False,
             retry_on_network_failure=6,
+            exists_behavior=config.FileExistsBehavior.OVERWRITE,
         )
 
     def test_download_verbose_passes_through_to_core_download(self) -> None:
@@ -454,6 +502,7 @@ class CliTests(unittest.TestCase):
             verbose=True,
             debug=False,
             retry_on_network_failure=3,
+            exists_behavior=config.DEFAULT_EXISTS_BEHAVIOR,
         )
 
     def test_download_debug_passes_through_to_core_download(self) -> None:
@@ -493,7 +542,99 @@ class CliTests(unittest.TestCase):
             verbose=False,
             debug=True,
             retry_on_network_failure=3,
+            exists_behavior=config.DEFAULT_EXISTS_BEHAVIOR,
         )
+
+    def test_download_uses_config_default_exists_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "default_exists_behavior: fail\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(
+            download.call_args.kwargs["exists_behavior"],
+            config.FileExistsBehavior.FAIL,
+        )
+
+    def test_download_reports_skipped_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
+
+            with patch(
+                "dubbed_video_downloader.cli.core.download",
+                return_value=core.DownloadResult(
+                    status=core.DownloadStatus.SKIPPED,
+                    output_path=output_path,
+                ),
+            ) as download:
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Skipped", result.output)
+        self.assertIn(f"Output already exists: {output_path}", result.output)
+        download.assert_called_once()
+
+    def test_download_rejects_invalid_if_exists_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--if-exists",
+                        "replace",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 2, result.output)
+        self.assertIn("--if-exists", result.output)
+        download.assert_not_called()
 
     def test_download_dry_run_requires_config_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -732,6 +873,7 @@ class CliTests(unittest.TestCase):
             verbose=False,
             debug=False,
             retry_on_network_failure=6,
+            exists_behavior=config.DEFAULT_EXISTS_BEHAVIOR,
         )
         download.assert_not_called()
         self.assertIn("Dry run: no files will be downloaded or created.", result.output)
@@ -780,6 +922,51 @@ class CliTests(unittest.TestCase):
         self.assertIn("Title: ", result.output)
         self.assertIn("Channel: ", result.output)
         self.assertIn("Title\n", result.output)
+
+    def test_download_dry_run_fails_when_existing_output_policy_is_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "default_exists_behavior: fail\n",
+                encoding="utf-8",
+            )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
+
+            with patch(
+                "dubbed_video_downloader.cli.core.plan_download",
+                return_value=core.DownloadPlan(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="en",
+                    title="Title",
+                    uploader="Channel",
+                    available_langs=("en",),
+                    output_path=output_path,
+                    exists_behavior=config.FileExistsBehavior.FAIL,
+                    output_exists=True,
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn(f"Output: {output_path}", result.output)
+        self.assertIn("If output exists: fail", result.output)
+        self.assertIn("Output exists: yes", result.output)
+        self.assertIn("Error: Output already exists", result.output)
 
     def test_download_dry_run_verbose_passes_through_to_core_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -830,6 +1017,7 @@ class CliTests(unittest.TestCase):
             verbose=True,
             debug=False,
             retry_on_network_failure=3,
+            exists_behavior=config.DEFAULT_EXISTS_BEHAVIOR,
         )
 
     def test_download_dry_run_reports_plan_failures(self) -> None:
@@ -928,7 +1116,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("--verbose", result.output)
         self.assertIn("--debug", result.output)
-        self.assertIn("--retry-on-network-failure", result.output)
+        self.assertIn("--retry-on-network", result.output)
 
     def test_langs_passes_verbose_false_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

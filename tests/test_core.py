@@ -477,18 +477,25 @@ class CoreTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
             ):
                 ydl = youtube_dl.return_value.__enter__.return_value
-                core.download(
+                result = core.download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
                     output_dir=Path(tmpdir),
                     retry_on_network_failure=2,
                 )
 
+        self.assertEqual(result.status, core.DownloadStatus.DOWNLOADED)
+        self.assertEqual(result.output_path, output_path)
         opts = youtube_dl.call_args.args[0]
         self.assertTrue(opts["quiet"])
         self.assertTrue(opts["no_warnings"])
@@ -499,6 +506,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(opts["fragment_retries"], 2)
         self.assertEqual(opts["extractor_retries"], 2)
         self.assertNotIn("file_access_retries", opts)
+        self.assertFalse(opts["overwrites"])
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
     def test_download_audio_mode_uses_audio_only_selector(self) -> None:
@@ -514,8 +522,13 @@ class CoreTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.webm"
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
             ):
                 ydl = youtube_dl.return_value.__enter__.return_value
@@ -571,8 +584,13 @@ class CoreTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
             ):
                 ydl = youtube_dl.return_value.__enter__.return_value
@@ -604,8 +622,13 @@ class CoreTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
             ):
                 core.download(
@@ -633,8 +656,13 @@ class CoreTests(unittest.TestCase):
         }
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
             ):
                 core.download(
@@ -664,6 +692,10 @@ class CoreTests(unittest.TestCase):
 
         with (
             patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+            patch(
+                "dubbed_video_downloader.core._planned_output_path",
+                return_value=Path("/tmp/example/tr/A_Title/A_Title.mkv"),
+            ),
             patch("dubbed_video_downloader.core.Path.mkdir", side_effect=cause),
         ):
             with self.assertRaises(errors.DownloadError) as context:
@@ -690,8 +722,13 @@ class CoreTests(unittest.TestCase):
         cause = YoutubeDLError("download failed")
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
             ):
                 ydl = youtube_dl.return_value.__enter__.return_value
@@ -707,6 +744,226 @@ class CoreTests(unittest.TestCase):
         self.assertIs(context.exception.__cause__, cause)
         self.assertIn("Could not download media", str(context.exception))
         self.assertIn("download failed", str(context.exception))
+
+    def test_download_skip_existing_returns_skipped_without_downloading(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            output_path.parent.mkdir(parents=True)
+            output_path.write_text("already downloaded", encoding="utf-8")
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
+
+        self.assertEqual(result.status, core.DownloadStatus.SKIPPED)
+        self.assertEqual(result.output_path, output_path)
+        youtube_dl.assert_not_called()
+
+    def test_download_fail_existing_raises_without_downloading(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            output_path.parent.mkdir(parents=True)
+            output_path.write_text("already downloaded", encoding="utf-8")
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=Path(tmpdir),
+                        exists_behavior=core.FileExistsBehavior.FAIL,
+                    )
+
+        self.assertIn("Output already exists", str(context.exception))
+        youtube_dl.assert_not_called()
+
+    def test_download_overwrite_existing_passes_force_overwrite_to_ytdlp(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            output_path.parent.mkdir(parents=True)
+            output_path.write_text("already downloaded", encoding="utf-8")
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    exists_behavior=core.FileExistsBehavior.OVERWRITE,
+                )
+
+        self.assertEqual(result.status, core.DownloadStatus.DOWNLOADED)
+        opts = youtube_dl.call_args.args[0]
+        self.assertTrue(opts["overwrites"])
+        self.assertFalse(opts["continuedl"])
+        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+    def test_download_fail_behavior_downloads_when_output_is_missing(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    exists_behavior=core.FileExistsBehavior.FAIL,
+                )
+
+        self.assertEqual(result.status, core.DownloadStatus.DOWNLOADED)
+        opts = youtube_dl.call_args.args[0]
+        self.assertFalse(opts["overwrites"])
+        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+    def test_existing_directory_at_output_path_always_fails(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        for exists_behavior in core.FileExistsBehavior:
+            with self.subTest(exists_behavior=exists_behavior):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+                    output_path.mkdir(parents=True)
+
+                    with (
+                        patch(
+                            "dubbed_video_downloader.core.get_video_info",
+                            return_value=info,
+                        ),
+                        patch(
+                            "dubbed_video_downloader.core._planned_output_path",
+                            return_value=output_path,
+                        ),
+                    ):
+                        with self.assertRaises(errors.DownloadError) as context:
+                            core.download(
+                                url="https://www.youtube.com/watch?v=EXAMPLE",
+                                lang="tr",
+                                output_dir=Path(tmpdir),
+                                exists_behavior=exists_behavior,
+                            )
+
+                self.assertIn("not a file", str(context.exception))
+
+    def test_plan_download_reports_existing_output_state(self) -> None:
+        info = {
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            output_path.parent.mkdir(parents=True)
+            output_path.write_text("already downloaded", encoding="utf-8")
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+            ):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    exists_behavior=core.FileExistsBehavior.FAIL,
+                )
+
+        self.assertEqual(plan.output_path, output_path)
+        self.assertTrue(plan.output_exists)
+        self.assertEqual(plan.exists_behavior, core.FileExistsBehavior.FAIL)
 
     def test_plan_download_wraps_ytdlp_planning_failures(self) -> None:
         info = {

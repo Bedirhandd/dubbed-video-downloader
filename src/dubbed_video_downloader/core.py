@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -12,11 +13,19 @@ from . import errors
 from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode
+from .exists_behavior import FileExistsBehavior
+from .exists_behavior import normalize_exists_behavior
 
 DEFAULT_OUTPUT_DIR = Path("Videos")
 DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
+DEFAULT_EXISTS_BEHAVIOR = FileExistsBehavior.SKIP
 MAX_RETRY_SLEEP_SECONDS = 8.0
+
+
+class DownloadStatus(str, Enum):
+    DOWNLOADED = "downloaded"
+    SKIPPED = "skipped"
 
 
 @dataclass(frozen=True)
@@ -33,10 +42,14 @@ class DownloadPlan:
     audio_quality: str = quality.DEFAULT_AUDIO_QUALITY.label
     selected_audio_quality: str = quality.DEFAULT_AUDIO_QUALITY.label
     quality_notes: tuple[str, ...] = ()
+    exists_behavior: FileExistsBehavior = DEFAULT_EXISTS_BEHAVIOR
+    output_exists: bool = False
 
 
 @dataclass(frozen=True)
 class DownloadResult:
+    status: DownloadStatus = DownloadStatus.DOWNLOADED
+    output_path: Path | None = None
     quality_notes: tuple[str, ...] = ()
 
 
@@ -182,9 +195,11 @@ def plan_download(
     verbose: bool = False,
     debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
+    exists_behavior: FileExistsBehavior | str = DEFAULT_EXISTS_BEHAVIOR,
 ) -> DownloadPlan:
     """Validate and describe a download without writing files."""
     selected_download_mode = normalize_download_mode(download_mode)
+    selected_exists_behavior = normalize_exists_behavior(exists_behavior)
     info = get_video_info(
         url,
         verbose=verbose,
@@ -199,6 +214,19 @@ def plan_download(
         video_quality=video_quality,
         audio_quality=audio_quality,
     )
+    output_path = _planned_output_path(
+        info=info,
+        lang=lang,
+        download_mode=selected_download_mode,
+        ffmpeg_path=ffmpeg_path,
+        output_dir=output_dir,
+        merge_output_format=merge_output_format,
+        format_selector=quality_selection.format_selector,
+        verbose=verbose,
+        debug=debug,
+        retry_on_network_failure=retry_on_network_failure,
+    )
+    output_exists = _output_path_exists(output_path)
 
     return DownloadPlan(
         url=url,
@@ -216,18 +244,9 @@ def plan_download(
         title=_optional_string(info.get("title")),
         uploader=_optional_string(info.get("uploader")),
         available_langs=tuple(sorted(get_available_audio_langs(info))),
-        output_path=_planned_output_path(
-            info=info,
-            lang=lang,
-            download_mode=selected_download_mode,
-            ffmpeg_path=ffmpeg_path,
-            output_dir=output_dir,
-            merge_output_format=merge_output_format,
-            format_selector=quality_selection.format_selector,
-            verbose=verbose,
-            debug=debug,
-            retry_on_network_failure=retry_on_network_failure,
-        ),
+        output_path=output_path,
+        exists_behavior=selected_exists_behavior,
+        output_exists=output_exists,
     )
 
 
@@ -243,9 +262,11 @@ def download(
     verbose: bool = False,
     debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
+    exists_behavior: FileExistsBehavior | str = DEFAULT_EXISTS_BEHAVIOR,
 ) -> DownloadResult:
     """Download a single URL with the specified dub language and mode."""
     selected_download_mode = normalize_download_mode(download_mode)
+    selected_exists_behavior = normalize_exists_behavior(exists_behavior)
     info = get_video_info(
         url,
         verbose=verbose,
@@ -260,6 +281,24 @@ def download(
         video_quality=video_quality,
         audio_quality=audio_quality,
     )
+    output_path = _planned_output_path(
+        info=info,
+        lang=lang,
+        download_mode=selected_download_mode,
+        ffmpeg_path=ffmpeg_path,
+        output_dir=output_dir,
+        merge_output_format=merge_output_format,
+        format_selector=quality_selection.format_selector,
+        verbose=verbose,
+        debug=debug,
+        retry_on_network_failure=retry_on_network_failure,
+    )
+    if _handle_existing_output(output_path, selected_exists_behavior):
+        return DownloadResult(
+            status=DownloadStatus.SKIPPED,
+            output_path=output_path,
+            quality_notes=quality_selection.notes,
+        )
 
     try:
         Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
@@ -278,12 +317,17 @@ def download(
                 verbose=verbose,
                 debug=debug,
                 retry_on_network_failure=retry_on_network_failure,
+                exists_behavior=selected_exists_behavior,
             )
         ) as ydl:
             ydl.download([url])
     except YoutubeDLError as exc:
         raise errors.DownloadError(f"Could not download media: {exc}") from exc
-    return DownloadResult(quality_notes=quality_selection.notes)
+    return DownloadResult(
+        status=DownloadStatus.DOWNLOADED,
+        output_path=output_path,
+        quality_notes=quality_selection.notes,
+    )
 
 
 def _download_ydl_opts(
@@ -297,6 +341,7 @@ def _download_ydl_opts(
     verbose: bool,
     debug: bool,
     retry_on_network_failure: int,
+    exists_behavior: FileExistsBehavior | str | None = None,
 ) -> dict[str, Any]:
     selected_download_mode = normalize_download_mode(download_mode)
     ydl_opts: dict[str, Any] = {
@@ -309,6 +354,13 @@ def _download_ydl_opts(
     }
     if selected_download_mode == DownloadMode.VIDEO:
         ydl_opts["merge_output_format"] = merge_output_format
+    if exists_behavior is not None:
+        selected_exists_behavior = normalize_exists_behavior(exists_behavior)
+        ydl_opts["overwrites"] = (
+            selected_exists_behavior == FileExistsBehavior.OVERWRITE
+        )
+        if selected_exists_behavior == FileExistsBehavior.OVERWRITE:
+            ydl_opts["continuedl"] = False
     if ffmpeg_path:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
     return ydl_opts
@@ -350,6 +402,35 @@ def _planned_output_path(
     if not filename:
         raise errors.DownloadError("Could not determine planned output path.")
     return Path(filename)
+
+
+def _output_path_exists(output_path: Path) -> bool:
+    if output_path.exists():
+        if not output_path.is_file():
+            raise errors.DownloadError(
+                f"Output path already exists but is not a file: {output_path}"
+            )
+        return True
+    if output_path.is_symlink():
+        raise errors.DownloadError(
+            f"Output path already exists but is not a file: {output_path}"
+        )
+    return False
+
+
+def _handle_existing_output(
+    output_path: Path,
+    exists_behavior: FileExistsBehavior,
+) -> bool:
+    output_exists = _output_path_exists(output_path)
+    if not output_exists:
+        return False
+
+    if exists_behavior == FileExistsBehavior.SKIP:
+        return True
+    if exists_behavior == FileExistsBehavior.FAIL:
+        raise errors.DownloadError(f"Output already exists: {output_path}")
+    return False
 
 
 def _copy_info_for_planning(info: dict[str, Any]) -> dict[str, Any]:

@@ -30,7 +30,8 @@ class ConfigTests(unittest.TestCase):
                 "default_download_mode: audio\n"
                 "default_video_quality: 720p\n"
                 "default_audio_quality: low\n"
-                "retry_on_network_failure: 5\n",
+                "retry_on_network_failure: 5\n"
+                "default_exists_behavior: overwrite\n",
                 encoding="utf-8",
             )
 
@@ -44,6 +45,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.default_video_quality.label, "720p")
         self.assertEqual(loaded_config.default_audio_quality.label, "low")
         self.assertEqual(loaded_config.retry_on_network_failure, 5)
+        self.assertEqual(
+            loaded_config.default_exists_behavior,
+            config.FileExistsBehavior.OVERWRITE,
+        )
 
     def test_missing_optional_keys_use_defaults(self) -> None:
         loaded_config = config.config_from_mapping(
@@ -73,6 +78,10 @@ class ConfigTests(unittest.TestCase):
             loaded_config.retry_on_network_failure,
             config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
         )
+        self.assertEqual(
+            loaded_config.default_exists_behavior,
+            config.DEFAULT_EXISTS_BEHAVIOR,
+        )
 
     def test_unknown_keys_are_ignored(self) -> None:
         loaded_config = config.config_from_mapping(
@@ -84,6 +93,7 @@ class ConfigTests(unittest.TestCase):
                 "default_video_quality": "1080p",
                 "default_audio_quality": "medium",
                 "retry_on_network_failure": 4,
+                "default_exists_behavior": "fail",
                 "future": "accepted",
             }
         )
@@ -95,6 +105,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded_config.default_video_quality.label, "1080p")
         self.assertEqual(loaded_config.default_audio_quality.label, "medium")
         self.assertEqual(loaded_config.retry_on_network_failure, 4)
+        self.assertEqual(
+            loaded_config.default_exists_behavior,
+            config.FileExistsBehavior.FAIL,
+        )
 
     def test_missing_ffmpeg_path_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:
@@ -169,6 +183,32 @@ class ConfigTests(unittest.TestCase):
             config.normalize_download_mode(123)
 
         self.assertIn("default_download_mode", str(context.exception))
+
+    def test_exists_behavior_accepts_supported_values(self) -> None:
+        self.assertEqual(
+            config.normalize_exists_behavior("skip"),
+            config.FileExistsBehavior.SKIP,
+        )
+        self.assertEqual(
+            config.normalize_exists_behavior(" fail "),
+            config.FileExistsBehavior.FAIL,
+        )
+        self.assertEqual(
+            config.normalize_exists_behavior("overwrite"),
+            config.FileExistsBehavior.OVERWRITE,
+        )
+
+    def test_invalid_exists_behavior_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_exists_behavior("replace")
+
+        self.assertIn("default_exists_behavior", str(context.exception))
+
+    def test_wrong_exists_behavior_type_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_exists_behavior(True)
+
+        self.assertIn("default_exists_behavior", str(context.exception))
 
     def test_video_quality_accepts_presets_and_exact_resolutions(self) -> None:
         self.assertEqual(config.normalize_video_quality("best").label, "best")
