@@ -38,6 +38,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },
+    { name = "rich" },
     { name = "typer" },
     { name = "yt-dlp" },
     { name = "yt-dlp-ejs" },
@@ -46,6 +47,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "rich", specifier = ">=15.0.0" },
     { name = "typer", specifier = ">=0.12.0" },
     { name = "yt-dlp", specifier = ">=2026.3.17" },
     { name = "yt-dlp-ejs", specifier = ">=0.8.0" },

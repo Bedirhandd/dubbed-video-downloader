@@ -231,9 +231,12 @@ işlemi yapmaz:
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-CLI çıktısını sade tutmak için yt-dlp ilerleme, bilgi, uyarı ve debug mesajları
-varsayılan olarak gizlenir. yt-dlp ilerleme, bilgi ve uyarılarını görmek için
-`download` veya `langs` komutlarında `--verbose` kullanabilirsiniz:
+Etkileşimli `download` çalıştırmalarında varsayılan olarak meta veri alma,
+kalite seçme, medyayı indirme ve medyayı birleştirme gibi ana adımlar için kısa
+durum satırları gösterilir. CLI çıktısını sade tutmak için ham yt-dlp ilerleme,
+bilgi, uyarı ve debug mesajları gizli kalır. Bunların yerine yt-dlp ilerleme,
+bilgi ve uyarılarını görmek için `download` veya `langs` komutlarında
+`--verbose` kullanabilirsiniz:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose

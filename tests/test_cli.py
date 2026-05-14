@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from typer.testing import CliRunner
 
+from dubbed_video_downloader import cli
 from dubbed_video_downloader import config
 from dubbed_video_downloader import core
 from dubbed_video_downloader import errors
@@ -632,6 +633,129 @@ class CliTests(unittest.TestCase):
             debug=False,
             retry_on_network_failure=6,
             exists_behavior=config.FileExistsBehavior.OVERWRITE,
+        )
+
+    def test_download_interactive_status_passes_stage_callback(self) -> None:
+        class FakeDownloadStatusRenderer:
+            instances: list[FakeDownloadStatusRenderer] = []
+
+            def __init__(self, console: object, *, enabled: bool) -> None:
+                self.enabled = enabled
+                self.stages: list[core.DownloadStage] = []
+                self.finish_called = False
+                self.fail_called = False
+                self.instances.append(self)
+
+            def __enter__(self) -> FakeDownloadStatusRenderer:
+                return self
+
+            def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+                if exc_type is None:
+                    self.finish_called = True
+                else:
+                    self.fail_called = True
+
+            def update(self, stage: core.DownloadStage) -> None:
+                self.stages.append(stage)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._download_status_enabled",
+                    return_value=True,
+                ),
+                patch(
+                    "dubbed_video_downloader.cli._DownloadStatusRenderer",
+                    FakeDownloadStatusRenderer,
+                ),
+                patch("dubbed_video_downloader.cli.core.download") as download,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(len(FakeDownloadStatusRenderer.instances), 2)
+        setup_renderer, download_renderer = FakeDownloadStatusRenderer.instances
+        self.assertEqual(
+            setup_renderer.stages,
+            [
+                core.DownloadStage.CHECKING_CONFIG,
+                core.DownloadStage.PREPARING_OPTIONS,
+            ],
+        )
+        self.assertTrue(setup_renderer.finish_called)
+        callback = download.call_args.kwargs["stage_callback"]
+        callback(core.DownloadStage.DOWNLOADING_MEDIA)
+        self.assertEqual(download_renderer.stages, [core.DownloadStage.DOWNLOADING_MEDIA])
+        self.assertTrue(download_renderer.finish_called)
+
+    def test_download_status_renderer_prints_completed_and_failed_stages(self) -> None:
+        class FakeStatus:
+            def __init__(self, text: str, spinner: str) -> None:
+                self.text = text
+                self.spinner = spinner
+                self.started = False
+                self.stopped = False
+                self.updates: list[str] = []
+
+            def start(self) -> None:
+                self.started = True
+
+            def stop(self) -> None:
+                self.stopped = True
+
+            def update(self, text: str) -> None:
+                self.updates.append(text)
+
+        class FakeConsole:
+            def __init__(self) -> None:
+                self.prints: list[tuple[str, bool]] = []
+                self.statuses: list[FakeStatus] = []
+
+            def print(self, text: str, *, markup: bool) -> None:
+                self.prints.append((text, markup))
+
+            def status(self, text: str, *, spinner: str) -> FakeStatus:
+                status = FakeStatus(text, spinner)
+                self.statuses.append(status)
+                return status
+
+        fake_console = FakeConsole()
+        renderer = cli._DownloadStatusRenderer(fake_console, enabled=True)
+
+        renderer.update(core.DownloadStage.FETCHING_METADATA)
+        renderer.update(core.DownloadStage.FETCHING_METADATA)
+        renderer.update(core.DownloadStage.DOWNLOADING_MEDIA)
+        renderer.fail()
+
+        self.assertEqual(len(fake_console.statuses), 1)
+        status = fake_console.statuses[0]
+        self.assertEqual(status.text, "Fetching metadata...")
+        self.assertEqual(status.spinner, cli.DOWNLOAD_STATUS_SPINNER)
+        self.assertTrue(status.started)
+        self.assertTrue(status.stopped)
+        self.assertEqual(status.updates, ["Downloading media..."])
+        self.assertEqual(
+            fake_console.prints,
+            [
+                ("[done] Fetching metadata...", False),
+                ("[failed] Downloading media...", False),
+            ],
         )
 
     def test_download_verbose_passes_through_to_core_download(self) -> None:

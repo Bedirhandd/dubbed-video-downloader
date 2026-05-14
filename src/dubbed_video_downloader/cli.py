@@ -5,6 +5,8 @@ import traceback
 from pathlib import Path
 from typing import Annotated
 
+from rich.console import Console
+from rich.status import Status
 import typer
 
 from . import __version__
@@ -33,6 +35,22 @@ Examples:
 
   dbdvdl qualities https://www.youtube.com/watch?v=VIDEO_ID --lang tr
 """
+
+DOWNLOAD_STATUS_SPINNER = "bouncingBar"
+
+DOWNLOAD_STAGE_TEXT = {
+    core.DownloadStage.CHECKING_CONFIG: "Checking configuration...",
+    core.DownloadStage.PREPARING_OPTIONS: "Preparing options...",
+    core.DownloadStage.FETCHING_METADATA: "Fetching metadata...",
+    core.DownloadStage.CHECKING_LANGUAGES: "Checking available languages...",
+    core.DownloadStage.SELECTING_QUALITIES: "Selecting qualities...",
+    core.DownloadStage.PLANNING_OUTPUT: "Planning output path...",
+    core.DownloadStage.PREPARING_OUTPUT_DIR: "Preparing output directory...",
+    core.DownloadStage.DOWNLOADING_MEDIA: "Downloading media...",
+    core.DownloadStage.MERGING_MEDIA: "Merging media...",
+    core.DownloadStage.FINALIZING_OUTPUT: "Finalizing output...",
+    core.DownloadStage.SKIPPING_EXISTING_OUTPUT: "Skipping existing output...",
+}
 
 app = typer.Typer(
     help=(
@@ -281,6 +299,82 @@ def _prompt_exists_behavior(
 
 def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
+
+
+class _DownloadStatusRenderer:
+    def __init__(self, console: Console, *, enabled: bool) -> None:
+        self.enabled = enabled
+        self._console = console
+        self._status: Status | None = None
+        self._current_stage: core.DownloadStage | None = None
+
+    def __enter__(self) -> _DownloadStatusRenderer:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if exc_type is None:
+            self.finish()
+        else:
+            self.fail()
+
+    def update(self, stage: core.DownloadStage) -> None:
+        if not self.enabled or stage == self._current_stage:
+            return
+
+        if self._current_stage is not None:
+            self._print_stage_marker("done", self._current_stage)
+
+        self._current_stage = stage
+        text = _download_stage_text(stage)
+        if self._status is None:
+            self._status = self._console.status(
+                text,
+                spinner=DOWNLOAD_STATUS_SPINNER,
+            )
+            self._status.start()
+        else:
+            self._status.update(text)
+
+    def finish(self) -> None:
+        if not self.enabled:
+            return
+        self._stop_status()
+        if self._current_stage is not None:
+            self._print_stage_marker("done", self._current_stage)
+            self._current_stage = None
+
+    def fail(self) -> None:
+        if not self.enabled:
+            return
+        self._stop_status()
+        if self._current_stage is not None:
+            self._print_stage_marker("failed", self._current_stage)
+            self._current_stage = None
+
+    def _stop_status(self) -> None:
+        if self._status is not None:
+            self._status.stop()
+            self._status = None
+
+    def _print_stage_marker(self, marker: str, stage: core.DownloadStage) -> None:
+        self._console.print(
+            f"[{marker}] {_download_stage_text(stage)}",
+            markup=False,
+        )
+
+
+def _download_stage_text(stage: core.DownloadStage) -> str:
+    return DOWNLOAD_STAGE_TEXT[stage]
+
+
+def _download_status_enabled(
+    console: Console,
+    *,
+    verbose: bool,
+    debug: bool,
+    dry_run: bool,
+) -> bool:
+    return not (verbose or debug or dry_run) and console.is_interactive
 
 
 def _write_config_or_exit(
@@ -792,56 +886,66 @@ def download_command(
     ] = None,
 ) -> None:
     """Download URL(s) with a dub language."""
-    loaded_config = _load_config_or_exit()
-    effective_output_dir = (
-        _normalize_output_dir_or_exit(output_dir)
-        if output_dir is not None
-        else loaded_config.output_dir
+    status_console = Console(stderr=True)
+    status_enabled = _download_status_enabled(
+        status_console,
+        verbose=verbose,
+        debug=debug,
+        dry_run=dry_run,
     )
-    effective_ffmpeg_path = (
-        _normalize_ffmpeg_path_or_exit(ffmpeg_path)
-        if ffmpeg_path is not None
-        else loaded_config.ffmpeg_path
-    )
-    ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
-    effective_lang = (
-        _normalize_default_lang_or_exit(lang)
-        if lang is not None
-        else loaded_config.default_lang
-    )
-    effective_download_mode = (
-        _normalize_download_mode_or_exit(mode)
-        if mode is not None
-        else loaded_config.default_download_mode
-    )
-    if video_quality is not None and effective_download_mode == DownloadMode.AUDIO:
-        typer.secho(
-            "Input error: --video-quality can only be used with --mode video.",
-            fg=typer.colors.RED,
-            err=True,
+    with _DownloadStatusRenderer(status_console, enabled=status_enabled) as setup_status:
+        setup_status.update(core.DownloadStage.CHECKING_CONFIG)
+        loaded_config = _load_config_or_exit()
+        setup_status.update(core.DownloadStage.PREPARING_OPTIONS)
+        effective_output_dir = (
+            _normalize_output_dir_or_exit(output_dir)
+            if output_dir is not None
+            else loaded_config.output_dir
         )
-        raise typer.Exit(code=1)
+        effective_ffmpeg_path = (
+            _normalize_ffmpeg_path_or_exit(ffmpeg_path)
+            if ffmpeg_path is not None
+            else loaded_config.ffmpeg_path
+        )
+        ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
+        effective_lang = (
+            _normalize_default_lang_or_exit(lang)
+            if lang is not None
+            else loaded_config.default_lang
+        )
+        effective_download_mode = (
+            _normalize_download_mode_or_exit(mode)
+            if mode is not None
+            else loaded_config.default_download_mode
+        )
+        if video_quality is not None and effective_download_mode == DownloadMode.AUDIO:
+            typer.secho(
+                "Input error: --video-quality can only be used with --mode video.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
-    effective_video_quality = (
-        _normalize_video_quality_or_exit(video_quality)
-        if video_quality is not None
-        else loaded_config.default_video_quality
-    )
-    effective_audio_quality = (
-        _normalize_audio_quality_or_exit(audio_quality)
-        if audio_quality is not None
-        else loaded_config.default_audio_quality
-    )
-    effective_retry_on_network_failure = (
-        _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
-        if retry_on_network_failure is not None
-        else loaded_config.retry_on_network_failure
-    )
-    effective_exists_behavior = (
-        _normalize_exists_behavior_or_exit(if_exists)
-        if if_exists is not None
-        else loaded_config.default_exists_behavior
-    )
+        effective_video_quality = (
+            _normalize_video_quality_or_exit(video_quality)
+            if video_quality is not None
+            else loaded_config.default_video_quality
+        )
+        effective_audio_quality = (
+            _normalize_audio_quality_or_exit(audio_quality)
+            if audio_quality is not None
+            else loaded_config.default_audio_quality
+        )
+        effective_retry_on_network_failure = (
+            _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
+            if retry_on_network_failure is not None
+            else loaded_config.retry_on_network_failure
+        )
+        effective_exists_behavior = (
+            _normalize_exists_behavior_or_exit(if_exists)
+            if if_exists is not None
+            else loaded_config.default_exists_behavior
+        )
 
     failures = 0
     for url in urls:
@@ -872,19 +976,26 @@ def download_command(
                     )
                 typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
             else:
-                download_result = core.download(
-                    url=url,
-                    lang=effective_lang,
-                    download_mode=effective_download_mode,
-                    ffmpeg_path=ffmpeg_location,
-                    output_dir=effective_output_dir,
-                    video_quality=effective_video_quality,
-                    audio_quality=effective_audio_quality,
-                    verbose=verbose,
-                    debug=debug,
-                    retry_on_network_failure=effective_retry_on_network_failure,
-                    exists_behavior=effective_exists_behavior,
-                )
+                download_kwargs = {
+                    "url": url,
+                    "lang": effective_lang,
+                    "download_mode": effective_download_mode,
+                    "ffmpeg_path": ffmpeg_location,
+                    "output_dir": effective_output_dir,
+                    "video_quality": effective_video_quality,
+                    "audio_quality": effective_audio_quality,
+                    "verbose": verbose,
+                    "debug": debug,
+                    "retry_on_network_failure": effective_retry_on_network_failure,
+                    "exists_behavior": effective_exists_behavior,
+                }
+                with _DownloadStatusRenderer(
+                    status_console,
+                    enabled=status_enabled,
+                ) as download_status:
+                    if download_status.enabled:
+                        download_kwargs["stage_callback"] = download_status.update
+                    download_result = core.download(**download_kwargs)
                 if isinstance(download_result, core.DownloadResult):
                     _print_quality_notes(download_result.quality_notes)
                     if download_result.status == core.DownloadStatus.SKIPPED:

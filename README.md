@@ -230,9 +230,11 @@ output path without downloading, merging, or creating output folders:
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-By default, yt-dlp progress, info, warnings, and debug messages are hidden to
-keep CLI output focused. Use `--verbose` on `download` or `langs` to show
-yt-dlp progress, info, and warnings:
+By default, interactive `download` runs show short status lines for each major
+step, such as fetching metadata, selecting qualities, downloading media, and
+merging media. Raw yt-dlp progress, info, warnings, and debug messages remain
+hidden to keep CLI output focused. Use `--verbose` on `download` or `langs` to
+show yt-dlp progress, info, and warnings instead:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose

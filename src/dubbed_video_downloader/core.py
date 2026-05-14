@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -26,6 +27,23 @@ MAX_RETRY_SLEEP_SECONDS = 8.0
 class DownloadStatus(str, Enum):
     DOWNLOADED = "downloaded"
     SKIPPED = "skipped"
+
+
+class DownloadStage(str, Enum):
+    CHECKING_CONFIG = "checking_config"
+    PREPARING_OPTIONS = "preparing_options"
+    FETCHING_METADATA = "fetching_metadata"
+    CHECKING_LANGUAGES = "checking_languages"
+    SELECTING_QUALITIES = "selecting_qualities"
+    PLANNING_OUTPUT = "planning_output"
+    PREPARING_OUTPUT_DIR = "preparing_output_dir"
+    DOWNLOADING_MEDIA = "downloading_media"
+    MERGING_MEDIA = "merging_media"
+    FINALIZING_OUTPUT = "finalizing_output"
+    SKIPPING_EXISTING_OUTPUT = "skipping_existing_output"
+
+
+DownloadStageCallback = Callable[[DownloadStage], None]
 
 
 @dataclass(frozen=True)
@@ -263,17 +281,21 @@ def download(
     debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     exists_behavior: FileExistsBehavior | str = DEFAULT_EXISTS_BEHAVIOR,
+    stage_callback: DownloadStageCallback | None = None,
 ) -> DownloadResult:
     """Download a single URL with the specified dub language and mode."""
     selected_download_mode = normalize_download_mode(download_mode)
     selected_exists_behavior = normalize_exists_behavior(exists_behavior)
+    _report_download_stage(stage_callback, DownloadStage.FETCHING_METADATA)
     info = get_video_info(
         url,
         verbose=verbose,
         debug=debug,
         retry_on_network_failure=retry_on_network_failure,
     )
+    _report_download_stage(stage_callback, DownloadStage.CHECKING_LANGUAGES)
     ensure_lang(info, lang)
+    _report_download_stage(stage_callback, DownloadStage.SELECTING_QUALITIES)
     quality_selection = quality.resolve_quality_selection(
         info=info,
         lang=lang,
@@ -281,6 +303,7 @@ def download(
         video_quality=video_quality,
         audio_quality=audio_quality,
     )
+    _report_download_stage(stage_callback, DownloadStage.PLANNING_OUTPUT)
     output_path = _planned_output_path(
         info=info,
         lang=lang,
@@ -294,17 +317,23 @@ def download(
         retry_on_network_failure=retry_on_network_failure,
     )
     if _handle_existing_output(output_path, selected_exists_behavior):
+        _report_download_stage(
+            stage_callback,
+            DownloadStage.SKIPPING_EXISTING_OUTPUT,
+        )
         return DownloadResult(
             status=DownloadStatus.SKIPPED,
             output_path=output_path,
             quality_notes=quality_selection.notes,
         )
 
+    _report_download_stage(stage_callback, DownloadStage.PREPARING_OUTPUT_DIR)
     try:
         Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
 
+    _report_download_stage(stage_callback, DownloadStage.DOWNLOADING_MEDIA)
     try:
         with yt_dlp.YoutubeDL(
             _download_ydl_opts(
@@ -318,11 +347,13 @@ def download(
                 debug=debug,
                 retry_on_network_failure=retry_on_network_failure,
                 exists_behavior=selected_exists_behavior,
+                stage_callback=stage_callback,
             )
         ) as ydl:
             ydl.download([url])
     except YoutubeDLError as exc:
         raise errors.DownloadError(f"Could not download media: {exc}") from exc
+    _report_download_stage(stage_callback, DownloadStage.FINALIZING_OUTPUT)
     return DownloadResult(
         status=DownloadStatus.DOWNLOADED,
         output_path=output_path,
@@ -342,6 +373,7 @@ def _download_ydl_opts(
     debug: bool,
     retry_on_network_failure: int,
     exists_behavior: FileExistsBehavior | str | None = None,
+    stage_callback: DownloadStageCallback | None = None,
 ) -> dict[str, Any]:
     selected_download_mode = normalize_download_mode(download_mode)
     ydl_opts: dict[str, Any] = {
@@ -363,7 +395,44 @@ def _download_ydl_opts(
             ydl_opts["continuedl"] = False
     if ffmpeg_path:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
+    if stage_callback is not None:
+        ydl_opts["progress_hooks"] = [_make_progress_hook(stage_callback)]
+        ydl_opts["postprocessor_hooks"] = [
+            _make_postprocessor_hook(stage_callback, selected_download_mode)
+        ]
     return ydl_opts
+
+
+def _make_progress_hook(
+    stage_callback: DownloadStageCallback,
+) -> Callable[[dict[str, Any]], None]:
+    def progress_hook(progress: dict[str, Any]) -> None:
+        if progress.get("status") == "downloading":
+            stage_callback(DownloadStage.DOWNLOADING_MEDIA)
+
+    return progress_hook
+
+
+def _make_postprocessor_hook(
+    stage_callback: DownloadStageCallback,
+    download_mode: DownloadMode,
+) -> Callable[[dict[str, Any]], None]:
+    def postprocessor_hook(progress: dict[str, Any]) -> None:
+        if download_mode == DownloadMode.VIDEO and progress.get("status") in {
+            "started",
+            "processing",
+        }:
+            stage_callback(DownloadStage.MERGING_MEDIA)
+
+    return postprocessor_hook
+
+
+def _report_download_stage(
+    stage_callback: DownloadStageCallback | None,
+    stage: DownloadStage,
+) -> None:
+    if stage_callback is not None:
+        stage_callback(stage)
 
 
 def _planned_output_path(

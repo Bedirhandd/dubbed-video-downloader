@@ -509,6 +509,134 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(opts["overwrites"])
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
+    def test_download_reports_status_stages_for_successful_video_download(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        stages: list[core.DownloadStage] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL"),
+            ):
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    stage_callback=stages.append,
+                )
+
+        self.assertEqual(
+            stages,
+            [
+                core.DownloadStage.FETCHING_METADATA,
+                core.DownloadStage.CHECKING_LANGUAGES,
+                core.DownloadStage.SELECTING_QUALITIES,
+                core.DownloadStage.PLANNING_OUTPUT,
+                core.DownloadStage.PREPARING_OUTPUT_DIR,
+                core.DownloadStage.DOWNLOADING_MEDIA,
+                core.DownloadStage.FINALIZING_OUTPUT,
+            ],
+        )
+
+    def test_download_wires_ytdlp_status_hooks(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        stages: list[core.DownloadStage] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    stage_callback=stages.append,
+                )
+
+        opts = youtube_dl.call_args.args[0]
+        self.assertEqual(len(opts["progress_hooks"]), 1)
+        self.assertEqual(len(opts["postprocessor_hooks"]), 1)
+
+        stages.clear()
+        opts["progress_hooks"][0]({"status": "downloading"})
+        opts["postprocessor_hooks"][0]({"status": "started"})
+
+        self.assertEqual(
+            stages,
+            [
+                core.DownloadStage.DOWNLOADING_MEDIA,
+                core.DownloadStage.MERGING_MEDIA,
+            ],
+        )
+
+    def test_download_audio_mode_does_not_report_merging_from_postprocessor_hook(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        stages: list[core.DownloadStage] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.webm"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    download_mode=core.DownloadMode.AUDIO,
+                    output_dir=Path(tmpdir),
+                    stage_callback=stages.append,
+                )
+
+        opts = youtube_dl.call_args.args[0]
+        stages.clear()
+        opts["postprocessor_hooks"][0]({"status": "started"})
+
+        self.assertEqual(stages, [])
+
     def test_download_audio_mode_uses_audio_only_selector(self) -> None:
         info = {
             "title": "A Title",
@@ -779,6 +907,44 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(result.status, core.DownloadStatus.SKIPPED)
         self.assertEqual(result.output_path, output_path)
+        youtube_dl.assert_not_called()
+
+    def test_download_skip_existing_reports_status_stage(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        stages: list[core.DownloadStage] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            output_path.parent.mkdir(parents=True)
+            output_path.write_text("already downloaded", encoding="utf-8")
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                    stage_callback=stages.append,
+                )
+
+        self.assertEqual(result.status, core.DownloadStatus.SKIPPED)
+        self.assertIn(core.DownloadStage.SKIPPING_EXISTING_OUTPUT, stages)
         youtube_dl.assert_not_called()
 
     def test_download_fail_existing_raises_without_downloading(self) -> None:
