@@ -900,6 +900,33 @@ class CliTests(unittest.TestCase):
         self.assertIn(f"Output already exists: {output_path}", result.output)
         download.assert_called_once()
 
+    def test_download_keyboard_interrupt_exits_without_finished_message(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = (
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.download",
+                side_effect=KeyboardInterrupt,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 130, result.output)
+        self.assertIn("==> Downloading:", result.output)
+        self.assertNotIn("Finished", result.output)
+
     def test_download_rejects_invalid_if_exists_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)

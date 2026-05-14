@@ -199,8 +199,21 @@ uv run dbdvdl download URL --if-exists overwrite
 - `skip` varsayılandır; final çıktı dosyası zaten varsa indirme yapmadan
   başarıyla biter.
 - `fail`, final çıktı dosyası zaten varsa o URL için hata verir.
-- `overwrite`, yt-dlp'nin overwrite davranışını kullanarak final çıktı dosyasını
+- `overwrite`, tamamlanmış geçici indirmeden sonra final çıktı dosyasını
   değiştirir.
+
+İndirmeler önce geçici bir staging klasörüne yazılır:
+
+```text
+<çıktı-klasörü>/tmp/.incomplete/<run-id>/...
+```
+
+Yalnızca tamamen bitmiş indirme final
+`<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` konumuna taşınır. Ctrl+C'ye
+basarsanız veya indirme hata verirse aktif staging klasörü silinir ve kısmi
+medya sonraki çalıştırmada otomatik devam ettirilmez. Süreç zorla kapatılırsa
+veya bilgisayar temizlik çalışmadan kapanırsa, eski ve aktif olmayan staging
+klasörleri bir sonraki gerçek `download` komutu başladığında temizlenir.
 
 Belirli bir URL ve dublaj dili için kullanılabilir kalite seçeneklerini görmek
 için `qualities` komutunu kullanabilirsiniz:
@@ -257,9 +270,10 @@ Video modunda araç şu işlemleri yapar:
 2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
 3. İstenen video kalitesini ve dublaj ses kalitesini seçer.
 4. Planlanan çıktı yolunu seçilen `--if-exists` davranışına göre kontrol eder.
-5. Videoyu ve seçilen ses parçasını indirir.
+5. Videoyu ve seçilen ses parçasını geçici staging klasörüne indirir.
 6. Bunları `.mkv` dosyasında birleştirir.
-7. Dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör yapısına kaydeder.
+7. Tamamlanan dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör
+   yapısına taşır.
 
 Ses modunda araç yalnızca seçilen dublajlı ses akışını indirir ve yt-dlp'nin
 seçtiği doğal ses uzantısıyla aynı klasör yapısına kaydeder. `--video-quality`

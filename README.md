@@ -197,7 +197,20 @@ uv run dbdvdl download URL --if-exists overwrite
 - `skip` is the default and finishes successfully without downloading when the
   final output file already exists.
 - `fail` stops that URL with an error when the final output file already exists.
-- `overwrite` replaces the final output file using yt-dlp's overwrite behavior.
+- `overwrite` replaces the final output file after a complete staged download.
+
+Downloads are written to a temporary staging directory first:
+
+```text
+<output-dir>/tmp/.incomplete/<run-id>/...
+```
+
+Only a fully completed download is moved into the final
+`<output-dir>/<lang>/<channel>/<title>/` location. If you press Ctrl+C or the
+download fails, the active staging directory is removed and partial media is not
+resumed automatically on the next run. If the process is force-killed or the
+computer powers off before cleanup can run, stale inactive staging directories
+are removed the next time a real `download` command starts.
 
 Use `qualities` to inspect the choices available for a specific URL and dub
 language:
@@ -255,9 +268,9 @@ In video mode, the tool will:
 2. Print an error with available languages if the requested language is missing.
 3. Select the requested video quality and dubbed audio quality.
 4. Check the planned output path against the selected `--if-exists` behavior.
-5. Download the video and the requested audio stream.
+5. Download the video and the requested audio stream into temporary staging.
 6. Merge them into `.mkv`.
-7. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
+7. Move the completed file into `<output-dir>/<lang>/<channel>/<title>/`.
 
 In audio mode, the tool downloads only the selected dubbed audio stream and
 saves it under the same folder structure with the native audio extension chosen

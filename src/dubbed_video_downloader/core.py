@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import contextlib
+import json
+import os
 import random
+import shutil
+import signal
+import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -22,6 +29,10 @@ DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
 DEFAULT_EXISTS_BEHAVIOR = FileExistsBehavior.SKIP
 MAX_RETRY_SLEEP_SECONDS = 8.0
+INCOMPLETE_DOWNLOAD_DIR = Path("tmp") / ".incomplete"
+INCOMPLETE_CLEANUP_LOCK_FILENAME = ".cleanup.lock"
+RUN_LOCK_FILENAME = ".lock"
+RUN_METADATA_FILENAME = "run.json"
 
 
 class DownloadStatus(str, Enum):
@@ -328,32 +339,56 @@ def download(
         )
 
     _report_download_stage(stage_callback, DownloadStage.PREPARING_OUTPUT_DIR)
+    _cleanup_stale_incomplete_downloads(output_dir)
+
     try:
-        Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
+        with _download_signal_handlers():
+            with _DownloadStagingRun(output_dir) as staging_run:
+                staged_output_path = _staged_output_path(
+                    output_path,
+                    output_dir=output_dir,
+                    staging_output_dir=staging_run.output_dir,
+                )
+                _report_download_stage(stage_callback, DownloadStage.DOWNLOADING_MEDIA)
+                try:
+                    with yt_dlp.YoutubeDL(
+                        _download_ydl_opts(
+                            lang=lang,
+                            download_mode=selected_download_mode,
+                            ffmpeg_path=ffmpeg_path,
+                            output_dir=staging_run.output_dir,
+                            merge_output_format=merge_output_format,
+                            format_selector=quality_selection.format_selector,
+                            verbose=verbose,
+                            debug=debug,
+                            retry_on_network_failure=retry_on_network_failure,
+                            exists_behavior=selected_exists_behavior,
+                            stage_callback=stage_callback,
+                        )
+                    ) as ydl:
+                        ydl.download([url])
+                except YoutubeDLError as exc:
+                    raise errors.DownloadError(
+                        f"Could not download media: {exc}"
+                    ) from exc
+                _report_download_stage(stage_callback, DownloadStage.FINALIZING_OUTPUT)
+                final_status = _finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    exists_behavior=selected_exists_behavior,
+                )
     except OSError as exc:
         raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
-
-    _report_download_stage(stage_callback, DownloadStage.DOWNLOADING_MEDIA)
-    try:
-        with yt_dlp.YoutubeDL(
-            _download_ydl_opts(
-                lang=lang,
-                download_mode=selected_download_mode,
-                ffmpeg_path=ffmpeg_path,
-                output_dir=output_dir,
-                merge_output_format=merge_output_format,
-                format_selector=quality_selection.format_selector,
-                verbose=verbose,
-                debug=debug,
-                retry_on_network_failure=retry_on_network_failure,
-                exists_behavior=selected_exists_behavior,
-                stage_callback=stage_callback,
-            )
-        ) as ydl:
-            ydl.download([url])
-    except YoutubeDLError as exc:
-        raise errors.DownloadError(f"Could not download media: {exc}") from exc
-    _report_download_stage(stage_callback, DownloadStage.FINALIZING_OUTPUT)
+    if final_status == DownloadStatus.SKIPPED:
+        _report_download_stage(
+            stage_callback,
+            DownloadStage.SKIPPING_EXISTING_OUTPUT,
+        )
+        return DownloadResult(
+            status=DownloadStatus.SKIPPED,
+            output_path=output_path,
+            quality_notes=quality_selection.notes,
+        )
     return DownloadResult(
         status=DownloadStatus.DOWNLOADED,
         output_path=output_path,
@@ -383,6 +418,8 @@ def _download_ydl_opts(
         "format": format_selector,
         "outtmpl": outtmpl(lang, output_dir),
         "restrictfilenames": True,
+        "continuedl": False,
+        "nopart": False,
     }
     if selected_download_mode == DownloadMode.VIDEO:
         ydl_opts["merge_output_format"] = merge_output_format
@@ -391,8 +428,6 @@ def _download_ydl_opts(
         ydl_opts["overwrites"] = (
             selected_exists_behavior == FileExistsBehavior.OVERWRITE
         )
-        if selected_exists_behavior == FileExistsBehavior.OVERWRITE:
-            ydl_opts["continuedl"] = False
     if ffmpeg_path:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
     if stage_callback is not None:
@@ -433,6 +468,232 @@ def _report_download_stage(
 ) -> None:
     if stage_callback is not None:
         stage_callback(stage)
+
+
+class _StagingLock:
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._file: Any | None = None
+
+    def acquire(self, *, blocking: bool) -> bool:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = self._path.open("a+b")
+        try:
+            if os.name == "nt":
+                self._acquire_windows(lock_file, blocking=blocking)
+            else:
+                self._acquire_posix(lock_file, blocking=blocking)
+        except OSError:
+            lock_file.close()
+            if blocking:
+                raise
+            return False
+        self._file = lock_file
+        return True
+
+    def release(self) -> None:
+        if self._file is None:
+            return
+        try:
+            if os.name == "nt":
+                self._release_windows(self._file)
+            else:
+                self._release_posix(self._file)
+        finally:
+            self._file.close()
+            self._file = None
+
+    @staticmethod
+    def _acquire_posix(lock_file: Any, *, blocking: bool) -> None:
+        import fcntl
+
+        flags = fcntl.LOCK_EX
+        if not blocking:
+            flags |= fcntl.LOCK_NB
+        fcntl.flock(lock_file.fileno(), flags)
+
+    @staticmethod
+    def _release_posix(lock_file: Any) -> None:
+        import fcntl
+
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    @staticmethod
+    def _acquire_windows(lock_file: Any, *, blocking: bool) -> None:
+        import msvcrt
+
+        lock_file.seek(0)
+        lock_file.write(b"\0")
+        lock_file.flush()
+        lock_file.seek(0)
+        mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+        msvcrt.locking(lock_file.fileno(), mode, 1)
+
+    @staticmethod
+    def _release_windows(lock_file: Any) -> None:
+        import msvcrt
+
+        lock_file.seek(0)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+class _DownloadStagingRun:
+    def __init__(self, output_dir: str | Path) -> None:
+        self._creation_lock = _StagingLock(
+            _incomplete_downloads_dir(output_dir) / INCOMPLETE_CLEANUP_LOCK_FILENAME
+        )
+        self.output_dir = _new_staging_output_dir(output_dir)
+        self._lock = _StagingLock(self.output_dir / RUN_LOCK_FILENAME)
+
+    def __enter__(self) -> _DownloadStagingRun:
+        try:
+            self._creation_lock.acquire(blocking=True)
+            self.output_dir.mkdir(parents=True, exist_ok=False)
+            self._lock.acquire(blocking=True)
+            _write_staging_metadata(self.output_dir)
+        except BaseException:
+            self._lock.release()
+            _remove_staging_output_dir(self.output_dir)
+            raise
+        finally:
+            self._creation_lock.release()
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self._lock.release()
+        _remove_staging_output_dir(self.output_dir)
+
+
+def _incomplete_downloads_dir(output_dir: str | Path) -> Path:
+    return Path(output_dir) / INCOMPLETE_DOWNLOAD_DIR
+
+
+def _new_staging_output_dir(output_dir: str | Path) -> Path:
+    run_id = f"{time.time_ns()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    return _incomplete_downloads_dir(output_dir) / run_id
+
+
+def _write_staging_metadata(staging_output_dir: Path) -> None:
+    metadata = {
+        "pid": os.getpid(),
+        "created_at": time.time(),
+    }
+    metadata_path = staging_output_dir / RUN_METADATA_FILENAME
+    metadata_path.write_text(json.dumps(metadata, sort_keys=True), encoding="utf-8")
+
+
+def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
+    incomplete_dir = _incomplete_downloads_dir(output_dir)
+    if not incomplete_dir.exists():
+        return
+    cleanup_lock = _StagingLock(incomplete_dir / INCOMPLETE_CLEANUP_LOCK_FILENAME)
+    try:
+        if not cleanup_lock.acquire(blocking=False):
+            return
+        children = tuple(incomplete_dir.iterdir())
+    except OSError:
+        return
+    finally:
+        cleanup_lock.release()
+
+    for child in children:
+        if child.is_symlink() or not child.is_dir():
+            continue
+        lock = _StagingLock(child / RUN_LOCK_FILENAME)
+        try:
+            acquired = lock.acquire(blocking=False)
+        except OSError:
+            continue
+        if not acquired:
+            continue
+        try:
+            lock.release()
+            _remove_staging_output_dir(child)
+        finally:
+            lock.release()
+
+
+def _remove_staging_output_dir(staging_output_dir: Path) -> None:
+    if staging_output_dir.is_symlink():
+        return
+    with contextlib.suppress(FileNotFoundError, OSError):
+        shutil.rmtree(staging_output_dir)
+
+
+def _staged_output_path(
+    final_output_path: Path,
+    *,
+    output_dir: str | Path,
+    staging_output_dir: Path,
+) -> Path:
+    final_path = Path(final_output_path)
+    output_dir_path = Path(output_dir)
+    try:
+        relative_output_path = final_path.relative_to(output_dir_path)
+    except ValueError:
+        try:
+            relative_output_path = final_path.resolve(strict=False).relative_to(
+                output_dir_path.resolve(strict=False)
+            )
+        except ValueError as exc:
+            raise errors.DownloadError(
+                f"Planned output path is outside output directory: {final_path}"
+            ) from exc
+    return staging_output_dir / relative_output_path
+
+
+def _finalize_staged_download(
+    *,
+    staged_output_path: Path,
+    final_output_path: Path,
+    exists_behavior: FileExistsBehavior,
+) -> DownloadStatus:
+    if not staged_output_path.is_file():
+        raise errors.DownloadError(
+            f"Completed staged download is missing: {staged_output_path}"
+        )
+
+    if _output_path_exists(final_output_path):
+        if exists_behavior == FileExistsBehavior.SKIP:
+            return DownloadStatus.SKIPPED
+        if exists_behavior == FileExistsBehavior.FAIL:
+            raise errors.DownloadError(f"Output already exists: {final_output_path}")
+
+    try:
+        final_output_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
+
+    try:
+        staged_output_path.replace(final_output_path)
+    except OSError as exc:
+        raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+    return DownloadStatus.DOWNLOADED
+
+
+@contextlib.contextmanager
+def _download_signal_handlers() -> Any:
+    handled_signals = tuple(
+        signum
+        for name in ("SIGTERM", "SIGHUP")
+        if (signum := getattr(signal, name, None)) is not None
+    )
+    previous_handlers: dict[int, Any] = {}
+
+    def handle_signal(signum: int, frame: Any) -> None:
+        raise SystemExit(128 + signum)
+
+    try:
+        for signum in handled_signals:
+            previous_handlers[signum] = signal.getsignal(signum)
+            signal.signal(signum, handle_signal)
+    except ValueError:
+        previous_handlers.clear()
+    try:
+        yield
+    finally:
+        for signum, previous_handler in previous_handlers.items():
+            signal.signal(signum, previous_handler)
 
 
 def _planned_output_path(
