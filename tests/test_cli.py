@@ -50,6 +50,110 @@ class CliTests(unittest.TestCase):
         self.assertEqual(second.exit_code, 1, second.output)
         self.assertIn("--force", second.output)
 
+    def test_interactive_init_explains_each_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init"],
+                    input="\n\n\n\n\n\n\n\n",
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "Downloads will be saved under this directory.",
+                result.output,
+            )
+            self.assertIn(
+                "Accepted: absolute path, ~ path, or env-var path.",
+                result.output,
+            )
+            self.assertIn(
+                "Executable used to merge video and dubbed audio.",
+                result.output,
+            )
+            self.assertIn(
+                "Accepted: `ffmpeg`, `ffmpeg.exe`, or absolute path.",
+                result.output,
+            )
+            self.assertIn(
+                "Dub language code to use when --lang is omitted.",
+                result.output,
+            )
+            self.assertIn(
+                "Accepted: non-empty language code, e.g. en, tr, es.",
+                result.output,
+            )
+            self.assertIn("Which type of output to download", result.output)
+            self.assertIn("Accepted: `video` | `audio`.", result.output)
+            self.assertIn("Which video quality to select", result.output)
+            self.assertIn("(`144p`-`8640p`, e.g. `720p`)", result.output)
+            self.assertIn("Which dubbed audio quality to select", result.output)
+            self.assertIn("Accepted: `best` | `medium` | `low`.", result.output)
+            self.assertIn("How many times to retry transient metadata", result.output)
+            self.assertIn(
+                "Accepted: non-negative integer; 0 disables retries.",
+                result.output,
+            )
+            self.assertIn(
+                "What to do when the planned output file already exists.",
+                result.output,
+            )
+            self.assertIn("Accepted: `skip` | `fail` | `overwrite`.", result.output)
+            self.assertEqual(result.output.count("(press Enter to use)"), 8)
+            self.assertNotIn("Hint:", result.output)
+            self.assertIn(
+                "Default: ~/Downloads/dbdvdl-output (press Enter to use)",
+                result.output,
+            )
+            self.assertIn("Default: ffmpeg (press Enter to use)", result.output)
+            self.assertIn("Default: en (press Enter to use)", result.output)
+            self.assertIn("Default: video (press Enter to use)", result.output)
+            self.assertIn("Default: best (press Enter to use)", result.output)
+            self.assertIn("Default: 3 (press Enter to use)", result.output)
+            self.assertIn("Default: skip (press Enter to use)", result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                "output_dir: ~/Downloads/dbdvdl-output\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "default_download_mode: video\n"
+                "default_video_quality: best\n"
+                "default_audio_quality: best\n"
+                "retry_on_network_failure: 3\n"
+                "default_exists_behavior: skip\n",
+            )
+
+    def test_interactive_init_colors_prompt_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init"],
+                    input="\n\n\n\n\n\n\n\n",
+                    env={"HOME": tmpdir},
+                    color=True,
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("\x1b[36m\x1b[1mOutput directory", result.output)
+        self.assertIn("\x1b[36m\x1b[1mAccepted:", result.output)
+        self.assertIn("\x1b[36m\x1b[1mDefault:", result.output)
+        self.assertNotIn("\x1b[36m\x1b[1mHint:", result.output)
+
     def test_config_init_writes_default_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.runner.invoke(app, ["config", "init"], env={"HOME": tmpdir})
@@ -61,6 +165,44 @@ class CliTests(unittest.TestCase):
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                "output_dir: ~/Downloads/dbdvdl-output\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "default_download_mode: video\n"
+                "default_video_quality: best\n"
+                "default_audio_quality: best\n"
+                "retry_on_network_failure: 3\n"
+                "default_exists_behavior: skip\n",
+            )
+
+    def test_interactive_config_init_explains_prompts_and_keeps_defaults(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["config", "init"],
+                    input="\n\n\n\n\n\n\n\n",
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("Accepted: `video` | `audio`.", result.output)
+            self.assertIn("(`144p`-`8640p`, e.g. `720p`)", result.output)
+            self.assertEqual(result.output.count("(press Enter to use)"), 8)
+            self.assertNotIn("Hint:", result.output)
             self.assertEqual(
                 config_path.read_text(encoding="utf-8"),
                 "output_dir: ~/Downloads/dbdvdl-output\n"

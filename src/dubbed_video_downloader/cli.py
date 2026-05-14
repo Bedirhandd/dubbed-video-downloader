@@ -141,10 +141,35 @@ def _print_command_error(exc: BaseException, *, debug: bool) -> None:
         traceback.print_exception(exc, file=sys.stderr)
 
 
-def _prompt_value(value: str | None, prompt: str, default: str) -> str:
+def _print_prompt_help(
+    heading: str,
+    description: str,
+    accepted: str,
+    default: str | int,
+) -> None:
+    typer.echo()
+    typer.secho(heading, fg=typer.colors.CYAN, bold=True)
+    typer.echo(f"  {description}")
+    typer.echo("  ", nl=False)
+    typer.secho("Accepted: ", fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.echo(accepted)
+    typer.echo("  ", nl=False)
+    typer.secho("Default: ", fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.echo(f"{default} (press Enter to use)")
+
+
+def _prompt_value(
+    value: str | None,
+    prompt: str,
+    default: str,
+    *,
+    description: str,
+    accepted: str,
+) -> str:
     if value is not None:
         return value
     if _stdin_is_interactive():
+        _print_prompt_help(prompt, description, accepted, default)
         return str(typer.prompt(prompt, default=default))
     return default
 
@@ -153,6 +178,15 @@ def _prompt_retry_on_network_failure(value: int | None) -> int:
     if value is not None:
         return value
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Retry on network failure",
+            (
+                "How many times to retry transient metadata, extraction, and "
+                "media download failures."
+            ),
+            "non-negative integer; 0 disables retries.",
+            app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
+        )
         return typer.prompt(
             "Retry on network failure",
             default=app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
@@ -165,6 +199,12 @@ def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
     if value is not None:
         return value
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default download mode",
+            "Which type of output to download when --mode is omitted.",
+            "`video` | `audio`.",
+            app_config.DEFAULT_DOWNLOAD_MODE.value,
+        )
         return str(
             typer.prompt(
                 "Default download mode",
@@ -178,6 +218,18 @@ def _prompt_video_quality(value: str | None) -> str:
     if value is not None:
         return value
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default video quality",
+            (
+                "Which video quality to select for video-mode downloads when "
+                "--video-quality is omitted."
+            ),
+            (
+                "`best` | `medium` | `low` | exact resolution "
+                "(`144p`-`8640p`, e.g. `720p`)."
+            ),
+            app_config.DEFAULT_VIDEO_QUALITY.label,
+        )
         return str(
             typer.prompt(
                 "Default video quality",
@@ -191,6 +243,12 @@ def _prompt_audio_quality(value: str | None) -> str:
     if value is not None:
         return value
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default audio quality",
+            "Which dubbed audio quality to select when --audio-quality is omitted.",
+            "`best` | `medium` | `low`.",
+            app_config.DEFAULT_AUDIO_QUALITY.label,
+        )
         return str(
             typer.prompt(
                 "Default audio quality",
@@ -206,6 +264,12 @@ def _prompt_exists_behavior(
     if value is not None:
         return value
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default existing-file behavior",
+            "What to do when the planned output file already exists.",
+            "`skip` | `fail` | `overwrite`.",
+            app_config.DEFAULT_EXISTS_BEHAVIOR.value,
+        )
         return str(
             typer.prompt(
                 "Default existing-file behavior",
@@ -264,16 +328,22 @@ def _init_config(
         output_dir,
         "Output directory",
         app_config.DEFAULT_OUTPUT_DIR,
+        description="Downloads will be saved under this directory.",
+        accepted="absolute path, ~ path, or env-var path.",
     )
     selected_ffmpeg_path = _prompt_value(
         ffmpeg_path,
         "FFmpeg path",
         app_config.DEFAULT_FFMPEG_PATH,
+        description="Executable used to merge video and dubbed audio.",
+        accepted="`ffmpeg`, `ffmpeg.exe`, or absolute path.",
     )
     selected_default_lang = _prompt_value(
         default_lang,
         "Default language",
         app_config.DEFAULT_LANG,
+        description="Dub language code to use when --lang is omitted.",
+        accepted="non-empty language code, e.g. en, tr, es.",
     )
     selected_default_download_mode = _prompt_download_mode(default_download_mode)
     selected_default_video_quality = _prompt_video_quality(default_video_quality)
