@@ -850,7 +850,7 @@ class CliTests(unittest.TestCase):
                 patch("dubbed_video_downloader.cli.core.download") as download,
                 patch(
                     "dubbed_video_downloader.cli.core.plan_download",
-                    side_effect=RuntimeError("missing language"),
+                    side_effect=errors.DownloadError("missing language"),
                 ) as plan,
             ):
                 result = self.runner.invoke(
@@ -887,7 +887,7 @@ class CliTests(unittest.TestCase):
                 patch("dubbed_video_downloader.cli.core.download") as download,
                 patch(
                     "dubbed_video_downloader.cli.core.plan_download",
-                    side_effect=RuntimeError("missing language"),
+                    side_effect=errors.DownloadError("missing language"),
                 ) as plan,
             ):
                 result = self.runner.invoke(
@@ -1130,7 +1130,7 @@ class CliTests(unittest.TestCase):
 
             with patch(
                 "dubbed_video_downloader.cli.core.get_quality_report",
-                side_effect=errors.LanguageUnavailableError("missing language"),
+                side_effect=errors.LanguageNotFoundError("missing language"),
             ) as report:
                 result = self.runner.invoke(
                     app,
@@ -1159,7 +1159,7 @@ class CliTests(unittest.TestCase):
 
             with patch(
                 "dubbed_video_downloader.cli.core.get_quality_report",
-                side_effect=errors.LanguageUnavailableError("missing language"),
+                side_effect=errors.LanguageNotFoundError("missing language"),
             ) as report:
                 result = self.runner.invoke(
                     app,

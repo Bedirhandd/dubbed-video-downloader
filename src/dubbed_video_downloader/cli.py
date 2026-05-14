@@ -739,7 +739,7 @@ def download_command(
                 if isinstance(download_result, core.DownloadResult):
                     _print_quality_notes(download_result.quality_notes)
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
-        except Exception as exc:
+        except errors.DubbedVideoDownloaderError as exc:
             failures += 1
             _print_command_error(exc, debug=debug)
 
@@ -768,7 +768,7 @@ def langs_command(
         bool,
         typer.Option(
             "--debug",
-            help="Show yt-dlp debug output.",
+            help="Show yt-dlp debug output and error tracebacks.",
         ),
     ] = False,
     retry_on_network_failure: Annotated[
@@ -833,7 +833,7 @@ def qualities_command(
         bool,
         typer.Option(
             "--debug",
-            help="Show yt-dlp debug output.",
+            help="Show yt-dlp debug output and error tracebacks.",
         ),
     ] = False,
     retry_on_network_failure: Annotated[

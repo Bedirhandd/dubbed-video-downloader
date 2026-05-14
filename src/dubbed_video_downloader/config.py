@@ -11,6 +11,7 @@ import yaml
 from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode as _normalize_download_mode
+from .errors import ConfigError
 
 CONFIG_DIR_NAME = "dubbed-video-downloader"
 CONFIG_FILE_NAME = "config.yaml"
@@ -32,10 +33,6 @@ class AppConfig:
     default_video_quality: quality.VideoQuality
     default_audio_quality: quality.AudioQuality
     retry_on_network_failure: int
-
-
-class ConfigError(RuntimeError):
-    """Raised when the user config is missing or invalid."""
 
 
 def get_config_path() -> Path:

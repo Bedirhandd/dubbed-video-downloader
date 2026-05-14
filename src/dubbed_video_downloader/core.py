@@ -153,10 +153,10 @@ def ensure_lang(info: dict[str, Any], target: str) -> None:
     if target not in langs:
         title = info.get("title")
         if not langs:
-            raise errors.LanguageUnavailableError(
+            raise errors.LanguageNotFoundError(
                 f"No multi-language audio tracks found for '{title}'."
             )
-        raise errors.LanguageUnavailableError(
+        raise errors.LanguageNotFoundError(
             f"Requested dub language not found for '{title}'.\n"
             f"Requested: {target}\n"
             f"Available: {', '.join(sorted(langs))}"
@@ -261,21 +261,28 @@ def download(
         audio_quality=audio_quality,
     )
 
-    Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
-    with yt_dlp.YoutubeDL(
-        _download_ydl_opts(
-            lang=lang,
-            download_mode=selected_download_mode,
-            ffmpeg_path=ffmpeg_path,
-            output_dir=output_dir,
-            merge_output_format=merge_output_format,
-            format_selector=quality_selection.format_selector,
-            verbose=verbose,
-            debug=debug,
-            retry_on_network_failure=retry_on_network_failure,
-        )
-    ) as ydl:
-        ydl.download([url])
+    try:
+        Path(output_dir, lang).mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
+
+    try:
+        with yt_dlp.YoutubeDL(
+            _download_ydl_opts(
+                lang=lang,
+                download_mode=selected_download_mode,
+                ffmpeg_path=ffmpeg_path,
+                output_dir=output_dir,
+                merge_output_format=merge_output_format,
+                format_selector=quality_selection.format_selector,
+                verbose=verbose,
+                debug=debug,
+                retry_on_network_failure=retry_on_network_failure,
+            )
+        ) as ydl:
+            ydl.download([url])
+    except YoutubeDLError as exc:
+        raise errors.DownloadError(f"Could not download media: {exc}") from exc
     return DownloadResult(quality_notes=quality_selection.notes)
 
 
@@ -333,12 +340,15 @@ def _planned_output_path(
         retry_on_network_failure=retry_on_network_failure,
     )
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        selected_info = ydl.process_ie_result(planned_info, download=False)
-        filename = ydl.prepare_filename(selected_info)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            selected_info = ydl.process_ie_result(planned_info, download=False)
+            filename = ydl.prepare_filename(selected_info)
+    except YoutubeDLError as exc:
+        raise errors.DownloadError(f"Could not plan download output: {exc}") from exc
 
     if not filename:
-        raise RuntimeError("Could not determine planned output path.")
+        raise errors.DownloadError("Could not determine planned output path.")
     return Path(filename)
 
 

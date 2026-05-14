@@ -451,7 +451,7 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
             with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-                with self.assertRaises(errors.LanguageUnavailableError) as context:
+                with self.assertRaises(errors.LanguageNotFoundError) as context:
                     core.plan_download(
                         url="https://www.youtube.com/watch?v=EXAMPLE",
                         lang="tr",
@@ -461,6 +461,8 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(output_dir.exists())
 
         self.assertIn("Requested dub language not found", str(context.exception))
+        self.assertIn("Requested: tr", str(context.exception))
+        self.assertIn("Available: en", str(context.exception))
 
     def test_download_suppresses_warnings_by_default(self) -> None:
         info = {
@@ -646,6 +648,128 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(opts["quiet"])
         self.assertFalse(opts["no_warnings"])
         self.assertTrue(opts["verbose"])
+
+    def test_download_wraps_output_directory_failures(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        cause = OSError("permission denied")
+
+        with (
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+            patch("dubbed_video_downloader.core.Path.mkdir", side_effect=cause),
+        ):
+            with self.assertRaises(errors.DownloadError) as context:
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path("/tmp/example"),
+                )
+
+        self.assertIs(context.exception.__cause__, cause)
+        self.assertIn("Could not prepare output directory", str(context.exception))
+
+    def test_download_wraps_ytdlp_download_failures(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        cause = YoutubeDLError("download failed")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                ydl.download.side_effect = cause
+
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=Path(tmpdir),
+                    )
+
+        self.assertIs(context.exception.__cause__, cause)
+        self.assertIn("Could not download media", str(context.exception))
+        self.assertIn("download failed", str(context.exception))
+
+    def test_plan_download_wraps_ytdlp_planning_failures(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        cause = YoutubeDLError("planning failed")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                ydl.process_ie_result.side_effect = cause
+
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.plan_download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=Path(tmpdir),
+                    )
+
+        self.assertIs(context.exception.__cause__, cause)
+        self.assertIn("Could not plan download output", str(context.exception))
+
+    def test_plan_download_raises_download_error_when_output_path_is_missing(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                ydl = youtube_dl.return_value.__enter__.return_value
+                ydl.process_ie_result.return_value = info
+                ydl.prepare_filename.return_value = ""
+
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.plan_download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=Path(tmpdir),
+                    )
+
+        self.assertIn("Could not determine planned output path", str(context.exception))
 
 
 if __name__ == "__main__":

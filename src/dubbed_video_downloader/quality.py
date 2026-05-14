@@ -7,15 +7,12 @@ from typing import Any
 
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode
+from .errors import QualityError
 
 MIN_VIDEO_HEIGHT = 144
 MAX_VIDEO_HEIGHT = 8640
 MEDIUM_VIDEO_TARGET_HEIGHT = 720
 MEDIUM_AUDIO_TARGET_KBPS = 128.0
-
-
-class QualityError(ValueError):
-    """Raised when quality input or metadata cannot produce a safe selector."""
 
 
 class VideoQualityKind(str, Enum):
