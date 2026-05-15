@@ -6,6 +6,7 @@ import os
 import random
 import shutil
 import signal
+import stat
 import time
 import uuid
 from collections.abc import Callable
@@ -33,6 +34,10 @@ INCOMPLETE_DOWNLOAD_DIR = Path("tmp") / ".incomplete"
 INCOMPLETE_CLEANUP_LOCK_FILENAME = ".cleanup.lock"
 RUN_LOCK_FILENAME = ".lock"
 RUN_METADATA_FILENAME = "run.json"
+
+
+class _UnsafeStagingPathError(OSError):
+    pass
 
 
 class DownloadStatus(str, Enum):
@@ -339,9 +344,9 @@ def download(
         )
 
     _report_download_stage(stage_callback, DownloadStage.PREPARING_OUTPUT_DIR)
-    _cleanup_stale_incomplete_downloads(output_dir)
 
     try:
+        _cleanup_stale_incomplete_downloads(output_dir)
         with _download_signal_handlers():
             with _DownloadStagingRun(output_dir) as staging_run:
                 staged_output_path = _staged_output_path(
@@ -476,7 +481,6 @@ class _StagingLock:
         self._file: Any | None = None
 
     def acquire(self, *, blocking: bool) -> bool:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self._path.open("a+b")
         try:
             if os.name == "nt":
@@ -539,6 +543,7 @@ class _StagingLock:
 
 class _DownloadStagingRun:
     def __init__(self, output_dir: str | Path) -> None:
+        self._output_dir = Path(output_dir)
         self._creation_lock = _StagingLock(
             _incomplete_downloads_dir(output_dir) / INCOMPLETE_CLEANUP_LOCK_FILENAME
         )
@@ -547,8 +552,12 @@ class _DownloadStagingRun:
 
     def __enter__(self) -> _DownloadStagingRun:
         try:
+            _ensure_safe_incomplete_downloads_dir(self._output_dir)
             self._creation_lock.acquire(blocking=True)
-            self.output_dir.mkdir(parents=True, exist_ok=False)
+            _ensure_safe_incomplete_downloads_dir(self._output_dir)
+            self.output_dir.mkdir(exist_ok=False)
+            _ensure_safe_incomplete_downloads_path(self._output_dir)
+            _raise_if_redirected_staging_path(self.output_dir)
             self._lock.acquire(blocking=True)
             _write_staging_metadata(self.output_dir)
         except BaseException:
@@ -568,6 +577,65 @@ def _incomplete_downloads_dir(output_dir: str | Path) -> Path:
     return Path(output_dir) / INCOMPLETE_DOWNLOAD_DIR
 
 
+def _staging_component_dirs(output_dir: str | Path) -> tuple[Path, Path]:
+    output_dir_path = Path(output_dir)
+    tmp_dir = output_dir_path / INCOMPLETE_DOWNLOAD_DIR.parts[0]
+    return tmp_dir, _incomplete_downloads_dir(output_dir_path)
+
+
+def _is_redirected_staging_path(path: Path) -> bool:
+    try:
+        if stat.S_ISLNK(path.lstat().st_mode):
+            return True
+    except FileNotFoundError:
+        return False
+
+    is_junction = getattr(path, "is_junction", None)
+    try:
+        if is_junction is not None and is_junction():
+            return True
+    except NotImplementedError:
+        pass
+
+    is_mount = getattr(path, "is_mount", None)
+    try:
+        return is_mount is not None and is_mount()
+    except NotImplementedError:
+        return False
+
+
+def _raise_if_redirected_staging_path(path: Path) -> None:
+    if _is_redirected_staging_path(path):
+        raise _UnsafeStagingPathError(
+            f"Refusing to use symlinked or redirected staging directory: {path}"
+        )
+
+
+def _ensure_safe_incomplete_downloads_path(output_dir: str | Path) -> Path:
+    for component_dir in _staging_component_dirs(output_dir):
+        _raise_if_redirected_staging_path(component_dir)
+    return _incomplete_downloads_dir(output_dir)
+
+
+def _ensure_safe_incomplete_downloads_dir(output_dir: str | Path) -> Path:
+    output_dir_path = Path(output_dir)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
+
+    for component_dir in _staging_component_dirs(output_dir_path):
+        _raise_if_redirected_staging_path(component_dir)
+        try:
+            component_dir.mkdir()
+        except FileExistsError:
+            _raise_if_redirected_staging_path(component_dir)
+            if not component_dir.is_dir():
+                raise NotADirectoryError(
+                    f"Staging path is not a directory: {component_dir}"
+                )
+        _raise_if_redirected_staging_path(component_dir)
+
+    return _incomplete_downloads_dir(output_dir_path)
+
+
 def _new_staging_output_dir(output_dir: str | Path) -> Path:
     run_id = f"{time.time_ns()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
     return _incomplete_downloads_dir(output_dir) / run_id
@@ -583,21 +651,31 @@ def _write_staging_metadata(staging_output_dir: Path) -> None:
 
 
 def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
-    incomplete_dir = _incomplete_downloads_dir(output_dir)
+    incomplete_dir = _ensure_safe_incomplete_downloads_path(output_dir)
     if not incomplete_dir.exists():
         return
     cleanup_lock = _StagingLock(incomplete_dir / INCOMPLETE_CLEANUP_LOCK_FILENAME)
     try:
         if not cleanup_lock.acquire(blocking=False):
             return
+        _ensure_safe_incomplete_downloads_path(output_dir)
         children = tuple(incomplete_dir.iterdir())
+        _ensure_safe_incomplete_downloads_path(output_dir)
+    except _UnsafeStagingPathError:
+        raise
     except OSError:
         return
     finally:
         cleanup_lock.release()
 
     for child in children:
-        if child.is_symlink() or not child.is_dir():
+        try:
+            _ensure_safe_incomplete_downloads_path(output_dir)
+            if _is_redirected_staging_path(child) or not child.is_dir():
+                continue
+        except _UnsafeStagingPathError:
+            raise
+        except OSError:
             continue
         lock = _StagingLock(child / RUN_LOCK_FILENAME)
         try:
@@ -614,7 +692,15 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
 
 
 def _remove_staging_output_dir(staging_output_dir: Path) -> None:
-    if staging_output_dir.is_symlink():
+    try:
+        should_skip = (
+            _is_redirected_staging_path(staging_output_dir.parent.parent)
+            or _is_redirected_staging_path(staging_output_dir.parent)
+            or _is_redirected_staging_path(staging_output_dir)
+        )
+    except OSError:
+        return
+    if should_skip:
         return
     with contextlib.suppress(FileNotFoundError, OSError):
         shutil.rmtree(staging_output_dir)

@@ -852,6 +852,98 @@ class CoreTests(unittest.TestCase):
         self.assertIs(context.exception.__cause__, cause)
         self.assertIn("Could not prepare output directory", str(context.exception))
 
+    def test_download_rejects_symlinked_incomplete_root_before_downloading(
+        self,
+    ) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root_dir = Path(tmpdir)
+            output_dir = root_dir / "out"
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            outside_dir = root_dir / "outside"
+            incomplete_dir = output_dir / "tmp" / ".incomplete"
+            outside_dir.mkdir()
+            incomplete_dir.parent.mkdir(parents=True)
+            try:
+                incomplete_dir.symlink_to(outside_dir, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                return
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=output_dir,
+                    )
+
+            self.assertIsInstance(context.exception.__cause__, OSError)
+            self.assertIn("Could not prepare output directory", str(context.exception))
+            self.assertIn("Refusing to use", str(context.exception))
+            youtube_dl.assert_not_called()
+
+    def test_download_rejects_symlinked_tmp_parent_before_downloading(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root_dir = Path(tmpdir)
+            output_dir = root_dir / "out"
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            outside_tmp_dir = root_dir / "outside-tmp"
+            tmp_parent = output_dir / "tmp"
+            output_dir.mkdir()
+            outside_tmp_dir.mkdir()
+            try:
+                tmp_parent.symlink_to(outside_tmp_dir, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                return
+
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                with self.assertRaises(errors.DownloadError) as context:
+                    core.download(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        output_dir=output_dir,
+                    )
+
+            self.assertIsInstance(context.exception.__cause__, OSError)
+            self.assertIn("Could not prepare output directory", str(context.exception))
+            self.assertIn("Refusing to use", str(context.exception))
+            youtube_dl.assert_not_called()
+
     def test_download_wraps_ytdlp_download_failures(self) -> None:
         info = {
             "title": "A Title",
@@ -1368,6 +1460,27 @@ class CoreTests(unittest.TestCase):
 
             self.assertTrue(symlink_path.exists())
             self.assertTrue((outside_dir / "keep.txt").exists())
+
+    def test_stale_incomplete_cleanup_rejects_symlinked_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            incomplete_dir = output_dir / "tmp" / ".incomplete"
+            outside_dir = Path(tmpdir) / "outside"
+            victim_dir = outside_dir / "victim"
+            incomplete_dir.parent.mkdir(parents=True)
+            victim_dir.mkdir(parents=True)
+            (victim_dir / "keep.txt").write_text("keep", encoding="utf-8")
+            try:
+                incomplete_dir.symlink_to(outside_dir, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                return
+
+            with self.assertRaises(OSError) as context:
+                core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertIn("Refusing to use", str(context.exception))
+            self.assertTrue(incomplete_dir.exists())
+            self.assertTrue((victim_dir / "keep.txt").exists())
 
     def test_download_skip_existing_returns_skipped_without_downloading(self) -> None:
         info = {
