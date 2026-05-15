@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -1736,14 +1737,8 @@ class CoreTests(unittest.TestCase):
             active_dir = incomplete_dir / "active"
             stale_dir.mkdir(parents=True)
             active_dir.mkdir(parents=True)
-            (stale_dir / core.RUN_METADATA_FILENAME).write_text(
-                "{}",
-                encoding="utf-8",
-            )
-            (active_dir / core.RUN_METADATA_FILENAME).write_text(
-                "{}",
-                encoding="utf-8",
-            )
+            core._write_staging_metadata(stale_dir)
+            core._write_staging_metadata(active_dir)
             (stale_dir / "partial.part").write_text("stale", encoding="utf-8")
             (active_dir / "partial.part").write_text("active", encoding="utf-8")
             active_lock = core._StagingLock(active_dir / core.RUN_LOCK_FILENAME)
@@ -1765,15 +1760,100 @@ class CoreTests(unittest.TestCase):
                 / f"A_Title.mkv{core.FALLBACK_FINALIZE_COPY_MARKER}.abc123.tmp"
             )
             stale_dir.mkdir(parents=True)
-            (stale_dir / core.RUN_METADATA_FILENAME).write_text(
-                "{}",
-                encoding="utf-8",
-            )
+            core._write_staging_metadata(stale_dir)
             stale_copy.write_text("partial", encoding="utf-8")
 
             core._cleanup_stale_incomplete_downloads(output_dir)
 
             self.assertFalse(stale_dir.exists())
+
+    def test_stale_incomplete_cleanup_preserves_unowned_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            unowned_dir = output_dir / "tmp" / ".incomplete" / "foreign"
+            unowned_dir.mkdir(parents=True)
+            (unowned_dir / "keep.txt").write_text("keep", encoding="utf-8")
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertTrue(unowned_dir.exists())
+            self.assertTrue((unowned_dir / "keep.txt").exists())
+            self.assertFalse((unowned_dir / core.RUN_LOCK_FILENAME).exists())
+
+    def test_stale_incomplete_cleanup_preserves_invalid_metadata(self) -> None:
+        cases = {
+            "malformed": "not json",
+            "wrong_app": json.dumps(
+                {
+                    "application": "other-tool",
+                    "metadata_version": core.RUN_METADATA_VERSION,
+                }
+            ),
+            "wrong_version": json.dumps(
+                {
+                    "application": core.RUN_METADATA_APPLICATION,
+                    "metadata_version": core.RUN_METADATA_VERSION + 1,
+                }
+            ),
+            "legacy": json.dumps({}),
+            "non_object": json.dumps([]),
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            incomplete_dir = output_dir / "tmp" / ".incomplete"
+            for name, metadata in cases.items():
+                candidate_dir = incomplete_dir / name
+                candidate_dir.mkdir(parents=True)
+                (candidate_dir / core.RUN_METADATA_FILENAME).write_text(
+                    metadata,
+                    encoding="utf-8",
+                )
+                (candidate_dir / "keep.txt").write_text("keep", encoding="utf-8")
+
+            metadata_dir = incomplete_dir / "metadata_dir"
+            metadata_dir.mkdir(parents=True)
+            (metadata_dir / core.RUN_METADATA_FILENAME).mkdir()
+            (metadata_dir / "keep.txt").write_text("keep", encoding="utf-8")
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            for name in (*cases, "metadata_dir"):
+                with self.subTest(name=name):
+                    candidate_dir = incomplete_dir / name
+                    self.assertTrue(candidate_dir.exists())
+                    self.assertTrue((candidate_dir / "keep.txt").exists())
+                    self.assertFalse(
+                        (candidate_dir / core.RUN_LOCK_FILENAME).exists()
+                    )
+
+    def test_stale_incomplete_cleanup_preserves_symlinked_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            candidate_dir = output_dir / "tmp" / ".incomplete" / "linked-metadata"
+            target_metadata = output_dir / "metadata.json"
+            candidate_dir.mkdir(parents=True)
+            target_metadata.write_text(
+                json.dumps(
+                    {
+                        "application": core.RUN_METADATA_APPLICATION,
+                        "metadata_version": core.RUN_METADATA_VERSION,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            try:
+                (candidate_dir / core.RUN_METADATA_FILENAME).symlink_to(
+                    target_metadata
+                )
+            except (NotImplementedError, OSError):
+                return
+            (candidate_dir / "keep.txt").write_text("keep", encoding="utf-8")
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertTrue(candidate_dir.exists())
+            self.assertTrue((candidate_dir / "keep.txt").exists())
+            self.assertFalse((candidate_dir / core.RUN_LOCK_FILENAME).exists())
 
     def test_stale_incomplete_cleanup_does_not_follow_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -39,6 +39,8 @@ INCOMPLETE_DOWNLOAD_DIR = Path("tmp") / ".incomplete"
 INCOMPLETE_CLEANUP_LOCK_FILENAME = ".cleanup.lock"
 RUN_LOCK_FILENAME = ".lock"
 RUN_METADATA_FILENAME = "run.json"
+RUN_METADATA_APPLICATION = "dubbed-video-downloader"
+RUN_METADATA_VERSION = 1
 FALLBACK_FINALIZE_COPY_MARKER = ".finalizing-copy"
 AT_FDCWD = -100
 LINUX_RENAME_NOREPLACE = 1
@@ -672,11 +674,32 @@ def _new_staging_output_dir(output_dir: str | Path) -> Path:
 
 def _write_staging_metadata(staging_output_dir: Path) -> None:
     metadata = {
+        "application": RUN_METADATA_APPLICATION,
+        "metadata_version": RUN_METADATA_VERSION,
         "pid": os.getpid(),
         "created_at": time.time(),
     }
     metadata_path = staging_output_dir / RUN_METADATA_FILENAME
     metadata_path.write_text(json.dumps(metadata, sort_keys=True), encoding="utf-8")
+
+
+def _is_owned_staging_output_dir(staging_output_dir: Path) -> bool:
+    metadata_path = staging_output_dir / RUN_METADATA_FILENAME
+    try:
+        if _is_redirected_staging_path(staging_output_dir):
+            return False
+        metadata_stat = metadata_path.lstat()
+        if not stat.S_ISREG(metadata_stat.st_mode):
+            return False
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return False
+
+    return (
+        isinstance(metadata, dict)
+        and metadata.get("application") == RUN_METADATA_APPLICATION
+        and metadata.get("metadata_version") == RUN_METADATA_VERSION
+    )
 
 
 def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
@@ -700,7 +723,11 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
     for child in children:
         try:
             _ensure_safe_incomplete_downloads_path(output_dir)
-            if _is_redirected_staging_path(child) or not child.is_dir():
+            if (
+                _is_redirected_staging_path(child)
+                or not child.is_dir()
+                or not _is_owned_staging_output_dir(child)
+            ):
                 continue
         except _UnsafeStagingPathError:
             raise
@@ -714,8 +741,9 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
         if not acquired:
             continue
         try:
-            lock.release()
-            _remove_staging_output_dir(child)
+            if _is_owned_staging_output_dir(child):
+                lock.release()
+                _remove_staging_output_dir(child)
         finally:
             lock.release()
 
