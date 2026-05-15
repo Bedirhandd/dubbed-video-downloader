@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
+import errno
 import json
 import os
+import platform
 import random
 import shutil
 import signal
 import stat
+import sys
 import time
 import uuid
 from collections.abc import Callable
@@ -35,9 +39,33 @@ INCOMPLETE_DOWNLOAD_DIR = Path("tmp") / ".incomplete"
 INCOMPLETE_CLEANUP_LOCK_FILENAME = ".cleanup.lock"
 RUN_LOCK_FILENAME = ".lock"
 RUN_METADATA_FILENAME = "run.json"
+FALLBACK_FINALIZE_COPY_MARKER = ".finalizing-copy"
+AT_FDCWD = -100
+LINUX_RENAME_NOREPLACE = 1
+DARWIN_RENAME_EXCL = 0x00000004
+WINDOWS_MOVEFILE_WRITE_THROUGH = 0x00000008
+WINDOWS_ERROR_FILE_EXISTS = 80
+WINDOWS_ERROR_ALREADY_EXISTS = 183
+WINDOWS_ERROR_NOT_SAME_DEVICE = 17
+WINDOWS_ERROR_CALL_NOT_IMPLEMENTED = 120
+LINUX_RENAMEAT2_SYSCALL_NUMBERS = {
+    "x86_64": 316,
+    "amd64": 316,
+    "i386": 353,
+    "i686": 353,
+    "aarch64": 276,
+    "arm64": 276,
+    "armv7l": 382,
+    "armv6l": 382,
+    "riscv64": 276,
+}
 
 
 class _UnsafeStagingPathError(OSError):
+    pass
+
+
+class _AtomicNoClobberPublishUnsupportedError(OSError):
     pass
 
 
@@ -729,6 +757,229 @@ def _staged_output_path(
     return staging_output_dir / relative_output_path
 
 
+def _fallback_finalize_copy_path(staged_output_path: Path) -> Path:
+    return staged_output_path.with_name(
+        f"{staged_output_path.name}{FALLBACK_FINALIZE_COPY_MARKER}.{uuid.uuid4().hex}.tmp"
+    )
+
+
+def _fsync_file(file_obj: Any) -> None:
+    file_obj.flush()
+    os.fsync(file_obj.fileno())
+
+
+def _fsync_parent_dir(path: Path) -> None:
+    if os.name == "nt":
+        return
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+
+    with contextlib.suppress(OSError):
+        dir_fd = os.open(path.parent, flags)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+
+def _publish_file_no_clobber(source_path: Path, destination_path: Path) -> None:
+    if sys.platform.startswith("linux"):
+        _publish_file_no_clobber_linux(source_path, destination_path)
+        return
+    if sys.platform == "darwin":
+        _publish_file_no_clobber_darwin(source_path, destination_path)
+        return
+    if os.name == "nt":
+        _publish_file_no_clobber_windows(source_path, destination_path)
+        return
+
+    raise _AtomicNoClobberPublishUnsupportedError(
+        "Atomic no-clobber publish is not supported on this platform"
+    )
+
+
+def _publish_file_no_clobber_linux(source_path: Path, destination_path: Path) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    source_bytes = os.fsencode(source_path)
+    destination_bytes = os.fsencode(destination_path)
+
+    try:
+        renameat2 = libc.renameat2
+    except AttributeError:
+        _publish_file_no_clobber_linux_syscall(
+            libc,
+            source_bytes,
+            destination_bytes,
+            destination_path,
+        )
+        return
+
+    renameat2.argtypes = [
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    ]
+    renameat2.restype = ctypes.c_int
+    ctypes.set_errno(0)
+    result = renameat2(
+        AT_FDCWD,
+        source_bytes,
+        AT_FDCWD,
+        destination_bytes,
+        LINUX_RENAME_NOREPLACE,
+    )
+    if result != 0:
+        _raise_posix_no_clobber_publish_error(ctypes.get_errno(), destination_path)
+
+
+def _publish_file_no_clobber_linux_syscall(
+    libc: Any,
+    source_bytes: bytes,
+    destination_bytes: bytes,
+    destination_path: Path,
+) -> None:
+    syscall_number = LINUX_RENAMEAT2_SYSCALL_NUMBERS.get(platform.machine().lower())
+    if syscall_number is None:
+        raise _AtomicNoClobberPublishUnsupportedError(
+            "renameat2 syscall number is unknown for this architecture"
+        )
+
+    try:
+        syscall = libc.syscall
+    except AttributeError as exc:
+        raise _AtomicNoClobberPublishUnsupportedError(
+            "libc syscall entry point is unavailable"
+        ) from exc
+
+    syscall.restype = ctypes.c_long
+    ctypes.set_errno(0)
+    result = syscall(
+        ctypes.c_long(syscall_number),
+        ctypes.c_int(AT_FDCWD),
+        ctypes.c_char_p(source_bytes),
+        ctypes.c_int(AT_FDCWD),
+        ctypes.c_char_p(destination_bytes),
+        ctypes.c_uint(LINUX_RENAME_NOREPLACE),
+    )
+    if result != 0:
+        _raise_posix_no_clobber_publish_error(ctypes.get_errno(), destination_path)
+
+
+def _publish_file_no_clobber_darwin(source_path: Path, destination_path: Path) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        renamex_np = libc.renamex_np
+    except AttributeError as exc:
+        raise _AtomicNoClobberPublishUnsupportedError(
+            "renamex_np is unavailable on this platform"
+        ) from exc
+
+    renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+    renamex_np.restype = ctypes.c_int
+    ctypes.set_errno(0)
+    result = renamex_np(
+        os.fsencode(source_path),
+        os.fsencode(destination_path),
+        DARWIN_RENAME_EXCL,
+    )
+    if result != 0:
+        _raise_posix_no_clobber_publish_error(ctypes.get_errno(), destination_path)
+
+
+def _publish_file_no_clobber_windows(
+    source_path: Path,
+    destination_path: Path,
+) -> None:
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    move_file_ex = kernel32.MoveFileExW
+    move_file_ex.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+    ]
+    move_file_ex.restype = wintypes.BOOL
+
+    ctypes.set_last_error(0)
+    result = move_file_ex(
+        str(source_path),
+        str(destination_path),
+        WINDOWS_MOVEFILE_WRITE_THROUGH,
+    )
+    if result:
+        return
+
+    error_code = ctypes.get_last_error()
+    _raise_windows_no_clobber_publish_error(error_code, destination_path)
+
+
+def _raise_posix_no_clobber_publish_error(
+    error_code: int,
+    destination_path: Path,
+) -> None:
+    if error_code == errno.EEXIST:
+        raise FileExistsError(
+            error_code,
+            os.strerror(error_code),
+            str(destination_path),
+        )
+
+    unsupported_errors = {
+        errno.ENOSYS,
+        errno.EINVAL,
+        errno.EXDEV,
+    }
+    for name in ("EOPNOTSUPP", "ENOTSUP"):
+        if (value := getattr(errno, name, None)) is not None:
+            unsupported_errors.add(value)
+
+    if error_code in unsupported_errors:
+        raise _AtomicNoClobberPublishUnsupportedError(
+            error_code,
+            os.strerror(error_code),
+            str(destination_path),
+        )
+
+    raise OSError(error_code, os.strerror(error_code), str(destination_path))
+
+
+def _raise_windows_no_clobber_publish_error(
+    error_code: int,
+    destination_path: Path,
+) -> None:
+    message = _windows_error_message(error_code)
+    if error_code in (WINDOWS_ERROR_FILE_EXISTS, WINDOWS_ERROR_ALREADY_EXISTS):
+        raise FileExistsError(
+            error_code,
+            message,
+            str(destination_path),
+        )
+
+    if error_code in (
+        WINDOWS_ERROR_NOT_SAME_DEVICE,
+        WINDOWS_ERROR_CALL_NOT_IMPLEMENTED,
+    ):
+        raise _AtomicNoClobberPublishUnsupportedError(
+            error_code,
+            message,
+            str(destination_path),
+        )
+
+    raise OSError(error_code, message, str(destination_path))
+
+
+def _windows_error_message(error_code: int) -> str:
+    format_error = getattr(ctypes, "FormatError", None)
+    if format_error is None:
+        return f"Windows error {error_code}"
+    return format_error(error_code)
+
+
 def _finalize_staged_download(
     *,
     staged_output_path: Path,
@@ -797,34 +1048,58 @@ def _copy_staged_download_without_overwriting(
     if _handle_existing_output(final_output_path, exists_behavior):
         return DownloadStatus.SKIPPED
 
-    created_final_output = False
+    fallback_copy_path = _fallback_finalize_copy_path(staged_output_path)
+    created_fallback_copy = False
     try:
         with staged_output_path.open("rb") as source:
-            try:
-                with final_output_path.open("xb") as destination:
-                    created_final_output = True
-                    shutil.copyfileobj(
-                        source,
-                        destination,
-                        length=FINALIZE_COPY_BUFFER_SIZE,
-                    )
-            except FileExistsError as exc:
-                if _handle_existing_output(final_output_path, exists_behavior):
-                    return DownloadStatus.SKIPPED
-                raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+            with fallback_copy_path.open("xb") as destination:
+                created_fallback_copy = True
+                shutil.copyfileobj(
+                    source,
+                    destination,
+                    length=FINALIZE_COPY_BUFFER_SIZE,
+                )
+                _fsync_file(destination)
     except OSError as exc:
-        if created_final_output:
+        if created_fallback_copy:
             with contextlib.suppress(FileNotFoundError, OSError):
-                final_output_path.unlink()
+                fallback_copy_path.unlink()
         raise errors.DownloadError(
             f"Could not finalize output after hard link failed ({hard_link_error}): {exc}"
         ) from exc
     except BaseException:
-        if created_final_output:
+        if created_fallback_copy:
             with contextlib.suppress(FileNotFoundError, OSError):
-                final_output_path.unlink()
+                fallback_copy_path.unlink()
         raise
 
+    try:
+        _publish_file_no_clobber(fallback_copy_path, final_output_path)
+    except FileExistsError as exc:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            fallback_copy_path.unlink()
+        if _handle_existing_output(final_output_path, exists_behavior):
+            return DownloadStatus.SKIPPED
+        raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+    except _AtomicNoClobberPublishUnsupportedError as exc:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            fallback_copy_path.unlink()
+        raise errors.DownloadError(
+            "Could not finalize output after hard link failed "
+            f"({hard_link_error}): atomic no-clobber publish is unavailable: {exc}"
+        ) from exc
+    except OSError as exc:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            fallback_copy_path.unlink()
+        raise errors.DownloadError(
+            f"Could not finalize output after hard link failed ({hard_link_error}): {exc}"
+        ) from exc
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            fallback_copy_path.unlink()
+        raise
+
+    _fsync_parent_dir(final_output_path)
     with contextlib.suppress(FileNotFoundError, OSError):
         staged_output_path.unlink()
     return DownloadStatus.DOWNLOADED

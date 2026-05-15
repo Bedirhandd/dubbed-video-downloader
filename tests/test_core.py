@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import tempfile
 import unittest
 from pathlib import Path
@@ -1458,10 +1459,29 @@ class CoreTests(unittest.TestCase):
             staged_output_path = output_dir / "staging" / "A_Title.mkv"
             staged_output_path.parent.mkdir(parents=True)
             staged_output_path.write_text("downloaded media", encoding="utf-8")
+            published_sources: list[Path] = []
 
-            with patch(
-                "dubbed_video_downloader.core.os.link",
-                side_effect=OSError("hard links unsupported"),
+            def copy_while_final_path_is_absent(source, destination, *, length) -> None:
+                destination.write(source.read())
+                self.assertFalse(output_path.exists())
+
+            def publish_no_clobber(source_path: Path, destination_path: Path) -> None:
+                published_sources.append(source_path)
+                source_path.rename(destination_path)
+
+            with (
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=OSError("hard links unsupported"),
+                ),
+                patch(
+                    "dubbed_video_downloader.core.shutil.copyfileobj",
+                    side_effect=copy_while_final_path_is_absent,
+                ),
+                patch(
+                    "dubbed_video_downloader.core._publish_file_no_clobber",
+                    side_effect=publish_no_clobber,
+                ),
             ):
                 status = core._finalize_staged_download(
                     staged_output_path=staged_output_path,
@@ -1471,6 +1491,8 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertEqual(len(published_sources), 1)
+            self.assertFalse(published_sources[0].exists())
             self.assertFalse(staged_output_path.exists())
 
     def test_finalize_copy_fallback_skip_race_preserves_existing_output(self) -> None:
@@ -1480,15 +1502,29 @@ class CoreTests(unittest.TestCase):
             staged_output_path = output_dir / "staging" / "A_Title.mkv"
             staged_output_path.parent.mkdir(parents=True)
             staged_output_path.write_text("downloaded media", encoding="utf-8")
+            publish_sources: list[Path] = []
 
-            def create_output_before_copy(src, dst) -> None:
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text("external media", encoding="utf-8")
-                raise OSError("hard links unsupported")
+            def create_output_before_publish(
+                source_path: Path,
+                destination_path: Path,
+            ) -> None:
+                publish_sources.append(source_path)
+                destination_path.write_text("external media", encoding="utf-8")
+                raise FileExistsError(
+                    errno.EEXIST,
+                    "File exists",
+                    str(destination_path),
+                )
 
-            with patch(
-                "dubbed_video_downloader.core.os.link",
-                side_effect=create_output_before_copy,
+            with (
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=OSError("hard links unsupported"),
+                ),
+                patch(
+                    "dubbed_video_downloader.core._publish_file_no_clobber",
+                    side_effect=create_output_before_publish,
+                ),
             ):
                 status = core._finalize_staged_download(
                     staged_output_path=staged_output_path,
@@ -1498,6 +1534,8 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(status, core.DownloadStatus.SKIPPED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
+            self.assertEqual(len(publish_sources), 1)
+            self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
 
     def test_finalize_copy_fallback_fail_race_reports_existing_output(self) -> None:
@@ -1507,15 +1545,29 @@ class CoreTests(unittest.TestCase):
             staged_output_path = output_dir / "staging" / "A_Title.mkv"
             staged_output_path.parent.mkdir(parents=True)
             staged_output_path.write_text("downloaded media", encoding="utf-8")
+            publish_sources: list[Path] = []
 
-            def create_output_before_copy(src, dst) -> None:
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                output_path.write_text("external media", encoding="utf-8")
-                raise OSError("hard links unsupported")
+            def create_output_before_publish(
+                source_path: Path,
+                destination_path: Path,
+            ) -> None:
+                publish_sources.append(source_path)
+                destination_path.write_text("external media", encoding="utf-8")
+                raise FileExistsError(
+                    errno.EEXIST,
+                    "File exists",
+                    str(destination_path),
+                )
 
-            with patch(
-                "dubbed_video_downloader.core.os.link",
-                side_effect=create_output_before_copy,
+            with (
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=OSError("hard links unsupported"),
+                ),
+                patch(
+                    "dubbed_video_downloader.core._publish_file_no_clobber",
+                    side_effect=create_output_before_publish,
+                ),
             ):
                 with self.assertRaises(errors.DownloadError) as context:
                     core._finalize_staged_download(
@@ -1526,6 +1578,8 @@ class CoreTests(unittest.TestCase):
 
             self.assertIn("Output already exists", str(context.exception))
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
+            self.assertEqual(len(publish_sources), 1)
+            self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
 
     def test_finalize_copy_fallback_removes_partial_output_on_failure(self) -> None:
@@ -1559,7 +1613,120 @@ class CoreTests(unittest.TestCase):
 
             self.assertIn("Could not finalize output", str(context.exception))
             self.assertFalse(output_path.exists())
+            self.assertEqual(
+                list(
+                    staged_output_path.parent.glob(
+                        f"{staged_output_path.name}{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    )
+                ),
+                [],
+            )
             self.assertTrue(staged_output_path.exists())
+
+    def test_finalize_copy_fallback_fails_closed_when_publish_unsupported(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            with (
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=OSError("hard links unsupported"),
+                ),
+                patch(
+                    "dubbed_video_downloader.core._publish_file_no_clobber",
+                    side_effect=core._AtomicNoClobberPublishUnsupportedError(
+                        "unsupported"
+                    ),
+                ),
+            ):
+                with self.assertRaises(errors.DownloadError) as context:
+                    core._finalize_staged_download(
+                        staged_output_path=staged_output_path,
+                        final_output_path=output_path,
+                        exists_behavior=core.FileExistsBehavior.SKIP,
+                    )
+
+            self.assertIn("atomic no-clobber publish is unavailable", str(context.exception))
+            self.assertFalse(output_path.exists())
+            self.assertEqual(
+                list(
+                    staged_output_path.parent.glob(
+                        f"{staged_output_path.name}{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    )
+                ),
+                [],
+            )
+            self.assertTrue(staged_output_path.exists())
+
+    def test_publish_file_no_clobber_moves_source_without_overwriting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            source_path = output_dir / "source.tmp"
+            destination_path = output_dir / "destination.mkv"
+            source_path.write_text("downloaded media", encoding="utf-8")
+
+            try:
+                core._publish_file_no_clobber(source_path, destination_path)
+            except core._AtomicNoClobberPublishUnsupportedError as exc:
+                self.skipTest(str(exc))
+
+            self.assertEqual(
+                destination_path.read_text(encoding="utf-8"),
+                "downloaded media",
+            )
+            self.assertFalse(source_path.exists())
+
+    def test_publish_file_no_clobber_preserves_existing_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            source_path = output_dir / "source.tmp"
+            destination_path = output_dir / "destination.mkv"
+            source_path.write_text("downloaded media", encoding="utf-8")
+            destination_path.write_text("external media", encoding="utf-8")
+
+            try:
+                with self.assertRaises(FileExistsError):
+                    core._publish_file_no_clobber(source_path, destination_path)
+            except core._AtomicNoClobberPublishUnsupportedError as exc:
+                self.skipTest(str(exc))
+
+            self.assertEqual(
+                destination_path.read_text(encoding="utf-8"),
+                "external media",
+            )
+            self.assertTrue(source_path.exists())
+
+    def test_no_clobber_publish_maps_posix_errors(self) -> None:
+        with self.assertRaises(FileExistsError):
+            core._raise_posix_no_clobber_publish_error(
+                errno.EEXIST,
+                Path("destination.mkv"),
+            )
+
+        with self.assertRaises(core._AtomicNoClobberPublishUnsupportedError):
+            core._raise_posix_no_clobber_publish_error(
+                errno.EINVAL,
+                Path("destination.mkv"),
+            )
+
+    def test_no_clobber_publish_maps_windows_errors(self) -> None:
+        with self.assertRaises(FileExistsError):
+            core._raise_windows_no_clobber_publish_error(
+                core.WINDOWS_ERROR_ALREADY_EXISTS,
+                Path("destination.mkv"),
+            )
+
+        with self.assertRaises(core._AtomicNoClobberPublishUnsupportedError):
+            core._raise_windows_no_clobber_publish_error(
+                core.WINDOWS_ERROR_NOT_SAME_DEVICE,
+                Path("destination.mkv"),
+            )
 
     def test_stale_incomplete_cleanup_removes_unlocked_runs_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1569,6 +1736,14 @@ class CoreTests(unittest.TestCase):
             active_dir = incomplete_dir / "active"
             stale_dir.mkdir(parents=True)
             active_dir.mkdir(parents=True)
+            (stale_dir / core.RUN_METADATA_FILENAME).write_text(
+                "{}",
+                encoding="utf-8",
+            )
+            (active_dir / core.RUN_METADATA_FILENAME).write_text(
+                "{}",
+                encoding="utf-8",
+            )
             (stale_dir / "partial.part").write_text("stale", encoding="utf-8")
             (active_dir / "partial.part").write_text("active", encoding="utf-8")
             active_lock = core._StagingLock(active_dir / core.RUN_LOCK_FILENAME)
@@ -1580,6 +1755,25 @@ class CoreTests(unittest.TestCase):
 
             self.assertFalse(stale_dir.exists())
             self.assertTrue(active_dir.exists())
+
+    def test_stale_incomplete_cleanup_removes_abandoned_fallback_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            stale_dir = output_dir / "tmp" / ".incomplete" / "stale"
+            stale_copy = (
+                stale_dir
+                / f"A_Title.mkv{core.FALLBACK_FINALIZE_COPY_MARKER}.abc123.tmp"
+            )
+            stale_dir.mkdir(parents=True)
+            (stale_dir / core.RUN_METADATA_FILENAME).write_text(
+                "{}",
+                encoding="utf-8",
+            )
+            stale_copy.write_text("partial", encoding="utf-8")
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertFalse(stale_dir.exists())
 
     def test_stale_incomplete_cleanup_does_not_follow_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
