@@ -1422,6 +1422,145 @@ class CoreTests(unittest.TestCase):
             )
             self.assertFalse(staged_output_path.exists())
 
+    def test_finalize_non_overwrite_uses_hard_link_before_copying(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            def create_final_output(src, dst) -> None:
+                Path(dst).parent.mkdir(parents=True, exist_ok=True)
+                Path(dst).write_bytes(Path(src).read_bytes())
+
+            with (
+                patch("dubbed_video_downloader.core.os.link") as link,
+                patch("dubbed_video_downloader.core.shutil.copyfileobj") as copyfileobj,
+            ):
+                link.side_effect = create_final_output
+                status = core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
+
+            self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
+            link.assert_called_once_with(staged_output_path, output_path)
+            copyfileobj.assert_not_called()
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertFalse(staged_output_path.exists())
+
+    def test_finalize_non_overwrite_copies_when_hard_link_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            with patch(
+                "dubbed_video_downloader.core.os.link",
+                side_effect=OSError("hard links unsupported"),
+            ):
+                status = core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
+
+            self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertFalse(staged_output_path.exists())
+
+    def test_finalize_copy_fallback_skip_race_preserves_existing_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            def create_output_before_copy(src, dst) -> None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text("external media", encoding="utf-8")
+                raise OSError("hard links unsupported")
+
+            with patch(
+                "dubbed_video_downloader.core.os.link",
+                side_effect=create_output_before_copy,
+            ):
+                status = core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
+
+            self.assertEqual(status, core.DownloadStatus.SKIPPED)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
+            self.assertTrue(staged_output_path.exists())
+
+    def test_finalize_copy_fallback_fail_race_reports_existing_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            def create_output_before_copy(src, dst) -> None:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text("external media", encoding="utf-8")
+                raise OSError("hard links unsupported")
+
+            with patch(
+                "dubbed_video_downloader.core.os.link",
+                side_effect=create_output_before_copy,
+            ):
+                with self.assertRaises(errors.DownloadError) as context:
+                    core._finalize_staged_download(
+                        staged_output_path=staged_output_path,
+                        final_output_path=output_path,
+                        exists_behavior=core.FileExistsBehavior.FAIL,
+                    )
+
+            self.assertIn("Output already exists", str(context.exception))
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
+            self.assertTrue(staged_output_path.exists())
+
+    def test_finalize_copy_fallback_removes_partial_output_on_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            def fail_after_partial_copy(source, destination, *, length) -> None:
+                destination.write(b"partial")
+                raise OSError("copy failed")
+
+            with (
+                patch(
+                    "dubbed_video_downloader.core.os.link",
+                    side_effect=OSError("hard links unsupported"),
+                ),
+                patch(
+                    "dubbed_video_downloader.core.shutil.copyfileobj",
+                    side_effect=fail_after_partial_copy,
+                ),
+            ):
+                with self.assertRaises(errors.DownloadError) as context:
+                    core._finalize_staged_download(
+                        staged_output_path=staged_output_path,
+                        final_output_path=output_path,
+                        exists_behavior=core.FileExistsBehavior.SKIP,
+                    )
+
+            self.assertIn("Could not finalize output", str(context.exception))
+            self.assertFalse(output_path.exists())
+            self.assertTrue(staged_output_path.exists())
+
     def test_stale_incomplete_cleanup_removes_unlocked_runs_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)

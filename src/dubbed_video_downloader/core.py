@@ -30,6 +30,7 @@ DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
 DEFAULT_EXISTS_BEHAVIOR = FileExistsBehavior.SKIP
 MAX_RETRY_SLEEP_SECONDS = 8.0
+FINALIZE_COPY_BUFFER_SIZE = 1024 * 1024
 INCOMPLETE_DOWNLOAD_DIR = Path("tmp") / ".incomplete"
 INCOMPLETE_CLEANUP_LOCK_FILENAME = ".cleanup.lock"
 RUN_LOCK_FILENAME = ".lock"
@@ -774,7 +775,55 @@ def _finalize_staged_download_without_overwriting(
             return DownloadStatus.SKIPPED
         raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
     except OSError as exc:
-        raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+        return _copy_staged_download_without_overwriting(
+            staged_output_path=staged_output_path,
+            final_output_path=final_output_path,
+            exists_behavior=exists_behavior,
+            hard_link_error=exc,
+        )
+
+    with contextlib.suppress(FileNotFoundError, OSError):
+        staged_output_path.unlink()
+    return DownloadStatus.DOWNLOADED
+
+
+def _copy_staged_download_without_overwriting(
+    *,
+    staged_output_path: Path,
+    final_output_path: Path,
+    exists_behavior: FileExistsBehavior,
+    hard_link_error: OSError,
+) -> DownloadStatus:
+    if _handle_existing_output(final_output_path, exists_behavior):
+        return DownloadStatus.SKIPPED
+
+    created_final_output = False
+    try:
+        with staged_output_path.open("rb") as source:
+            try:
+                with final_output_path.open("xb") as destination:
+                    created_final_output = True
+                    shutil.copyfileobj(
+                        source,
+                        destination,
+                        length=FINALIZE_COPY_BUFFER_SIZE,
+                    )
+            except FileExistsError as exc:
+                if _handle_existing_output(final_output_path, exists_behavior):
+                    return DownloadStatus.SKIPPED
+                raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+    except OSError as exc:
+        if created_final_output:
+            with contextlib.suppress(FileNotFoundError, OSError):
+                final_output_path.unlink()
+        raise errors.DownloadError(
+            f"Could not finalize output after hard link failed ({hard_link_error}): {exc}"
+        ) from exc
+    except BaseException:
+        if created_final_output:
+            with contextlib.suppress(FileNotFoundError, OSError):
+                final_output_path.unlink()
+        raise
 
     with contextlib.suppress(FileNotFoundError, OSError):
         staged_output_path.unlink()
