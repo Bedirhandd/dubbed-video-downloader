@@ -132,6 +132,7 @@ default_video_quality: best
 default_audio_quality: best
 retry_on_network_failure: 3
 default_exists_behavior: skip
+ask_for_disk_usage: false
 ```
 
 `ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
@@ -148,6 +149,9 @@ kaç kez yeniden deneneceğini belirler. Network retry davranışını kapatmak 
 `0` kullanabilirsiniz.
 `default_exists_behavior`, planlanan çıktı dosyası zaten varsa ne yapılacağını
 belirler. Desteklenen değerler `skip`, `fail` ve `overwrite`.
+`ask_for_disk_usage: true`, her gerçek indirmeden önce seçilen medya boyutu
+tahmin edildikten sonra onay sorulmasını sağlar. Bu anahtarı içermeyen mevcut
+config dosyaları `false` gibi davranır.
 
 Config dosyasını görmek veya kaldırmak için:
 
@@ -181,12 +185,15 @@ uv run dbdvdl download \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg \
   --retry-on-network-failure 5 \
-  --if-exists skip
+  --if-exists skip \
+  --yes
 ```
 
 CLI seçenekleri o çalıştırma için config değerlerini ezer; buna
 `--mode`, `--video-quality`, `--audio-quality` ve
 `--retry-on-network-failure` ile `--if-exists` da dahildir.
+`ask_for_disk_usage: true` olduğunda scriptlerde tahmini disk kullanımı onayını
+vermek için `--yes` veya `-y` kullanın.
 
 Mevcut çıktı davranışı açıkça seçilir:
 
@@ -237,8 +244,8 @@ Kalite davranışı açık çözünürlüklerde bilinçli olarak katıdır:
 
 URL'yi, etkin dublaj dilini, etkin indirme modunu ve kaliteyi doğrulayıp
 mevcut çıktı davranışını ve planlanan çıktı yolunu görmek için `--dry-run`
-kullanabilirsiniz. Bu mod indirme, birleştirme veya çıktı klasörü oluşturma
-işlemi yapmaz:
+kullanabilirsiniz. Bu mod tahmini disk kullanımını da gösterir; indirme,
+birleştirme veya çıktı klasörü oluşturma işlemi yapmaz:
 
 ```bash
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
@@ -270,17 +277,29 @@ Video modunda araç şu işlemleri yapar:
 2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
 3. İstenen video kalitesini ve dublaj ses kalitesini seçer.
 4. Planlanan çıktı yolunu seçilen `--if-exists` davranışına göre kontrol eder.
-5. Videoyu ve seçilen ses parçasını geçici staging klasörüne indirir.
-6. Bunları `.mkv` dosyasında birleştirir.
-7. Tamamlanan dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör
+5. `ask_for_disk_usage: true` ise disk kullanımı onayı ister.
+6. Videoyu ve seçilen ses parçasını geçici staging klasörüne indirir.
+7. Bunları `.mkv` dosyasında birleştirir.
+8. Tamamlanan dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör
    yapısına taşır.
 
 Ses modunda araç yalnızca seçilen dublajlı ses akışını indirir ve yt-dlp'nin
 seçtiği doğal ses uzantısıyla aynı klasör yapısına kaydeder. `--video-quality`
 yalnızca video modunda geçerlidir.
 
-`--dry-run` ile araç doğrulama, çıktı yolu önizlemesi ve mevcut çıktı
-önizlemesinden sonra durur.
+`--dry-run` ile araç doğrulama, çıktı yolu önizlemesi, tahmini disk kullanımı
+önizlemesi ve mevcut çıktı önizlemesinden sonra durur.
+
+`ask_for_disk_usage: true` ayarlandığında gerçek `download` çalıştırmaları
+medya baytları yazılmadan önce onay ister:
+
+```text
+This download is estimated to use ~139 MB of disk space. Continue? [Y/n]
+```
+
+yt-dlp seçilen medya boyutunu tahmin edemezse onay mesajı disk kullanımının
+bilinmediğini söyler. Non-interactive ortamlarda bu onay için `--yes` veya
+`-y` gerekir; aksi halde komut indirme metadata'sı alınmadan çıkar.
 
 ## Bağımlılıkları Güncelleme
 

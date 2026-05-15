@@ -25,6 +25,7 @@ DEFAULT_VIDEO_QUALITY = quality.DEFAULT_VIDEO_QUALITY
 DEFAULT_AUDIO_QUALITY = quality.DEFAULT_AUDIO_QUALITY
 DEFAULT_RETRY_ON_NETWORK_FAILURE = 3
 DEFAULT_EXISTS_BEHAVIOR = FileExistsBehavior.SKIP
+DEFAULT_ASK_FOR_DISK_USAGE = False
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class AppConfig:
     default_audio_quality: quality.AudioQuality
     retry_on_network_failure: int
     default_exists_behavior: FileExistsBehavior
+    ask_for_disk_usage: bool
 
 
 def get_config_path() -> Path:
@@ -105,6 +107,10 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
         "default_exists_behavior",
         DEFAULT_EXISTS_BEHAVIOR,
     )
+    ask_for_disk_usage = raw_config.get(
+        "ask_for_disk_usage",
+        DEFAULT_ASK_FOR_DISK_USAGE,
+    )
 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
@@ -117,6 +123,7 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
             retry_on_network_failure
         ),
         default_exists_behavior=normalize_exists_behavior(default_exists_behavior),
+        ask_for_disk_usage=normalize_ask_for_disk_usage(ask_for_disk_usage),
     )
 
 
@@ -130,6 +137,7 @@ def write_config(
     default_audio_quality: str | quality.AudioQuality = DEFAULT_AUDIO_QUALITY,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     default_exists_behavior: str | FileExistsBehavior = DEFAULT_EXISTS_BEHAVIOR,
+    ask_for_disk_usage: bool = DEFAULT_ASK_FOR_DISK_USAGE,
     path: Path | None = None,
     overwrite: bool = False,
 ) -> Path:
@@ -151,6 +159,7 @@ def write_config(
     normalized_default_exists_behavior = normalize_exists_behavior(
         default_exists_behavior
     )
+    normalized_ask_for_disk_usage = normalize_ask_for_disk_usage(ask_for_disk_usage)
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = yaml.safe_dump(
@@ -163,6 +172,7 @@ def write_config(
             "default_audio_quality": normalized_default_audio_quality.label,
             "retry_on_network_failure": normalized_retry_on_network_failure,
             "default_exists_behavior": normalized_default_exists_behavior.value,
+            "ask_for_disk_usage": normalized_ask_for_disk_usage,
         },
         sort_keys=False,
     )
@@ -243,6 +253,12 @@ def normalize_exists_behavior(value: Any) -> FileExistsBehavior:
         return _normalize_exists_behavior(value, key="default_exists_behavior")
     except ValueError as exc:
         raise ConfigError(str(exc)) from exc
+
+
+def normalize_ask_for_disk_usage(value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError("ask_for_disk_usage must be a boolean.")
+    return value
 
 
 def ffmpeg_location_for_yt_dlp(ffmpeg_path: str) -> str | None:

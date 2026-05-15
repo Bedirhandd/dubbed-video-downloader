@@ -228,6 +228,85 @@ class CoreTests(unittest.TestCase):
             output_dir / "tr" / "Example_Channel" / "A_Title" / "A_Title.webm",
         )
 
+    def test_plan_download_estimates_video_size_from_selected_formats(self) -> None:
+        info = {
+            "id": "example",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "video",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "filesize": 100_000_000,
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "tr-audio",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "ext": "webm",
+                    "url": "https://example.test/tr.webm",
+                    "filesize_approx": 39_000_000,
+                    "tbr": 128,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                )
+
+        self.assertEqual(plan.estimated_size_bytes, 139_000_000)
+
+    def test_plan_download_reports_unknown_size_when_selected_format_size_is_missing(
+        self,
+    ) -> None:
+        info = {
+            "id": "example",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "video",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "filesize": 100_000_000,
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "tr-audio",
+                    "vcodec": "none",
+                    "acodec": "opus",
+                    "language": "tr",
+                    "ext": "webm",
+                    "url": "https://example.test/tr.webm",
+                    "tbr": 128,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                )
+
+        self.assertIsNone(plan.estimated_size_bytes)
+
     def test_plan_download_medium_video_uses_single_available_height(self) -> None:
         info = {
             "id": "example",
@@ -519,6 +598,90 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(opts["continuedl"])
         self.assertFalse(opts["nopart"])
         ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+    def test_download_approval_callback_runs_before_media_download(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        approved_plans: list[core.DownloadPlan] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                self._patch_successful_staged_finalization(),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+
+                def approve(plan: core.DownloadPlan) -> bool:
+                    approved_plans.append(plan)
+                    youtube_dl.assert_not_called()
+                    return True
+
+                ydl = youtube_dl.return_value.__enter__.return_value
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    approval_callback=approve,
+                )
+
+        self.assertEqual(result.status, core.DownloadStatus.DOWNLOADED)
+        self.assertEqual(len(approved_plans), 1)
+        self.assertEqual(approved_plans[0].output_path, output_path)
+        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+    def test_download_declined_approval_cancels_without_downloading(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        approved_plans: list[core.DownloadPlan] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                self._patch_successful_staged_finalization(),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+
+                def decline(plan: core.DownloadPlan) -> bool:
+                    approved_plans.append(plan)
+                    return False
+
+                result = core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    approval_callback=decline,
+                )
+
+        self.assertEqual(result.status, core.DownloadStatus.CANCELLED)
+        self.assertEqual(result.output_path, output_path)
+        self.assertEqual(len(approved_plans), 1)
+        youtube_dl.assert_not_called()
 
     def test_download_reports_status_stages_for_successful_video_download(self) -> None:
         info = {
@@ -1911,6 +2074,11 @@ class CoreTests(unittest.TestCase):
             output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
             output_path.parent.mkdir(parents=True)
             output_path.write_text("already downloaded", encoding="utf-8")
+            approval_plans: list[core.DownloadPlan] = []
+
+            def approve(plan: core.DownloadPlan) -> bool:
+                approval_plans.append(plan)
+                return True
 
             with (
                 patch("dubbed_video_downloader.core.get_video_info", return_value=info),
@@ -1926,10 +2094,12 @@ class CoreTests(unittest.TestCase):
                     lang="tr",
                     output_dir=Path(tmpdir),
                     exists_behavior=core.FileExistsBehavior.SKIP,
+                    approval_callback=approve,
                 )
 
         self.assertEqual(result.status, core.DownloadStatus.SKIPPED)
         self.assertEqual(result.output_path, output_path)
+        self.assertEqual(approval_plans, [])
         youtube_dl.assert_not_called()
 
     def test_download_skip_existing_reports_status_stage(self) -> None:

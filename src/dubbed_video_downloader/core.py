@@ -74,6 +74,7 @@ class _AtomicNoClobberPublishUnsupportedError(OSError):
 class DownloadStatus(str, Enum):
     DOWNLOADED = "downloaded"
     SKIPPED = "skipped"
+    CANCELLED = "cancelled"
 
 
 class DownloadStage(str, Enum):
@@ -91,6 +92,7 @@ class DownloadStage(str, Enum):
 
 
 DownloadStageCallback = Callable[[DownloadStage], None]
+DownloadApprovalCallback = Callable[["DownloadPlan"], bool]
 
 
 @dataclass(frozen=True)
@@ -109,6 +111,7 @@ class DownloadPlan:
     quality_notes: tuple[str, ...] = ()
     exists_behavior: FileExistsBehavior = DEFAULT_EXISTS_BEHAVIOR
     output_exists: bool = False
+    estimated_size_bytes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -279,6 +282,7 @@ def plan_download(
         video_quality=video_quality,
         audio_quality=audio_quality,
     )
+    selected_info: list[dict[str, Any]] = []
     output_path = _planned_output_path(
         info=info,
         lang=lang,
@@ -290,6 +294,7 @@ def plan_download(
         verbose=verbose,
         debug=debug,
         retry_on_network_failure=retry_on_network_failure,
+        selected_info_callback=selected_info.append,
     )
     output_exists = _output_path_exists(output_path)
 
@@ -312,6 +317,9 @@ def plan_download(
         output_path=output_path,
         exists_behavior=selected_exists_behavior,
         output_exists=output_exists,
+        estimated_size_bytes=_estimated_download_size_bytes(
+            selected_info[0] if selected_info else None
+        ),
     )
 
 
@@ -329,6 +337,7 @@ def download(
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     exists_behavior: FileExistsBehavior | str = DEFAULT_EXISTS_BEHAVIOR,
     stage_callback: DownloadStageCallback | None = None,
+    approval_callback: DownloadApprovalCallback | None = None,
 ) -> DownloadResult:
     """Download a single URL with the specified dub language and mode."""
     selected_download_mode = normalize_download_mode(download_mode)
@@ -351,6 +360,7 @@ def download(
         audio_quality=audio_quality,
     )
     _report_download_stage(stage_callback, DownloadStage.PLANNING_OUTPUT)
+    selected_info: list[dict[str, Any]] = []
     output_path = _planned_output_path(
         info=info,
         lang=lang,
@@ -362,6 +372,30 @@ def download(
         verbose=verbose,
         debug=debug,
         retry_on_network_failure=retry_on_network_failure,
+        selected_info_callback=selected_info.append,
+    )
+    download_plan = DownloadPlan(
+        url=url,
+        lang=lang,
+        download_mode=selected_download_mode,
+        video_quality=(
+            quality_selection.video_quality.label
+            if quality_selection.video_quality
+            else None
+        ),
+        selected_video_quality=quality_selection.selected_video_label,
+        audio_quality=quality_selection.audio_quality.label,
+        selected_audio_quality=quality_selection.selected_audio_label,
+        quality_notes=quality_selection.notes,
+        title=_optional_string(info.get("title")),
+        uploader=_optional_string(info.get("uploader")),
+        available_langs=tuple(sorted(get_available_audio_langs(info))),
+        output_path=output_path,
+        exists_behavior=selected_exists_behavior,
+        output_exists=_output_path_exists(output_path),
+        estimated_size_bytes=_estimated_download_size_bytes(
+            selected_info[0] if selected_info else None
+        ),
     )
     if _handle_existing_output(output_path, selected_exists_behavior):
         _report_download_stage(
@@ -370,6 +404,12 @@ def download(
         )
         return DownloadResult(
             status=DownloadStatus.SKIPPED,
+            output_path=output_path,
+            quality_notes=quality_selection.notes,
+        )
+    if approval_callback is not None and not approval_callback(download_plan):
+        return DownloadResult(
+            status=DownloadStatus.CANCELLED,
             output_path=output_path,
             quality_notes=quality_selection.notes,
         )
@@ -1170,6 +1210,7 @@ def _planned_output_path(
     verbose: bool,
     debug: bool,
     retry_on_network_failure: int,
+    selected_info_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> Path:
     planned_info = _copy_info_for_planning(info)
     ydl_opts = _download_ydl_opts(
@@ -1187,6 +1228,8 @@ def _planned_output_path(
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             selected_info = ydl.process_ie_result(planned_info, download=False)
+            if selected_info_callback is not None and isinstance(selected_info, dict):
+                selected_info_callback(selected_info)
             filename = ydl.prepare_filename(selected_info)
     except YoutubeDLError as exc:
         raise errors.DownloadError(f"Could not plan download output: {exc}") from exc
@@ -1194,6 +1237,47 @@ def _planned_output_path(
     if not filename:
         raise errors.DownloadError("Could not determine planned output path.")
     return Path(filename)
+
+
+def _estimated_download_size_bytes(
+    selected_info: dict[str, Any] | None,
+) -> int | None:
+    if selected_info is None:
+        return None
+
+    requested_formats = selected_info.get("requested_formats")
+    if isinstance(requested_formats, list) and requested_formats:
+        return _requested_formats_size_bytes(requested_formats)
+
+    return _format_size_bytes(selected_info)
+
+
+def _requested_formats_size_bytes(formats: list[Any]) -> int | None:
+    total = 0
+    for format_info in formats:
+        if not isinstance(format_info, dict):
+            return None
+        format_size = _format_size_bytes(format_info)
+        if format_size is None:
+            return None
+        total += format_size
+    return total or None
+
+
+def _format_size_bytes(format_info: dict[str, Any]) -> int | None:
+    return _positive_size_bytes(format_info.get("filesize")) or _positive_size_bytes(
+        format_info.get("filesize_approx")
+    )
+
+
+def _positive_size_bytes(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, float) and value > 0:
+        return int(value)
+    return None
 
 
 def _output_path_exists(output_path: Path) -> bool:

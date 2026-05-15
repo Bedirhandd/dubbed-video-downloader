@@ -297,6 +297,23 @@ def _prompt_exists_behavior(
     return app_config.DEFAULT_EXISTS_BEHAVIOR
 
 
+def _prompt_ask_for_disk_usage(value: bool | None) -> bool:
+    if value is not None:
+        return value
+    if _stdin_is_interactive():
+        _print_prompt_help(
+            "Ask for disk usage",
+            "Whether downloads should ask for confirmation after estimating size.",
+            "`yes` | `no`.",
+            str(app_config.DEFAULT_ASK_FOR_DISK_USAGE).lower(),
+        )
+        return typer.confirm(
+            "Ask for disk usage",
+            default=app_config.DEFAULT_ASK_FOR_DISK_USAGE,
+        )
+    return app_config.DEFAULT_ASK_FOR_DISK_USAGE
+
+
 def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
@@ -386,6 +403,7 @@ def _write_config_or_exit(
     default_audio_quality: str,
     retry_on_network_failure: int,
     default_exists_behavior: FileExistsBehavior | str,
+    ask_for_disk_usage: bool,
     force: bool,
 ) -> None:
     try:
@@ -398,6 +416,7 @@ def _write_config_or_exit(
             default_audio_quality=default_audio_quality,
             retry_on_network_failure=retry_on_network_failure,
             default_exists_behavior=default_exists_behavior,
+            ask_for_disk_usage=ask_for_disk_usage,
             overwrite=force,
         )
     except app_config.ConfigError as exc:
@@ -416,6 +435,7 @@ def _init_config(
     default_audio_quality: str | None,
     retry_on_network_failure: int | None,
     default_exists_behavior: FileExistsBehavior | None,
+    ask_for_disk_usage: bool | None,
     force: bool,
 ) -> None:
     selected_output_dir = _prompt_value(
@@ -446,6 +466,7 @@ def _init_config(
         retry_on_network_failure
     )
     selected_default_exists_behavior = _prompt_exists_behavior(default_exists_behavior)
+    selected_ask_for_disk_usage = _prompt_ask_for_disk_usage(ask_for_disk_usage)
     _write_config_or_exit(
         selected_output_dir,
         selected_ffmpeg_path,
@@ -455,6 +476,7 @@ def _init_config(
         selected_default_audio_quality,
         selected_retry_on_network_failure,
         selected_default_exists_behavior,
+        selected_ask_for_disk_usage,
         force,
     )
 
@@ -467,7 +489,7 @@ def _print_config_recreate_hint() -> None:
         "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
         "--default-download-mode video --default-video-quality best "
         "--default-audio-quality best --retry-on-network-failure 3 "
-        "--default-exists-behavior skip"
+        "--default-exists-behavior skip --no-ask-for-disk-usage"
     )
 
 
@@ -505,6 +527,7 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
         _print_label_value("Available languages", ", ".join(plan.available_langs))
     _print_quality_notes(plan.quality_notes)
     _print_label_value("Output", plan.output_path)
+    _print_label_value("Estimated disk usage", _format_estimated_disk_usage(plan))
     _print_label_value("If output exists", plan.exists_behavior.value)
     _print_label_value("Output exists", "yes" if plan.output_exists else "no")
     if plan.output_exists:
@@ -541,6 +564,40 @@ def _print_quality_report(report: core.QualityReport) -> None:
     _print_label_value(
         "Audio qualities",
         ", ".join(report.audio_qualities) if report.audio_qualities else "none found",
+    )
+
+
+def _format_estimated_disk_usage(plan: core.DownloadPlan) -> str:
+    if plan.estimated_size_bytes is None:
+        return "unknown"
+    return f"~{_format_size_bytes(plan.estimated_size_bytes)}"
+
+
+def _format_size_bytes(size_bytes: int) -> str:
+    units = ("B", "KB", "MB", "GB", "TB")
+    size = float(size_bytes)
+    unit_index = 0
+    while size >= 1000 and unit_index < len(units) - 1:
+        size /= 1000
+        unit_index += 1
+
+    if unit_index == 0:
+        return f"{int(size)} {units[unit_index]}"
+    if size < 10 and not size.is_integer():
+        return f"{size:.1f} {units[unit_index]}"
+    return f"{size:.0f} {units[unit_index]}"
+
+
+def _confirm_disk_usage(plan: core.DownloadPlan) -> bool:
+    if plan.estimated_size_bytes is None:
+        return typer.confirm(
+            "This download's disk usage could not be estimated. Continue?",
+            default=True,
+        )
+    return typer.confirm(
+        "This download is estimated to use "
+        f"{_format_estimated_disk_usage(plan)} of disk space. Continue?",
+        default=True,
     )
 
 
@@ -603,6 +660,13 @@ def init_command(
             help="Default behavior when the planned output file already exists.",
         ),
     ] = None,
+    ask_for_disk_usage: Annotated[
+        bool | None,
+        typer.Option(
+            "--ask-for-disk-usage/--no-ask-for-disk-usage",
+            help="Ask for confirmation with an estimated disk usage before downloads.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
@@ -618,6 +682,7 @@ def init_command(
         default_audio_quality,
         retry_on_network_failure,
         default_exists_behavior,
+        ask_for_disk_usage,
         force,
     )
 
@@ -681,6 +746,13 @@ def config_init_command(
             help="Default behavior when the planned output file already exists.",
         ),
     ] = None,
+    ask_for_disk_usage: Annotated[
+        bool | None,
+        typer.Option(
+            "--ask-for-disk-usage/--no-ask-for-disk-usage",
+            help="Ask for confirmation with an estimated disk usage before downloads.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
@@ -696,6 +768,7 @@ def config_init_command(
         default_audio_quality,
         retry_on_network_failure,
         default_exists_behavior,
+        ask_for_disk_usage,
         force,
     )
 
@@ -715,6 +788,7 @@ def config_show_command() -> None:
     typer.echo(
         f"Default exists behavior: {loaded_config.default_exists_behavior.value}"
     )
+    typer.echo(f"Ask for disk usage: {str(loaded_config.ask_for_disk_usage).lower()}")
 
 
 @config_app.command("remove")
@@ -852,7 +926,10 @@ def download_command(
         bool,
         typer.Option(
             "--dry-run",
-            help="Validate metadata and print the planned output without downloading.",
+            help=(
+                "Validate metadata and print the planned output and estimated "
+                "disk usage without downloading."
+            ),
         ),
     ] = False,
     verbose: Annotated[
@@ -884,6 +961,14 @@ def download_command(
             help="Behavior when the planned output file already exists. Overrides config default.",
         ),
     ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Approve disk usage confirmation prompts for this download run.",
+        ),
+    ] = False,
 ) -> None:
     """Download URL(s) with a dub language."""
     status_console = Console(stderr=True)
@@ -946,6 +1031,20 @@ def download_command(
             if if_exists is not None
             else loaded_config.default_exists_behavior
         )
+        effective_ask_for_disk_usage = loaded_config.ask_for_disk_usage
+        if (
+            effective_ask_for_disk_usage
+            and not dry_run
+            and not yes
+            and not _stdin_is_interactive()
+        ):
+            typer.secho(
+                "Refusing to download non-interactively with disk usage "
+                "confirmation enabled. Use --yes to approve.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
     failures = 0
     for url in urls:
@@ -995,9 +1094,18 @@ def download_command(
                 ) as download_status:
                     if download_status.enabled:
                         download_kwargs["stage_callback"] = download_status.update
+                    if effective_ask_for_disk_usage and not yes:
+                        def approval_callback(plan: core.DownloadPlan) -> bool:
+                            download_status.finish()
+                            return _confirm_disk_usage(plan)
+
+                        download_kwargs["approval_callback"] = approval_callback
                     download_result = core.download(**download_kwargs)
                 if isinstance(download_result, core.DownloadResult):
                     _print_quality_notes(download_result.quality_notes)
+                    if download_result.status == core.DownloadStatus.CANCELLED:
+                        typer.secho("Cancelled", fg=typer.colors.YELLOW, bold=True)
+                        continue
                     if download_result.status == core.DownloadStatus.SKIPPED:
                         typer.secho("Skipped", fg=typer.colors.YELLOW, bold=True)
                         if download_result.output_path is not None:

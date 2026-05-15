@@ -39,7 +39,8 @@ class CliTests(unittest.TestCase):
                 "default_video_quality: best\n"
                 "default_audio_quality: best\n"
                 "retry_on_network_failure: 3\n"
-                "default_exists_behavior: skip\n",
+                "default_exists_behavior: skip\n"
+                "ask_for_disk_usage: false\n",
             )
 
     def test_init_refuses_overwrite_without_force(self) -> None:
@@ -60,7 +61,7 @@ class CliTests(unittest.TestCase):
                 result = self.runner.invoke(
                     app,
                     ["init"],
-                    input="\n\n\n\n\n\n\n\n",
+                    input="\n\n\n\n\n\n\n\n\n",
                     env={"HOME": tmpdir},
                 )
             config_path = (
@@ -111,7 +112,12 @@ class CliTests(unittest.TestCase):
                 result.output,
             )
             self.assertIn("Accepted: `skip` | `fail` | `overwrite`.", result.output)
-            self.assertEqual(result.output.count("(press Enter to use)"), 8)
+            self.assertIn(
+                "Whether downloads should ask for confirmation after estimating size.",
+                result.output,
+            )
+            self.assertIn("Accepted: `yes` | `no`.", result.output)
+            self.assertEqual(result.output.count("(press Enter to use)"), 9)
             self.assertNotIn("Hint:", result.output)
             self.assertIn(
                 "Default: ~/Downloads/dbdvdl-output (press Enter to use)",
@@ -123,6 +129,7 @@ class CliTests(unittest.TestCase):
             self.assertIn("Default: best (press Enter to use)", result.output)
             self.assertIn("Default: 3 (press Enter to use)", result.output)
             self.assertIn("Default: skip (press Enter to use)", result.output)
+            self.assertIn("Default: false (press Enter to use)", result.output)
             self.assertEqual(
                 config_path.read_text(encoding="utf-8"),
                 "output_dir: ~/Downloads/dbdvdl-output\n"
@@ -132,7 +139,8 @@ class CliTests(unittest.TestCase):
                 "default_video_quality: best\n"
                 "default_audio_quality: best\n"
                 "retry_on_network_failure: 3\n"
-                "default_exists_behavior: skip\n",
+                "default_exists_behavior: skip\n"
+                "ask_for_disk_usage: false\n",
             )
 
     def test_interactive_init_colors_prompt_keys(self) -> None:
@@ -144,7 +152,7 @@ class CliTests(unittest.TestCase):
                 result = self.runner.invoke(
                     app,
                     ["init"],
-                    input="\n\n\n\n\n\n\n\n",
+                    input="\n\n\n\n\n\n\n\n\n",
                     env={"HOME": tmpdir},
                     color=True,
                 )
@@ -175,7 +183,8 @@ class CliTests(unittest.TestCase):
                 "default_video_quality: best\n"
                 "default_audio_quality: best\n"
                 "retry_on_network_failure: 3\n"
-                "default_exists_behavior: skip\n",
+                "default_exists_behavior: skip\n"
+                "ask_for_disk_usage: false\n",
             )
 
     def test_interactive_config_init_explains_prompts_and_keeps_defaults(
@@ -189,7 +198,7 @@ class CliTests(unittest.TestCase):
                 result = self.runner.invoke(
                     app,
                     ["config", "init"],
-                    input="\n\n\n\n\n\n\n\n",
+                    input="\n\n\n\n\n\n\n\n\n",
                     env={"HOME": tmpdir},
                 )
             config_path = (
@@ -202,7 +211,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertIn("Accepted: `video` | `audio`.", result.output)
             self.assertIn("(`144p`-`8640p`, e.g. `720p`)", result.output)
-            self.assertEqual(result.output.count("(press Enter to use)"), 8)
+            self.assertEqual(result.output.count("(press Enter to use)"), 9)
             self.assertNotIn("Hint:", result.output)
             self.assertEqual(
                 config_path.read_text(encoding="utf-8"),
@@ -213,7 +222,8 @@ class CliTests(unittest.TestCase):
                 "default_video_quality: best\n"
                 "default_audio_quality: best\n"
                 "retry_on_network_failure: 3\n"
-                "default_exists_behavior: skip\n",
+                "default_exists_behavior: skip\n"
+                "ask_for_disk_usage: false\n",
             )
 
     def test_init_writes_custom_default_lang(self) -> None:
@@ -381,6 +391,46 @@ class CliTests(unittest.TestCase):
                 config_path.read_text(encoding="utf-8"),
             )
 
+    def test_init_writes_custom_ask_for_disk_usage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["init", "--ask-for-disk-usage"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "ask_for_disk_usage: true\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
+    def test_config_init_writes_custom_ask_for_disk_usage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["config", "init", "--ask-for-disk-usage"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "ask_for_disk_usage: true\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
     def test_config_show_displays_resolved_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -414,6 +464,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Default audio quality: best", result.output)
         self.assertIn("Retry on network failure: 3", result.output)
         self.assertIn("Default exists behavior: skip", result.output)
+        self.assertIn("Ask for disk usage: false", result.output)
 
     def test_config_show_requires_existing_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -566,6 +617,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("--audio-quality", result.output)
         self.assertIn("--retry-on-network", result.output)
         self.assertIn("--if-exists", result.output)
+        self.assertIn("--yes", result.output)
         self.assertIn("Overrides config", result.output)
         self.assertIn("default.", result.output)
         self.assertNotIn("[default: tr]", result.output)
@@ -900,6 +952,176 @@ class CliTests(unittest.TestCase):
         self.assertIn(f"Output already exists: {output_path}", result.output)
         download.assert_called_once()
 
+    def test_download_prompts_for_estimated_disk_usage_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "ask_for_disk_usage: true\n",
+                encoding="utf-8",
+            )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
+            approved: list[bool] = []
+
+            def fake_download(**kwargs):
+                plan = core.DownloadPlan(
+                    url=kwargs["url"],
+                    lang=kwargs["lang"],
+                    title="Title",
+                    uploader="Channel",
+                    available_langs=("en",),
+                    output_path=output_path,
+                    estimated_size_bytes=139_000_000,
+                )
+                approved.append(kwargs["approval_callback"](plan))
+                return core.DownloadResult(output_path=output_path)
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.core.download",
+                    side_effect=fake_download,
+                ) as download:
+                    result = self.runner.invoke(
+                        app,
+                        ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                        input="y\n",
+                        env={"HOME": tmpdir},
+                    )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("~139 MB", result.output)
+        self.assertIn("Finished", result.output)
+        self.assertEqual(approved, [True])
+        download.assert_called_once()
+
+    def test_download_decline_disk_usage_prompt_cancels_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "ask_for_disk_usage: true\n",
+                encoding="utf-8",
+            )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
+
+            def fake_download(**kwargs):
+                plan = core.DownloadPlan(
+                    url=kwargs["url"],
+                    lang=kwargs["lang"],
+                    title="Title",
+                    uploader="Channel",
+                    available_langs=("en",),
+                    output_path=output_path,
+                    estimated_size_bytes=None,
+                )
+                if kwargs["approval_callback"](plan):
+                    return core.DownloadResult(output_path=output_path)
+                return core.DownloadResult(
+                    status=core.DownloadStatus.CANCELLED,
+                    output_path=output_path,
+                )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.core.download",
+                    side_effect=fake_download,
+                ) as download:
+                    result = self.runner.invoke(
+                        app,
+                        ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                        input="n\n",
+                        env={"HOME": tmpdir},
+                    )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("could not be estimated", result.output)
+        self.assertIn("Cancelled", result.output)
+        self.assertNotIn("Finished", result.output)
+        download.assert_called_once()
+
+    def test_download_yes_bypasses_disk_usage_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "ask_for_disk_usage: true\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=False,
+            ):
+                with patch("dubbed_video_downloader.cli.core.download") as download:
+                    result = self.runner.invoke(
+                        app,
+                        [
+                            "download",
+                            "https://www.youtube.com/watch?v=EXAMPLE",
+                            "--yes",
+                        ],
+                        env={"HOME": tmpdir},
+                    )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertNotIn("approval_callback", download.call_args.kwargs)
+
+    def test_download_refuses_non_interactive_disk_usage_prompt_without_yes(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "ask_for_disk_usage: true\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=False,
+            ):
+                with patch("dubbed_video_downloader.cli.core.download") as download:
+                    result = self.runner.invoke(
+                        app,
+                        ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                        env={"HOME": tmpdir},
+                    )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("--yes", result.output)
+        download.assert_not_called()
+
     def test_download_keyboard_interrupt_exits_without_finished_message(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = (
@@ -973,6 +1195,53 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
         plan.assert_not_called()
+
+    def test_download_dry_run_ignores_non_interactive_disk_usage_confirmation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n"
+                "ask_for_disk_usage: true\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=False,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.core.plan_download",
+                    return_value=core.DownloadPlan(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="en",
+                        title="Title",
+                        uploader="Channel",
+                        available_langs=("en",),
+                        output_path=home / "Downloads" / "from-config" / "Title.mkv",
+                        estimated_size_bytes=10_000_000,
+                    ),
+                ) as plan:
+                    result = self.runner.invoke(
+                        app,
+                        [
+                            "download",
+                            "https://www.youtube.com/watch?v=EXAMPLE",
+                            "--dry-run",
+                        ],
+                        env={"HOME": tmpdir},
+                    )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Estimated disk usage: ~10 MB", result.output)
+        plan.assert_called_once()
 
     def test_download_rejects_negative_retry_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1159,6 +1428,7 @@ class CliTests(unittest.TestCase):
                         uploader="Channel",
                         available_langs=("en", "tr"),
                         output_path=planned_output,
+                        estimated_size_bytes=139_000_000,
                     ),
                 ) as plan,
             ):
@@ -1200,6 +1470,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Dry run: no files will be downloaded or created.", result.output)
         self.assertIn("Mode: audio", result.output)
         self.assertIn(f"Output: {planned_output}", result.output)
+        self.assertIn("Estimated disk usage: ~139 MB", result.output)
 
     def test_download_dry_run_uses_color_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1225,6 +1496,7 @@ class CliTests(unittest.TestCase):
                     uploader="Channel",
                     available_langs=("en",),
                     output_path=home / "Downloads" / "from-config" / "en" / "Title.mkv",
+                    estimated_size_bytes=None,
                 ),
             ):
                 result = self.runner.invoke(
@@ -1242,6 +1514,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("\x1b[", result.output)
         self.assertIn("Title: ", result.output)
         self.assertIn("Channel: ", result.output)
+        self.assertIn("Estimated disk usage: ", result.output)
+        self.assertIn("unknown", result.output)
         self.assertIn("Title\n", result.output)
 
     def test_download_dry_run_fails_when_existing_output_policy_is_fail(self) -> None:
