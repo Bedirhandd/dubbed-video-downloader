@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import errno
 import json
 import tempfile
@@ -20,6 +21,29 @@ class CoreTests(unittest.TestCase):
             "dubbed_video_downloader.core._finalize_staged_download",
             return_value=core.DownloadStatus.DOWNLOADED,
         )
+
+    def _assume_cross_filesystem_temp_roots(self) -> tuple[Path, Path]:
+        output_root = Path("/tmp")
+        redirected_root = Path("/dev/shm")
+        if not output_root.is_dir() or not redirected_root.is_dir():
+            self.skipTest("/tmp and /dev/shm are required for this regression test")
+        if output_root.stat().st_dev == redirected_root.stat().st_dev:
+            self.skipTest("/tmp and /dev/shm are on the same filesystem")
+        return output_root, redirected_root
+
+    def _assume_atomic_no_clobber_publish_supported(self, directory: Path) -> None:
+        source_path = directory / "no-clobber-source.tmp"
+        destination_path = directory / "no-clobber-destination.tmp"
+        source_path.write_text("probe", encoding="utf-8")
+        try:
+            core._publish_file_no_clobber(source_path, destination_path)
+        except core._AtomicNoClobberPublishUnsupportedError as exc:
+            self.skipTest(str(exc))
+        finally:
+            with contextlib.suppress(FileNotFoundError, OSError):
+                source_path.unlink()
+            with contextlib.suppress(FileNotFoundError, OSError):
+                destination_path.unlink()
 
     def test_get_video_info_suppresses_warnings_by_default(self) -> None:
         with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
@@ -1587,6 +1611,88 @@ class CoreTests(unittest.TestCase):
             )
             self.assertFalse(staged_output_path.exists())
 
+    def test_finalize_overwrite_copies_when_replace_is_cross_device(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = output_dir / "staging" / "A_Title.mkv"
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+            original_replace = Path.replace
+
+            def replace_cross_device_once(path: Path, target: Path) -> Path:
+                if path == staged_output_path:
+                    raise OSError(
+                        errno.EXDEV,
+                        "Invalid cross-device link",
+                        str(staged_output_path),
+                    )
+                return original_replace(path, target)
+
+            with patch.object(
+                Path,
+                "replace",
+                autospec=True,
+                side_effect=replace_cross_device_once,
+            ):
+                status = core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    exists_behavior=core.FileExistsBehavior.OVERWRITE,
+                )
+
+            self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertFalse(staged_output_path.exists())
+            self.assertEqual(
+                list(
+                    output_path.parent.glob(
+                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    )
+                ),
+                [],
+            )
+
+    def test_finalize_overwrite_supports_redirected_final_directory(self) -> None:
+        output_root, redirected_root = self._assume_cross_filesystem_temp_roots()
+        with (
+            tempfile.TemporaryDirectory(dir=output_root) as output_tmpdir,
+            tempfile.TemporaryDirectory(dir=redirected_root) as redirected_tmpdir,
+        ):
+            output_dir = Path(output_tmpdir)
+            redirected_dir = Path(redirected_tmpdir)
+            (output_dir / "tr").symlink_to(redirected_dir, target_is_directory=True)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = (
+                output_dir
+                / "tmp"
+                / ".incomplete"
+                / "run"
+                / "tr"
+                / "A_Title"
+                / "A_Title.mkv"
+            )
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            status = core._finalize_staged_download(
+                staged_output_path=staged_output_path,
+                final_output_path=output_path,
+                exists_behavior=core.FileExistsBehavior.OVERWRITE,
+            )
+
+            self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertFalse(staged_output_path.exists())
+            self.assertEqual(
+                list(
+                    output_path.parent.glob(
+                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    )
+                ),
+                [],
+            )
+
     def test_finalize_non_overwrite_uses_hard_link_before_copying(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
@@ -1615,6 +1721,47 @@ class CoreTests(unittest.TestCase):
             copyfileobj.assert_not_called()
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
             self.assertFalse(staged_output_path.exists())
+
+    def test_finalize_non_overwrite_supports_redirected_final_directory(self) -> None:
+        output_root, redirected_root = self._assume_cross_filesystem_temp_roots()
+        with (
+            tempfile.TemporaryDirectory(dir=output_root) as output_tmpdir,
+            tempfile.TemporaryDirectory(dir=redirected_root) as redirected_tmpdir,
+        ):
+            output_dir = Path(output_tmpdir)
+            redirected_dir = Path(redirected_tmpdir)
+            self._assume_atomic_no_clobber_publish_supported(redirected_dir)
+            (output_dir / "tr").symlink_to(redirected_dir, target_is_directory=True)
+            output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
+            staged_output_path = (
+                output_dir
+                / "tmp"
+                / ".incomplete"
+                / "run"
+                / "tr"
+                / "A_Title"
+                / "A_Title.mkv"
+            )
+            staged_output_path.parent.mkdir(parents=True)
+            staged_output_path.write_text("downloaded media", encoding="utf-8")
+
+            status = core._finalize_staged_download(
+                staged_output_path=staged_output_path,
+                final_output_path=output_path,
+                exists_behavior=core.FileExistsBehavior.SKIP,
+            )
+
+            self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
+            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertFalse(staged_output_path.exists())
+            self.assertEqual(
+                list(
+                    output_path.parent.glob(
+                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    )
+                ),
+                [],
+            )
 
     def test_finalize_non_overwrite_copies_when_hard_link_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1656,6 +1803,12 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
             self.assertEqual(len(published_sources), 1)
+            self.assertEqual(published_sources[0].parent, output_path.parent)
+            self.assertTrue(
+                published_sources[0].name.startswith(
+                    f"{core.FALLBACK_FINALIZE_COPY_MARKER}."
+                )
+            )
             self.assertFalse(published_sources[0].exists())
             self.assertFalse(staged_output_path.exists())
 
@@ -1699,6 +1852,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.SKIPPED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
             self.assertEqual(len(publish_sources), 1)
+            self.assertEqual(publish_sources[0].parent, output_path.parent)
             self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
 
@@ -1743,6 +1897,7 @@ class CoreTests(unittest.TestCase):
             self.assertIn("Output already exists", str(context.exception))
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
             self.assertEqual(len(publish_sources), 1)
+            self.assertEqual(publish_sources[0].parent, output_path.parent)
             self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
 
@@ -1779,8 +1934,8 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertEqual(
                 list(
-                    staged_output_path.parent.glob(
-                        f"{staged_output_path.name}{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    output_path.parent.glob(
+                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
                     )
                 ),
                 [],
@@ -1820,8 +1975,8 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(output_path.exists())
             self.assertEqual(
                 list(
-                    staged_output_path.parent.glob(
-                        f"{staged_output_path.name}{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
+                    output_path.parent.glob(
+                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
                     )
                 ),
                 [],

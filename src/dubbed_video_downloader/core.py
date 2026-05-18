@@ -11,6 +11,7 @@ import shutil
 import signal
 import stat
 import sys
+import tempfile
 import time
 import uuid
 from collections.abc import Callable
@@ -825,10 +826,52 @@ def _staged_output_path(
     return staging_output_dir / relative_output_path
 
 
-def _fallback_finalize_copy_path(staged_output_path: Path) -> Path:
-    return staged_output_path.with_name(
-        f"{staged_output_path.name}{FALLBACK_FINALIZE_COPY_MARKER}.{uuid.uuid4().hex}.tmp"
+def _is_cross_device_error(exc: OSError) -> bool:
+    return (
+        exc.errno == errno.EXDEV
+        or getattr(exc, "winerror", None) == WINDOWS_ERROR_NOT_SAME_DEVICE
     )
+
+
+def _copy_staged_download_to_finalizing_path(
+    *,
+    staged_output_path: Path,
+    final_output_path: Path,
+) -> Path:
+    final_output_path.parent.mkdir(parents=True, exist_ok=True)
+    fd: int | None = None
+    finalizing_copy_path: Path | None = None
+    try:
+        fd, raw_path = tempfile.mkstemp(
+            prefix=f"{FALLBACK_FINALIZE_COPY_MARKER}.",
+            suffix=".tmp",
+            dir=final_output_path.parent,
+        )
+        finalizing_copy_path = Path(raw_path)
+        with os.fdopen(fd, "wb") as destination:
+            fd = None
+            with staged_output_path.open("rb") as source:
+                shutil.copyfileobj(
+                    source,
+                    destination,
+                    length=FINALIZE_COPY_BUFFER_SIZE,
+                )
+            with contextlib.suppress(OSError):
+                staged_mode = stat.S_IMODE(staged_output_path.stat().st_mode)
+                os.chmod(finalizing_copy_path, staged_mode)
+            _fsync_file(destination)
+    except BaseException:
+        if fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+        if finalizing_copy_path is not None:
+            with contextlib.suppress(FileNotFoundError, OSError):
+                finalizing_copy_path.unlink()
+        raise
+
+    if finalizing_copy_path is None:
+        raise AssertionError("Finalizing copy path was not created")
+    return finalizing_copy_path
 
 
 def _fsync_file(file_obj: Any) -> None:
@@ -1077,7 +1120,49 @@ def _finalize_staged_download(
     try:
         staged_output_path.replace(final_output_path)
     except OSError as exc:
+        if _is_cross_device_error(exc):
+            return _copy_staged_download_with_overwrite(
+                staged_output_path=staged_output_path,
+                final_output_path=final_output_path,
+                replace_error=exc,
+            )
         raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
+    _fsync_parent_dir(final_output_path)
+    return DownloadStatus.DOWNLOADED
+
+
+def _copy_staged_download_with_overwrite(
+    *,
+    staged_output_path: Path,
+    final_output_path: Path,
+    replace_error: OSError,
+) -> DownloadStatus:
+    try:
+        finalizing_copy_path = _copy_staged_download_to_finalizing_path(
+            staged_output_path=staged_output_path,
+            final_output_path=final_output_path,
+        )
+    except OSError as exc:
+        raise errors.DownloadError(
+            f"Could not finalize output after replace failed ({replace_error}): {exc}"
+        ) from exc
+
+    try:
+        finalizing_copy_path.replace(final_output_path)
+    except OSError as exc:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            finalizing_copy_path.unlink()
+        raise errors.DownloadError(
+            f"Could not finalize output after replace failed ({replace_error}): {exc}"
+        ) from exc
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            finalizing_copy_path.unlink()
+        raise
+
+    _fsync_parent_dir(final_output_path)
+    with contextlib.suppress(FileNotFoundError, OSError):
+        staged_output_path.unlink()
     return DownloadStatus.DOWNLOADED
 
 
@@ -1103,6 +1188,7 @@ def _finalize_staged_download_without_overwriting(
 
     with contextlib.suppress(FileNotFoundError, OSError):
         staged_output_path.unlink()
+    _fsync_parent_dir(final_output_path)
     return DownloadStatus.DOWNLOADED
 
 
@@ -1116,55 +1202,40 @@ def _copy_staged_download_without_overwriting(
     if _handle_existing_output(final_output_path, exists_behavior):
         return DownloadStatus.SKIPPED
 
-    fallback_copy_path = _fallback_finalize_copy_path(staged_output_path)
-    created_fallback_copy = False
     try:
-        with staged_output_path.open("rb") as source:
-            with fallback_copy_path.open("xb") as destination:
-                created_fallback_copy = True
-                shutil.copyfileobj(
-                    source,
-                    destination,
-                    length=FINALIZE_COPY_BUFFER_SIZE,
-                )
-                _fsync_file(destination)
+        finalizing_copy_path = _copy_staged_download_to_finalizing_path(
+            staged_output_path=staged_output_path,
+            final_output_path=final_output_path,
+        )
     except OSError as exc:
-        if created_fallback_copy:
-            with contextlib.suppress(FileNotFoundError, OSError):
-                fallback_copy_path.unlink()
         raise errors.DownloadError(
             f"Could not finalize output after hard link failed ({hard_link_error}): {exc}"
         ) from exc
-    except BaseException:
-        if created_fallback_copy:
-            with contextlib.suppress(FileNotFoundError, OSError):
-                fallback_copy_path.unlink()
-        raise
 
     try:
-        _publish_file_no_clobber(fallback_copy_path, final_output_path)
+        _publish_file_no_clobber(finalizing_copy_path, final_output_path)
     except FileExistsError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
-            fallback_copy_path.unlink()
+            finalizing_copy_path.unlink()
         if _handle_existing_output(final_output_path, exists_behavior):
             return DownloadStatus.SKIPPED
         raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
     except _AtomicNoClobberPublishUnsupportedError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
-            fallback_copy_path.unlink()
+            finalizing_copy_path.unlink()
         raise errors.DownloadError(
             "Could not finalize output after hard link failed "
             f"({hard_link_error}): atomic no-clobber publish is unavailable: {exc}"
         ) from exc
     except OSError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
-            fallback_copy_path.unlink()
+            finalizing_copy_path.unlink()
         raise errors.DownloadError(
             f"Could not finalize output after hard link failed ({hard_link_error}): {exc}"
         ) from exc
     except BaseException:
         with contextlib.suppress(FileNotFoundError, OSError):
-            fallback_copy_path.unlink()
+            finalizing_copy_path.unlink()
         raise
 
     _fsync_parent_dir(final_output_path)
