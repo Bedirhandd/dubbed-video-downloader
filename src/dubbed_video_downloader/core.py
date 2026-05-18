@@ -11,7 +11,6 @@ import shutil
 import signal
 import stat
 import sys
-import tempfile
 import time
 import uuid
 from collections.abc import Callable
@@ -42,6 +41,7 @@ RUN_LOCK_FILENAME = ".lock"
 RUN_METADATA_FILENAME = "run.json"
 RUN_METADATA_APPLICATION = "dubbed-video-downloader"
 RUN_METADATA_VERSION = 1
+RUN_METADATA_FINALIZING_COPY_PATHS = "finalizing_copy_paths"
 FALLBACK_FINALIZE_COPY_MARKER = ".finalizing-copy"
 AT_FDCWD = -100
 LINUX_RENAME_NOREPLACE = 1
@@ -452,6 +452,7 @@ def download(
                 final_status = _finalize_staged_download(
                     staged_output_path=staged_output_path,
                     final_output_path=output_path,
+                    staging_output_dir=staging_run.output_dir,
                     exists_behavior=selected_exists_behavior,
                 )
     except OSError as exc:
@@ -713,34 +714,105 @@ def _new_staging_output_dir(output_dir: str | Path) -> Path:
     return _incomplete_downloads_dir(output_dir) / run_id
 
 
-def _write_staging_metadata(staging_output_dir: Path) -> None:
+def _write_staging_metadata(
+    staging_output_dir: Path,
+    *,
+    finalizing_copy_paths: tuple[Path, ...] = (),
+) -> None:
     metadata = {
         "application": RUN_METADATA_APPLICATION,
         "metadata_version": RUN_METADATA_VERSION,
         "pid": os.getpid(),
         "created_at": time.time(),
     }
+    if finalizing_copy_paths:
+        metadata[RUN_METADATA_FINALIZING_COPY_PATHS] = [
+            str(path) for path in finalizing_copy_paths
+        ]
+    _write_staging_metadata_file(staging_output_dir, metadata)
+
+
+def _write_staging_metadata_file(
+    staging_output_dir: Path,
+    metadata: dict[str, Any],
+) -> None:
     metadata_path = staging_output_dir / RUN_METADATA_FILENAME
-    metadata_path.write_text(json.dumps(metadata, sort_keys=True), encoding="utf-8")
+    metadata_tmp_path = metadata_path.with_name(
+        f".{metadata_path.name}.{uuid.uuid4().hex}.tmp"
+    )
+    try:
+        with metadata_tmp_path.open("w", encoding="utf-8") as metadata_file:
+            json.dump(metadata, metadata_file, sort_keys=True)
+            _fsync_file(metadata_file)
+        metadata_tmp_path.replace(metadata_path)
+        _fsync_parent_dir(metadata_path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError, OSError):
+            metadata_tmp_path.unlink()
+        raise
 
 
-def _is_owned_staging_output_dir(staging_output_dir: Path) -> bool:
+def _load_owned_staging_metadata(staging_output_dir: Path) -> dict[str, Any] | None:
     metadata_path = staging_output_dir / RUN_METADATA_FILENAME
     try:
         if _is_redirected_staging_path(staging_output_dir):
-            return False
+            return None
         metadata_stat = metadata_path.lstat()
         if not stat.S_ISREG(metadata_stat.st_mode):
-            return False
+            return None
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return False
+        return None
 
-    return (
+    if (
         isinstance(metadata, dict)
         and metadata.get("application") == RUN_METADATA_APPLICATION
         and metadata.get("metadata_version") == RUN_METADATA_VERSION
+    ):
+        return metadata
+    return None
+
+
+def _is_owned_staging_output_dir(staging_output_dir: Path) -> bool:
+    return _load_owned_staging_metadata(staging_output_dir) is not None
+
+
+def _record_finalizing_copy_path(
+    *,
+    staging_output_dir: Path,
+    finalizing_copy_path: Path,
+) -> None:
+    metadata = _load_owned_staging_metadata(staging_output_dir)
+    if metadata is None:
+        raise OSError(f"Staging metadata is missing or invalid: {staging_output_dir}")
+
+    raw_paths = metadata.get(RUN_METADATA_FINALIZING_COPY_PATHS, [])
+    if isinstance(raw_paths, list):
+        finalizing_copy_paths = [
+            path for path in raw_paths if isinstance(path, str)
+        ]
+    else:
+        finalizing_copy_paths = []
+
+    finalizing_copy_path_text = str(finalizing_copy_path)
+    if finalizing_copy_path_text not in finalizing_copy_paths:
+        finalizing_copy_paths.append(finalizing_copy_path_text)
+    metadata[RUN_METADATA_FINALIZING_COPY_PATHS] = finalizing_copy_paths
+    _write_staging_metadata_file(staging_output_dir, metadata)
+
+
+def _finalizing_copy_path(
+    *,
+    staging_output_dir: Path,
+    final_output_path: Path,
+) -> Path:
+    path = (
+        final_output_path.parent
+        / f"{FALLBACK_FINALIZE_COPY_MARKER}.{staging_output_dir.name}.tmp"
     )
+    if path.is_absolute():
+        return path
+    return path.absolute()
 
 
 def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
@@ -764,11 +836,10 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
     for child in children:
         try:
             _ensure_safe_incomplete_downloads_path(output_dir)
-            if (
-                _is_redirected_staging_path(child)
-                or not child.is_dir()
-                or not _is_owned_staging_output_dir(child)
-            ):
+            if _is_redirected_staging_path(child) or not child.is_dir():
+                continue
+            metadata = _load_owned_staging_metadata(child)
+            if metadata is None:
                 continue
         except _UnsafeStagingPathError:
             raise
@@ -782,11 +853,49 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
         if not acquired:
             continue
         try:
-            if _is_owned_staging_output_dir(child):
+            metadata = _load_owned_staging_metadata(child)
+            if metadata is not None and _cleanup_stale_finalizing_copies(
+                child,
+                metadata,
+            ):
                 lock.release()
                 _remove_staging_output_dir(child)
         finally:
             lock.release()
+
+
+def _cleanup_stale_finalizing_copies(
+    staging_output_dir: Path,
+    metadata: dict[str, Any],
+) -> bool:
+    raw_paths = metadata.get(RUN_METADATA_FINALIZING_COPY_PATHS, [])
+    if not isinstance(raw_paths, list):
+        return True
+
+    expected_name = f"{FALLBACK_FINALIZE_COPY_MARKER}.{staging_output_dir.name}.tmp"
+    clean = True
+    for raw_path in raw_paths:
+        if not isinstance(raw_path, str):
+            continue
+        finalizing_copy_path = Path(raw_path)
+        if finalizing_copy_path.name != expected_name:
+            continue
+        try:
+            finalizing_copy_stat = finalizing_copy_path.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            clean = False
+            continue
+        if not stat.S_ISREG(finalizing_copy_stat.st_mode):
+            continue
+        try:
+            finalizing_copy_path.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            clean = False
+    return clean
 
 
 def _remove_staging_output_dir(staging_output_dir: Path) -> None:
@@ -837,19 +946,19 @@ def _copy_staged_download_to_finalizing_path(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    staging_output_dir: Path,
 ) -> Path:
     final_output_path.parent.mkdir(parents=True, exist_ok=True)
-    fd: int | None = None
-    finalizing_copy_path: Path | None = None
+    finalizing_copy_path = _finalizing_copy_path(
+        staging_output_dir=staging_output_dir,
+        final_output_path=final_output_path,
+    )
+    _record_finalizing_copy_path(
+        staging_output_dir=staging_output_dir,
+        finalizing_copy_path=finalizing_copy_path,
+    )
     try:
-        fd, raw_path = tempfile.mkstemp(
-            prefix=f"{FALLBACK_FINALIZE_COPY_MARKER}.",
-            suffix=".tmp",
-            dir=final_output_path.parent,
-        )
-        finalizing_copy_path = Path(raw_path)
-        with os.fdopen(fd, "wb") as destination:
-            fd = None
+        with finalizing_copy_path.open("xb") as destination:
             with staged_output_path.open("rb") as source:
                 shutil.copyfileobj(
                     source,
@@ -861,16 +970,10 @@ def _copy_staged_download_to_finalizing_path(
                 os.chmod(finalizing_copy_path, staged_mode)
             _fsync_file(destination)
     except BaseException:
-        if fd is not None:
-            with contextlib.suppress(OSError):
-                os.close(fd)
-        if finalizing_copy_path is not None:
-            with contextlib.suppress(FileNotFoundError, OSError):
-                finalizing_copy_path.unlink()
+        with contextlib.suppress(FileNotFoundError, OSError):
+            finalizing_copy_path.unlink()
         raise
 
-    if finalizing_copy_path is None:
-        raise AssertionError("Finalizing copy path was not created")
     return finalizing_copy_path
 
 
@@ -1095,6 +1198,7 @@ def _finalize_staged_download(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    staging_output_dir: Path,
     exists_behavior: FileExistsBehavior,
 ) -> DownloadStatus:
     if not staged_output_path.is_file():
@@ -1114,6 +1218,7 @@ def _finalize_staged_download(
         return _finalize_staged_download_without_overwriting(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            staging_output_dir=staging_output_dir,
             exists_behavior=exists_behavior,
         )
 
@@ -1124,6 +1229,7 @@ def _finalize_staged_download(
             return _copy_staged_download_with_overwrite(
                 staged_output_path=staged_output_path,
                 final_output_path=final_output_path,
+                staging_output_dir=staging_output_dir,
                 replace_error=exc,
             )
         raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
@@ -1135,12 +1241,14 @@ def _copy_staged_download_with_overwrite(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    staging_output_dir: Path,
     replace_error: OSError,
 ) -> DownloadStatus:
     try:
         finalizing_copy_path = _copy_staged_download_to_finalizing_path(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            staging_output_dir=staging_output_dir,
         )
     except OSError as exc:
         raise errors.DownloadError(
@@ -1170,6 +1278,7 @@ def _finalize_staged_download_without_overwriting(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    staging_output_dir: Path,
     exists_behavior: FileExistsBehavior,
 ) -> DownloadStatus:
     try:
@@ -1182,6 +1291,7 @@ def _finalize_staged_download_without_overwriting(
         return _copy_staged_download_without_overwriting(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            staging_output_dir=staging_output_dir,
             exists_behavior=exists_behavior,
             hard_link_error=exc,
         )
@@ -1196,6 +1306,7 @@ def _copy_staged_download_without_overwriting(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    staging_output_dir: Path,
     exists_behavior: FileExistsBehavior,
     hard_link_error: OSError,
 ) -> DownloadStatus:
@@ -1206,6 +1317,7 @@ def _copy_staged_download_without_overwriting(
         finalizing_copy_path = _copy_staged_download_to_finalizing_path(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            staging_output_dir=staging_output_dir,
         )
     except OSError as exc:
         raise errors.DownloadError(
