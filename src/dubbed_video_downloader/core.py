@@ -41,7 +41,9 @@ RUN_LOCK_FILENAME = ".lock"
 RUN_METADATA_FILENAME = "run.json"
 RUN_METADATA_APPLICATION = "dubbed-video-downloader"
 RUN_METADATA_VERSION = 1
-RUN_METADATA_FINALIZING_COPY_PATHS = "finalizing_copy_paths"
+RUN_METADATA_FINALIZING_COPY_DIRS = "finalizing_copy_dirs"
+FINALIZING_COPY_DIR_NAME = ".dubbed-video-downloader-finalizing"
+FINALIZING_COPY_DIR_MODE = 0o700
 FALLBACK_FINALIZE_COPY_MARKER = ".finalizing-copy"
 AT_FDCWD = -100
 LINUX_RENAME_NOREPLACE = 1
@@ -452,6 +454,7 @@ def download(
                 final_status = _finalize_staged_download(
                     staged_output_path=staged_output_path,
                     final_output_path=output_path,
+                    output_dir=output_dir,
                     staging_output_dir=staging_run.output_dir,
                     exists_behavior=selected_exists_behavior,
                 )
@@ -717,7 +720,7 @@ def _new_staging_output_dir(output_dir: str | Path) -> Path:
 def _write_staging_metadata(
     staging_output_dir: Path,
     *,
-    finalizing_copy_paths: tuple[Path, ...] = (),
+    finalizing_copy_dirs: tuple[Path, ...] = (),
 ) -> None:
     metadata = {
         "application": RUN_METADATA_APPLICATION,
@@ -725,9 +728,9 @@ def _write_staging_metadata(
         "pid": os.getpid(),
         "created_at": time.time(),
     }
-    if finalizing_copy_paths:
-        metadata[RUN_METADATA_FINALIZING_COPY_PATHS] = [
-            str(path) for path in finalizing_copy_paths
+    if finalizing_copy_dirs:
+        metadata[RUN_METADATA_FINALIZING_COPY_DIRS] = [
+            str(path) for path in finalizing_copy_dirs
         ]
     _write_staging_metadata_file(staging_output_dir, metadata)
 
@@ -777,28 +780,60 @@ def _is_owned_staging_output_dir(staging_output_dir: Path) -> bool:
     return _load_owned_staging_metadata(staging_output_dir) is not None
 
 
-def _record_finalizing_copy_path(
+def _record_finalizing_copy_dir(
     *,
     staging_output_dir: Path,
-    finalizing_copy_path: Path,
+    finalizing_copy_dir: Path,
+    output_dir: str | Path,
 ) -> None:
     metadata = _load_owned_staging_metadata(staging_output_dir)
     if metadata is None:
         raise OSError(f"Staging metadata is missing or invalid: {staging_output_dir}")
 
-    raw_paths = metadata.get(RUN_METADATA_FINALIZING_COPY_PATHS, [])
-    if isinstance(raw_paths, list):
-        finalizing_copy_paths = [
-            path for path in raw_paths if isinstance(path, str)
+    raw_dirs = metadata.get(RUN_METADATA_FINALIZING_COPY_DIRS, [])
+    if isinstance(raw_dirs, list):
+        finalizing_copy_dirs = [
+            path for path in raw_dirs if isinstance(path, str)
         ]
     else:
-        finalizing_copy_paths = []
+        finalizing_copy_dirs = []
 
-    finalizing_copy_path_text = str(finalizing_copy_path)
-    if finalizing_copy_path_text not in finalizing_copy_paths:
-        finalizing_copy_paths.append(finalizing_copy_path_text)
-    metadata[RUN_METADATA_FINALIZING_COPY_PATHS] = finalizing_copy_paths
+    relative_finalizing_copy_dir = _output_relative_path(
+        finalizing_copy_dir,
+        output_dir=output_dir,
+    )
+    if not _is_valid_finalizing_copy_dir(relative_finalizing_copy_dir):
+        raise OSError(f"Invalid finalizing copy directory: {finalizing_copy_dir}")
+
+    finalizing_copy_dir_text = str(relative_finalizing_copy_dir)
+    if finalizing_copy_dir_text not in finalizing_copy_dirs:
+        finalizing_copy_dirs.append(finalizing_copy_dir_text)
+    metadata[RUN_METADATA_FINALIZING_COPY_DIRS] = finalizing_copy_dirs
     _write_staging_metadata_file(staging_output_dir, metadata)
+
+
+def _output_relative_path(path: Path, *, output_dir: str | Path) -> Path:
+    output_dir_path = Path(output_dir)
+    try:
+        return path.relative_to(output_dir_path)
+    except ValueError:
+        try:
+            return path.resolve(strict=False).relative_to(
+                output_dir_path.resolve(strict=False)
+            )
+        except ValueError as exc:
+            raise OSError(f"Path is outside output directory: {path}") from exc
+
+
+def _is_valid_finalizing_copy_dir(path: Path) -> bool:
+    if path.is_absolute() or path.drive or path.root:
+        return False
+    parts = path.parts
+    return (
+        bool(parts)
+        and parts[-1] == FINALIZING_COPY_DIR_NAME
+        and all(part not in ("", ".", "..") for part in parts)
+    )
 
 
 def _finalizing_copy_path(
@@ -806,13 +841,208 @@ def _finalizing_copy_path(
     staging_output_dir: Path,
     final_output_path: Path,
 ) -> Path:
-    path = (
-        final_output_path.parent
-        / f"{FALLBACK_FINALIZE_COPY_MARKER}.{staging_output_dir.name}.tmp"
-    )
+    path = _finalizing_copy_dir(final_output_path) / f"{staging_output_dir.name}.tmp"
     if path.is_absolute():
         return path
     return path.absolute()
+
+
+def _finalizing_copy_dir(final_output_path: Path) -> Path:
+    return final_output_path.parent / FINALIZING_COPY_DIR_NAME
+
+
+def _is_owned_finalizing_copy_dir_stat(
+    finalizing_copy_dir_stat: os.stat_result,
+) -> bool:
+    if not stat.S_ISDIR(finalizing_copy_dir_stat.st_mode):
+        return False
+    if os.name != "posix":
+        return True
+    return finalizing_copy_dir_stat.st_uid == os.getuid()
+
+
+def _has_unsafe_finalizing_copy_dir_mode(
+    finalizing_copy_dir_stat: os.stat_result,
+) -> bool:
+    return bool(
+        os.name == "posix"
+        and finalizing_copy_dir_stat.st_mode
+        & (stat.S_IWGRP | stat.S_IWOTH)
+    )
+
+
+def _is_safe_finalizing_copy_dir_stat(finalizing_copy_dir_stat: os.stat_result) -> bool:
+    if not _is_owned_finalizing_copy_dir_stat(finalizing_copy_dir_stat):
+        return False
+    return not _has_unsafe_finalizing_copy_dir_mode(finalizing_copy_dir_stat)
+
+
+def _is_safe_finalizing_copy_file_stat(
+    finalizing_copy_stat: os.stat_result,
+) -> bool:
+    if not stat.S_ISREG(finalizing_copy_stat.st_mode):
+        return False
+    if os.name == "posix" and finalizing_copy_stat.st_uid != os.getuid():
+        return False
+    return True
+
+
+def _ensure_safe_finalizing_copy_dir(finalizing_copy_dir: Path) -> None:
+    finalizing_copy_dir_stat = finalizing_copy_dir.lstat()
+    if not _is_safe_finalizing_copy_dir_stat(finalizing_copy_dir_stat):
+        raise OSError(f"Unsafe finalizing copy directory: {finalizing_copy_dir}")
+
+
+def _tighten_finalizing_copy_dir_permissions(finalizing_copy_dir: Path) -> None:
+    if os.name != "posix":
+        return
+    finalizing_copy_dir_stat = finalizing_copy_dir.lstat()
+    if (
+        stat.S_ISDIR(finalizing_copy_dir_stat.st_mode)
+        and finalizing_copy_dir_stat.st_uid == os.getuid()
+        and _has_unsafe_finalizing_copy_dir_mode(finalizing_copy_dir_stat)
+    ):
+        finalizing_copy_dir.chmod(FINALIZING_COPY_DIR_MODE)
+
+
+def _ensure_finalizing_copy_dir(final_output_path: Path) -> Path:
+    finalizing_copy_dir = _finalizing_copy_dir(final_output_path)
+    finalizing_copy_dir.mkdir(
+        mode=FINALIZING_COPY_DIR_MODE,
+        parents=True,
+        exist_ok=True,
+    )
+    _tighten_finalizing_copy_dir_permissions(finalizing_copy_dir)
+    _ensure_safe_finalizing_copy_dir(finalizing_copy_dir)
+    return finalizing_copy_dir
+
+
+def _remove_empty_finalizing_copy_dir(finalizing_copy_path: Path) -> None:
+    finalizing_copy_dir = finalizing_copy_path.parent
+    with contextlib.suppress(OSError):
+        _ensure_safe_finalizing_copy_dir(finalizing_copy_dir)
+        finalizing_copy_dir.rmdir()
+
+
+def _cleanup_finalizing_copy_by_path(
+    finalizing_copy_dir: Path,
+    expected_name: str,
+) -> bool:
+    try:
+        finalizing_copy_dir_stat = finalizing_copy_dir.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if not _is_owned_finalizing_copy_dir_stat(finalizing_copy_dir_stat):
+        return True
+    if _has_unsafe_finalizing_copy_dir_mode(finalizing_copy_dir_stat):
+        try:
+            finalizing_copy_dir.chmod(FINALIZING_COPY_DIR_MODE)
+            finalizing_copy_dir_stat = finalizing_copy_dir.lstat()
+        except OSError:
+            return False
+    if not _is_safe_finalizing_copy_dir_stat(finalizing_copy_dir_stat):
+        return False
+
+    finalizing_copy_path = finalizing_copy_dir / expected_name
+    try:
+        finalizing_copy_stat = finalizing_copy_path.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if not _is_safe_finalizing_copy_file_stat(finalizing_copy_stat):
+        return True
+
+    try:
+        finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _cleanup_finalizing_copy_with_dir_fd(
+    finalizing_copy_dir: Path,
+    expected_name: str,
+) -> bool:
+    try:
+        finalizing_copy_dir_stat = finalizing_copy_dir.lstat()
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if not _is_owned_finalizing_copy_dir_stat(finalizing_copy_dir_stat):
+        return True
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+
+    dir_fd = None
+    try:
+        dir_fd = os.open(finalizing_copy_dir, flags)
+        opened_dir_stat = os.fstat(dir_fd)
+        if (
+            opened_dir_stat.st_dev != finalizing_copy_dir_stat.st_dev
+            or opened_dir_stat.st_ino != finalizing_copy_dir_stat.st_ino
+            or not _is_owned_finalizing_copy_dir_stat(opened_dir_stat)
+        ):
+            return False
+        if _has_unsafe_finalizing_copy_dir_mode(opened_dir_stat):
+            os.fchmod(dir_fd, FINALIZING_COPY_DIR_MODE)
+            opened_dir_stat = os.fstat(dir_fd)
+            if not _is_safe_finalizing_copy_dir_stat(opened_dir_stat):
+                return False
+        try:
+            finalizing_copy_stat = os.stat(
+                expected_name,
+                dir_fd=dir_fd,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        if not _is_safe_finalizing_copy_file_stat(finalizing_copy_stat):
+            return True
+        try:
+            os.unlink(expected_name, dir_fd=dir_fd)
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+    except OSError:
+        return False
+    finally:
+        if dir_fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(dir_fd)
+
+    _remove_empty_finalizing_copy_dir(finalizing_copy_dir / expected_name)
+    return True
+
+
+def _cleanup_finalizing_copy(
+    finalizing_copy_dir: Path,
+    expected_name: str,
+) -> bool:
+    if (
+        os.open in os.supports_dir_fd
+        and os.stat in os.supports_dir_fd
+        and os.unlink in os.supports_dir_fd
+        and hasattr(os, "fchmod")
+    ):
+        return _cleanup_finalizing_copy_with_dir_fd(
+            finalizing_copy_dir,
+            expected_name,
+        )
+    return _cleanup_finalizing_copy_by_path(finalizing_copy_dir, expected_name)
 
 
 def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
@@ -855,6 +1085,7 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
         try:
             metadata = _load_owned_staging_metadata(child)
             if metadata is not None and _cleanup_stale_finalizing_copies(
+                output_dir,
                 child,
                 metadata,
             ):
@@ -865,35 +1096,24 @@ def _cleanup_stale_incomplete_downloads(output_dir: str | Path) -> None:
 
 
 def _cleanup_stale_finalizing_copies(
+    output_dir: str | Path,
     staging_output_dir: Path,
     metadata: dict[str, Any],
 ) -> bool:
-    raw_paths = metadata.get(RUN_METADATA_FINALIZING_COPY_PATHS, [])
-    if not isinstance(raw_paths, list):
+    raw_dirs = metadata.get(RUN_METADATA_FINALIZING_COPY_DIRS, [])
+    if not isinstance(raw_dirs, list):
         return True
 
-    expected_name = f"{FALLBACK_FINALIZE_COPY_MARKER}.{staging_output_dir.name}.tmp"
+    expected_name = f"{staging_output_dir.name}.tmp"
     clean = True
-    for raw_path in raw_paths:
-        if not isinstance(raw_path, str):
+    for raw_dir in raw_dirs:
+        if not isinstance(raw_dir, str):
             continue
-        finalizing_copy_path = Path(raw_path)
-        if finalizing_copy_path.name != expected_name:
+        relative_finalizing_copy_dir = Path(raw_dir)
+        if not _is_valid_finalizing_copy_dir(relative_finalizing_copy_dir):
             continue
-        try:
-            finalizing_copy_stat = finalizing_copy_path.lstat()
-        except FileNotFoundError:
-            continue
-        except OSError:
-            clean = False
-            continue
-        if not stat.S_ISREG(finalizing_copy_stat.st_mode):
-            continue
-        try:
-            finalizing_copy_path.unlink()
-        except FileNotFoundError:
-            continue
-        except OSError:
+        finalizing_copy_dir = Path(output_dir) / relative_finalizing_copy_dir
+        if not _cleanup_finalizing_copy(finalizing_copy_dir, expected_name):
             clean = False
     return clean
 
@@ -947,18 +1167,23 @@ def _copy_staged_download_to_finalizing_path(
     staged_output_path: Path,
     final_output_path: Path,
     staging_output_dir: Path,
+    output_dir: str | Path,
 ) -> Path:
     final_output_path.parent.mkdir(parents=True, exist_ok=True)
+    finalizing_copy_dir = _ensure_finalizing_copy_dir(final_output_path)
     finalizing_copy_path = _finalizing_copy_path(
         staging_output_dir=staging_output_dir,
         final_output_path=final_output_path,
     )
-    _record_finalizing_copy_path(
+    _record_finalizing_copy_dir(
         staging_output_dir=staging_output_dir,
-        finalizing_copy_path=finalizing_copy_path,
+        finalizing_copy_dir=finalizing_copy_dir,
+        output_dir=output_dir,
     )
+    created_finalizing_copy = False
     try:
         with finalizing_copy_path.open("xb") as destination:
+            created_finalizing_copy = True
             with staged_output_path.open("rb") as source:
                 shutil.copyfileobj(
                     source,
@@ -970,8 +1195,10 @@ def _copy_staged_download_to_finalizing_path(
                 os.chmod(finalizing_copy_path, staged_mode)
             _fsync_file(destination)
     except BaseException:
-        with contextlib.suppress(FileNotFoundError, OSError):
-            finalizing_copy_path.unlink()
+        if created_finalizing_copy:
+            with contextlib.suppress(FileNotFoundError, OSError):
+                finalizing_copy_path.unlink()
+            _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         raise
 
     return finalizing_copy_path
@@ -1198,6 +1425,7 @@ def _finalize_staged_download(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    output_dir: str | Path,
     staging_output_dir: Path,
     exists_behavior: FileExistsBehavior,
 ) -> DownloadStatus:
@@ -1218,6 +1446,7 @@ def _finalize_staged_download(
         return _finalize_staged_download_without_overwriting(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            output_dir=output_dir,
             staging_output_dir=staging_output_dir,
             exists_behavior=exists_behavior,
         )
@@ -1229,6 +1458,7 @@ def _finalize_staged_download(
             return _copy_staged_download_with_overwrite(
                 staged_output_path=staged_output_path,
                 final_output_path=final_output_path,
+                output_dir=output_dir,
                 staging_output_dir=staging_output_dir,
                 replace_error=exc,
             )
@@ -1241,6 +1471,7 @@ def _copy_staged_download_with_overwrite(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    output_dir: str | Path,
     staging_output_dir: Path,
     replace_error: OSError,
 ) -> DownloadStatus:
@@ -1248,6 +1479,7 @@ def _copy_staged_download_with_overwrite(
         finalizing_copy_path = _copy_staged_download_to_finalizing_path(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            output_dir=output_dir,
             staging_output_dir=staging_output_dir,
         )
     except OSError as exc:
@@ -1260,15 +1492,18 @@ def _copy_staged_download_with_overwrite(
     except OSError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
             finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         raise errors.DownloadError(
             f"Could not finalize output after replace failed ({replace_error}): {exc}"
         ) from exc
     except BaseException:
         with contextlib.suppress(FileNotFoundError, OSError):
             finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         raise
 
     _fsync_parent_dir(final_output_path)
+    _remove_empty_finalizing_copy_dir(finalizing_copy_path)
     with contextlib.suppress(FileNotFoundError, OSError):
         staged_output_path.unlink()
     return DownloadStatus.DOWNLOADED
@@ -1278,6 +1513,7 @@ def _finalize_staged_download_without_overwriting(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    output_dir: str | Path,
     staging_output_dir: Path,
     exists_behavior: FileExistsBehavior,
 ) -> DownloadStatus:
@@ -1291,6 +1527,7 @@ def _finalize_staged_download_without_overwriting(
         return _copy_staged_download_without_overwriting(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            output_dir=output_dir,
             staging_output_dir=staging_output_dir,
             exists_behavior=exists_behavior,
             hard_link_error=exc,
@@ -1306,6 +1543,7 @@ def _copy_staged_download_without_overwriting(
     *,
     staged_output_path: Path,
     final_output_path: Path,
+    output_dir: str | Path,
     staging_output_dir: Path,
     exists_behavior: FileExistsBehavior,
     hard_link_error: OSError,
@@ -1317,6 +1555,7 @@ def _copy_staged_download_without_overwriting(
         finalizing_copy_path = _copy_staged_download_to_finalizing_path(
             staged_output_path=staged_output_path,
             final_output_path=final_output_path,
+            output_dir=output_dir,
             staging_output_dir=staging_output_dir,
         )
     except OSError as exc:
@@ -1329,12 +1568,14 @@ def _copy_staged_download_without_overwriting(
     except FileExistsError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
             finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         if _handle_existing_output(final_output_path, exists_behavior):
             return DownloadStatus.SKIPPED
         raise errors.DownloadError(f"Could not finalize output: {exc}") from exc
     except _AtomicNoClobberPublishUnsupportedError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
             finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         raise errors.DownloadError(
             "Could not finalize output after hard link failed "
             f"({hard_link_error}): atomic no-clobber publish is unavailable: {exc}"
@@ -1342,15 +1583,18 @@ def _copy_staged_download_without_overwriting(
     except OSError as exc:
         with contextlib.suppress(FileNotFoundError, OSError):
             finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         raise errors.DownloadError(
             f"Could not finalize output after hard link failed ({hard_link_error}): {exc}"
         ) from exc
     except BaseException:
         with contextlib.suppress(FileNotFoundError, OSError):
             finalizing_copy_path.unlink()
+        _remove_empty_finalizing_copy_dir(finalizing_copy_path)
         raise
 
     _fsync_parent_dir(final_output_path)
+    _remove_empty_finalizing_copy_dir(finalizing_copy_path)
     with contextlib.suppress(FileNotFoundError, OSError):
         staged_output_path.unlink()
     return DownloadStatus.DOWNLOADED

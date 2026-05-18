@@ -1601,6 +1601,7 @@ class CoreTests(unittest.TestCase):
             status = core._finalize_staged_download(
                 staged_output_path=staged_output_path,
                 final_output_path=output_path,
+                output_dir=output_dir,
                 staging_output_dir=staged_output_path.parent,
                 exists_behavior=core.FileExistsBehavior.OVERWRITE,
             )
@@ -1640,6 +1641,7 @@ class CoreTests(unittest.TestCase):
                 status = core._finalize_staged_download(
                     staged_output_path=staged_output_path,
                     final_output_path=output_path,
+                    output_dir=output_dir,
                     staging_output_dir=staged_output_path.parent,
                     exists_behavior=core.FileExistsBehavior.OVERWRITE,
                 )
@@ -1647,14 +1649,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
             self.assertFalse(staged_output_path.exists())
-            self.assertEqual(
-                list(
-                    output_path.parent.glob(
-                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
-                    )
-                ),
-                [],
-            )
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
 
     def test_finalize_overwrite_supports_redirected_final_directory(self) -> None:
         output_root, redirected_root = self._assume_cross_filesystem_temp_roots()
@@ -1682,6 +1677,7 @@ class CoreTests(unittest.TestCase):
             status = core._finalize_staged_download(
                 staged_output_path=staged_output_path,
                 final_output_path=output_path,
+                output_dir=output_dir,
                 staging_output_dir=staged_output_path.parent,
                 exists_behavior=core.FileExistsBehavior.OVERWRITE,
             )
@@ -1689,14 +1685,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
             self.assertFalse(staged_output_path.exists())
-            self.assertEqual(
-                list(
-                    output_path.parent.glob(
-                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
-                    )
-                ),
-                [],
-            )
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
 
     def test_finalize_non_overwrite_uses_hard_link_before_copying(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1718,6 +1707,7 @@ class CoreTests(unittest.TestCase):
                 status = core._finalize_staged_download(
                     staged_output_path=staged_output_path,
                     final_output_path=output_path,
+                    output_dir=output_dir,
                     staging_output_dir=staged_output_path.parent,
                     exists_behavior=core.FileExistsBehavior.SKIP,
                 )
@@ -1755,6 +1745,7 @@ class CoreTests(unittest.TestCase):
             status = core._finalize_staged_download(
                 staged_output_path=staged_output_path,
                 final_output_path=output_path,
+                output_dir=output_dir,
                 staging_output_dir=staged_output_path.parent,
                 exists_behavior=core.FileExistsBehavior.SKIP,
             )
@@ -1762,14 +1753,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
             self.assertFalse(staged_output_path.exists())
-            self.assertEqual(
-                list(
-                    output_path.parent.glob(
-                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
-                    )
-                ),
-                [],
-            )
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
 
     def test_finalize_non_overwrite_copies_when_hard_link_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1789,8 +1773,8 @@ class CoreTests(unittest.TestCase):
                     )
                 )
                 self.assertIn(
-                    str(Path(destination.name)),
-                    metadata[core.RUN_METADATA_FINALIZING_COPY_PATHS],
+                    str(Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME),
+                    metadata[core.RUN_METADATA_FINALIZING_COPY_DIRS],
                 )
                 self.assertFalse(output_path.exists())
 
@@ -1815,6 +1799,7 @@ class CoreTests(unittest.TestCase):
                 status = core._finalize_staged_download(
                     staged_output_path=staged_output_path,
                     final_output_path=output_path,
+                    output_dir=output_dir,
                     staging_output_dir=staged_output_path.parent,
                     exists_behavior=core.FileExistsBehavior.SKIP,
                 )
@@ -1822,14 +1807,14 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
             self.assertEqual(len(published_sources), 1)
-            self.assertEqual(published_sources[0].parent, output_path.parent)
-            self.assertTrue(
-                published_sources[0].name.startswith(
-                    f"{core.FALLBACK_FINALIZE_COPY_MARKER}."
-                )
+            self.assertEqual(
+                published_sources[0].parent,
+                output_path.parent / core.FINALIZING_COPY_DIR_NAME,
             )
+            self.assertEqual(published_sources[0].name, f"{staged_output_path.parent.name}.tmp")
             self.assertFalse(published_sources[0].exists())
             self.assertFalse(staged_output_path.exists())
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
 
     def test_finalize_copy_fallback_skip_race_preserves_existing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1866,6 +1851,7 @@ class CoreTests(unittest.TestCase):
                 status = core._finalize_staged_download(
                     staged_output_path=staged_output_path,
                     final_output_path=output_path,
+                    output_dir=output_dir,
                     staging_output_dir=staged_output_path.parent,
                     exists_behavior=core.FileExistsBehavior.SKIP,
                 )
@@ -1873,9 +1859,13 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.SKIPPED)
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
             self.assertEqual(len(publish_sources), 1)
-            self.assertEqual(publish_sources[0].parent, output_path.parent)
+            self.assertEqual(
+                publish_sources[0].parent,
+                output_path.parent / core.FINALIZING_COPY_DIR_NAME,
+            )
             self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
 
     def test_finalize_copy_fallback_fail_race_reports_existing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1913,6 +1903,7 @@ class CoreTests(unittest.TestCase):
                     core._finalize_staged_download(
                         staged_output_path=staged_output_path,
                         final_output_path=output_path,
+                        output_dir=output_dir,
                         staging_output_dir=staged_output_path.parent,
                         exists_behavior=core.FileExistsBehavior.FAIL,
                     )
@@ -1920,9 +1911,13 @@ class CoreTests(unittest.TestCase):
             self.assertIn("Output already exists", str(context.exception))
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
             self.assertEqual(len(publish_sources), 1)
-            self.assertEqual(publish_sources[0].parent, output_path.parent)
+            self.assertEqual(
+                publish_sources[0].parent,
+                output_path.parent / core.FINALIZING_COPY_DIR_NAME,
+            )
             self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
 
     def test_finalize_copy_fallback_removes_partial_output_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1951,20 +1946,14 @@ class CoreTests(unittest.TestCase):
                     core._finalize_staged_download(
                         staged_output_path=staged_output_path,
                         final_output_path=output_path,
+                        output_dir=output_dir,
                         staging_output_dir=staged_output_path.parent,
                         exists_behavior=core.FileExistsBehavior.SKIP,
                     )
 
             self.assertIn("Could not finalize output", str(context.exception))
             self.assertFalse(output_path.exists())
-            self.assertEqual(
-                list(
-                    output_path.parent.glob(
-                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
-                    )
-                ),
-                [],
-            )
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
             self.assertTrue(staged_output_path.exists())
 
     def test_finalize_copy_fallback_fails_closed_when_publish_unsupported(
@@ -1994,20 +1983,14 @@ class CoreTests(unittest.TestCase):
                     core._finalize_staged_download(
                         staged_output_path=staged_output_path,
                         final_output_path=output_path,
+                        output_dir=output_dir,
                         staging_output_dir=staged_output_path.parent,
                         exists_behavior=core.FileExistsBehavior.SKIP,
                     )
 
             self.assertIn("atomic no-clobber publish is unavailable", str(context.exception))
             self.assertFalse(output_path.exists())
-            self.assertEqual(
-                list(
-                    output_path.parent.glob(
-                        f"{core.FALLBACK_FINALIZE_COPY_MARKER}.*.tmp"
-                    )
-                ),
-                [],
-            )
+            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
             self.assertTrue(staged_output_path.exists())
 
     def test_publish_file_no_clobber_moves_source_without_overwriting(self) -> None:
@@ -2116,39 +2099,40 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             final_dir = output_dir / "tr" / "A_Title"
+            finalizing_dir = final_dir / core.FINALIZING_COPY_DIR_NAME
             stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
-            finalizing_copy = (
-                final_dir
-                / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.{stale_dir.name}.tmp"
-            )
-            final_dir.mkdir(parents=True)
+            finalizing_copy = finalizing_dir / f"{stale_dir.name}.tmp"
+            finalizing_dir.mkdir(parents=True)
             stale_dir.mkdir(parents=True)
             finalizing_copy.write_text("partial", encoding="utf-8")
             core._write_staging_metadata(
                 stale_dir,
-                finalizing_copy_paths=(finalizing_copy,),
+                finalizing_copy_dirs=(
+                    Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME,
+                ),
             )
 
             core._cleanup_stale_incomplete_downloads(output_dir)
 
             self.assertFalse(stale_dir.exists())
             self.assertFalse(finalizing_copy.exists())
+            self.assertFalse(finalizing_dir.exists())
 
     def test_stale_incomplete_cleanup_preserves_active_finalizing_copy(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             final_dir = output_dir / "tr" / "A_Title"
+            finalizing_dir = final_dir / core.FINALIZING_COPY_DIR_NAME
             active_dir = output_dir / "tmp" / ".incomplete" / "active-run"
-            finalizing_copy = (
-                final_dir
-                / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.{active_dir.name}.tmp"
-            )
-            final_dir.mkdir(parents=True)
+            finalizing_copy = finalizing_dir / f"{active_dir.name}.tmp"
+            finalizing_dir.mkdir(parents=True)
             active_dir.mkdir(parents=True)
             finalizing_copy.write_text("partial", encoding="utf-8")
             core._write_staging_metadata(
                 active_dir,
-                finalizing_copy_paths=(finalizing_copy,),
+                finalizing_copy_dirs=(
+                    Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME,
+                ),
             )
             active_lock = core._StagingLock(active_dir / core.RUN_LOCK_FILENAME)
             active_lock.acquire(blocking=True)
@@ -2160,30 +2144,29 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(active_dir.exists())
             self.assertTrue(finalizing_copy.exists())
 
-    def test_stale_incomplete_cleanup_preserves_unmatched_finalizing_paths(self) -> None:
+    def test_stale_incomplete_cleanup_preserves_unmatched_finalizing_dirs(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             final_dir = output_dir / "tr" / "A_Title"
+            finalizing_dir = final_dir / core.FINALIZING_COPY_DIR_NAME
             stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
-            wrong_run_copy = (
-                final_dir / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.other-run.tmp"
-            )
-            wrong_name_copy = final_dir / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.tmp"
-            non_regular_copy = (
-                final_dir
-                / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.{stale_dir.name}.tmp"
-            )
-            final_dir.mkdir(parents=True)
+            outside_dir = output_dir.parent / f"{output_dir.name}-outside-finalizing"
+            wrong_run_copy = finalizing_dir / "other-run.tmp"
+            non_regular_copy = finalizing_dir / f"{stale_dir.name}.tmp"
+            outside_copy = outside_dir / f"{stale_dir.name}.tmp"
+            finalizing_dir.mkdir(parents=True)
+            outside_dir.mkdir()
             stale_dir.mkdir(parents=True)
             wrong_run_copy.write_text("keep", encoding="utf-8")
-            wrong_name_copy.write_text("keep", encoding="utf-8")
             non_regular_copy.mkdir()
+            outside_copy.write_text("keep", encoding="utf-8")
             core._write_staging_metadata(
                 stale_dir,
-                finalizing_copy_paths=(
-                    wrong_run_copy,
-                    wrong_name_copy,
-                    non_regular_copy,
+                finalizing_copy_dirs=(
+                    Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME,
+                    Path("tr") / "A_Title" / "not-finalizing",
+                    Path("..") / "outside-finalizing",
+                    outside_dir,
                 ),
             )
 
@@ -2191,8 +2174,114 @@ class CoreTests(unittest.TestCase):
 
             self.assertFalse(stale_dir.exists())
             self.assertTrue(wrong_run_copy.exists())
-            self.assertTrue(wrong_name_copy.exists())
             self.assertTrue(non_regular_copy.exists())
+            self.assertTrue(outside_copy.exists())
+
+    def test_stale_incomplete_cleanup_handles_redirected_finalizing_parent(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root_dir = Path(tmpdir)
+            output_dir = root_dir / "output"
+            redirected_root = root_dir / "redirected"
+            redirected_lang_dir = redirected_root / "tr"
+            output_dir.mkdir()
+            redirected_lang_dir.mkdir(parents=True)
+            try:
+                (output_dir / "tr").symlink_to(
+                    redirected_lang_dir,
+                    target_is_directory=True,
+                )
+            except (NotImplementedError, OSError):
+                return
+
+            stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
+            finalizing_dir = (
+                output_dir
+                / "tr"
+                / "A_Title"
+                / core.FINALIZING_COPY_DIR_NAME
+            )
+            finalizing_copy = finalizing_dir / f"{stale_dir.name}.tmp"
+            finalizing_dir.mkdir(parents=True)
+            stale_dir.mkdir(parents=True)
+            finalizing_copy.write_text("partial", encoding="utf-8")
+            core._write_staging_metadata(
+                stale_dir,
+                finalizing_copy_dirs=(
+                    Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME,
+                ),
+            )
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertFalse(stale_dir.exists())
+            self.assertFalse(finalizing_copy.exists())
+            self.assertFalse(finalizing_dir.exists())
+
+    def test_stale_incomplete_cleanup_rejects_symlinked_finalizing_dir(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root_dir = Path(tmpdir)
+            output_dir = root_dir / "output"
+            outside_dir = root_dir / "outside-finalizing"
+            final_dir = output_dir / "tr" / "A_Title"
+            finalizing_dir = final_dir / core.FINALIZING_COPY_DIR_NAME
+            stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
+            output_dir.mkdir()
+            outside_dir.mkdir()
+            final_dir.mkdir(parents=True)
+            try:
+                finalizing_dir.symlink_to(outside_dir, target_is_directory=True)
+            except (NotImplementedError, OSError):
+                return
+
+            outside_copy = outside_dir / f"{stale_dir.name}.tmp"
+            stale_dir.mkdir(parents=True)
+            outside_copy.write_text("keep", encoding="utf-8")
+            core._write_staging_metadata(
+                stale_dir,
+                finalizing_copy_dirs=(
+                    Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME,
+                ),
+            )
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertFalse(stale_dir.exists())
+            self.assertTrue(finalizing_dir.exists())
+            self.assertTrue(outside_copy.exists())
+
+    def test_stale_incomplete_cleanup_ignores_legacy_absolute_finalizing_copy_path(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
+            outside_dir = output_dir.parent / f"{output_dir.name}-outside-finalizing"
+            outside_copy = (
+                outside_dir
+                / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.{stale_dir.name}.tmp"
+            )
+            outside_dir.mkdir()
+            stale_dir.mkdir(parents=True)
+            outside_copy.write_text("keep", encoding="utf-8")
+            (stale_dir / core.RUN_METADATA_FILENAME).write_text(
+                json.dumps(
+                    {
+                        "application": core.RUN_METADATA_APPLICATION,
+                        "metadata_version": core.RUN_METADATA_VERSION,
+                        "finalizing_copy_paths": [str(outside_copy)],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            core._cleanup_stale_incomplete_downloads(output_dir)
+
+            self.assertFalse(stale_dir.exists())
+            self.assertTrue(outside_copy.exists())
 
     def test_stale_incomplete_cleanup_retries_finalizing_copy_delete_failure(
         self,
@@ -2200,29 +2289,30 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             final_dir = output_dir / "tr" / "A_Title"
+            finalizing_dir = final_dir / core.FINALIZING_COPY_DIR_NAME
             stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
-            finalizing_copy = (
-                final_dir
-                / f"{core.FALLBACK_FINALIZE_COPY_MARKER}.{stale_dir.name}.tmp"
-            )
-            final_dir.mkdir(parents=True)
+            finalizing_copy = finalizing_dir / f"{stale_dir.name}.tmp"
+            finalizing_dir.mkdir(parents=True)
             stale_dir.mkdir(parents=True)
             finalizing_copy.write_text("partial", encoding="utf-8")
             core._write_staging_metadata(
                 stale_dir,
-                finalizing_copy_paths=(finalizing_copy,),
+                finalizing_copy_dirs=(
+                    Path("tr") / "A_Title" / core.FINALIZING_COPY_DIR_NAME,
+                ),
             )
-            original_unlink = Path.unlink
+            original_unlink = core.os.unlink
 
-            def fail_finalizing_copy_unlink(path: Path, *args, **kwargs) -> None:
-                if path == finalizing_copy:
+            def fail_finalizing_copy_unlink(path, *args, **kwargs) -> None:
+                if (
+                    path == finalizing_copy.name
+                    and kwargs.get("dir_fd") is not None
+                ) or Path(path) == finalizing_copy:
                     raise OSError("cannot delete finalizing copy")
                 return original_unlink(path, *args, **kwargs)
 
-            with patch.object(
-                Path,
-                "unlink",
-                autospec=True,
+            with patch(
+                "dubbed_video_downloader.core.os.unlink",
                 side_effect=fail_finalizing_copy_unlink,
             ):
                 core._cleanup_stale_incomplete_downloads(output_dir)
