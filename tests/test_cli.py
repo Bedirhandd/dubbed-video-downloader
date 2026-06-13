@@ -32,6 +32,32 @@ class CliTests(unittest.TestCase):
             output_path.touch()
         return core.DownloadResult(output_path=output_path)
 
+    @staticmethod
+    def _expected_config_yaml(**overrides: str) -> str:
+        values = {
+            "output_dir": "~/Downloads/dbdvdl-output",
+            "ffmpeg_path": "ffmpeg",
+            "default_lang": "en",
+            "default_download_mode": "video",
+            "default_video_quality": "best",
+            "default_audio_quality": "best",
+            "retry_on_network_failure": "3",
+            "default_exists_behavior": "skip",
+            "ask_for_disk_usage": "false",
+        }
+        values.update(overrides)
+        return (
+            f"output_dir: {values['output_dir']}\n"
+            f"ffmpeg_path: {values['ffmpeg_path']}\n"
+            f"default_lang: {values['default_lang']}\n"
+            f"default_download_mode: {values['default_download_mode']}\n"
+            f"default_video_quality: {values['default_video_quality']}\n"
+            f"default_audio_quality: {values['default_audio_quality']}\n"
+            f"retry_on_network_failure: {values['retry_on_network_failure']}\n"
+            f"default_exists_behavior: {values['default_exists_behavior']}\n"
+            f"ask_for_disk_usage: {values['ask_for_disk_usage']}\n"
+        )
+
     def test_init_writes_default_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.runner.invoke(app, ["init"], env={"HOME": tmpdir})
@@ -45,16 +71,367 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertEqual(
                 config_path.read_text(encoding="utf-8"),
-                "output_dir: ~/Downloads/dbdvdl-output\n"
-                "ffmpeg_path: ffmpeg\n"
-                "default_lang: en\n"
-                "default_download_mode: video\n"
-                "default_video_quality: best\n"
-                "default_audio_quality: best\n"
-                "retry_on_network_failure: 3\n"
-                "default_exists_behavior: skip\n"
-                "ask_for_disk_usage: false\n",
+                self._expected_config_yaml(),
             )
+
+    def test_init_default_writes_config_without_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.shutil.which",
+                    return_value=None,
+                ):
+                    result = self.runner.invoke(
+                        app,
+                        ["init", "--default"],
+                        env={"HOME": tmpdir},
+                    )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(),
+            )
+            self.assertNotIn("(press Enter to use)", result.output)
+            self.assertNotIn(
+                "Downloads will be saved under this directory.",
+                result.output,
+            )
+
+    def test_init_default_allows_partial_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli.shutil.which",
+                return_value=None,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init", "--default", "--default-lang", "tr"],
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(default_lang="tr"),
+            )
+
+    def test_init_default_autodetects_ffmpeg(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli.shutil.which",
+                return_value="/usr/bin/ffmpeg",
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init", "--default"],
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(ffmpeg_path="/usr/bin/ffmpeg"),
+            )
+
+    def test_init_default_ffmpeg_fallback_when_not_found(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli.shutil.which",
+                return_value=None,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init", "--default"],
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(),
+            )
+
+    def test_config_init_default_writes_config_without_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.shutil.which",
+                    return_value=None,
+                ):
+                    result = self.runner.invoke(
+                        app,
+                        ["config", "init", "--default"],
+                        env={"HOME": tmpdir},
+                    )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(),
+            )
+            self.assertNotIn("(press Enter to use)", result.output)
+
+    def test_init_default_still_requires_force_to_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = self.runner.invoke(
+                app,
+                ["init", "--default"],
+                env={"HOME": tmpdir},
+            )
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                second = self.runner.invoke(
+                    app,
+                    ["init", "--default"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertEqual(second.exit_code, 1, second.output)
+        self.assertIn("--force", second.output)
+        self.assertNotIn("Output directory", second.output)
+        self.assertNotIn("(press Enter to use)", second.output)
+
+    def test_init_default_explicit_ffmpeg_path_skips_autodetect(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.shutil.which",
+                    return_value="/usr/bin/ffmpeg",
+                ):
+                    result = self.runner.invoke(
+                        app,
+                        [
+                            "init",
+                            "--default",
+                            "--ffmpeg-path",
+                            "/opt/ffmpeg/bin/ffmpeg",
+                        ],
+                        env={"HOME": tmpdir},
+                    )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(ffmpeg_path="/opt/ffmpeg/bin/ffmpeg"),
+            )
+            self.assertNotIn("(press Enter to use)", result.output)
+
+    def test_init_default_explicit_output_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli.shutil.which",
+                return_value=None,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "init",
+                        "--default",
+                        "--output-dir",
+                        "~/Videos/custom",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(output_dir="~/Videos/custom"),
+            )
+
+    def test_init_default_multiple_explicit_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.shutil.which",
+                    return_value=None,
+                ):
+                    result = self.runner.invoke(
+                        app,
+                        [
+                            "init",
+                            "--default",
+                            "--default-lang",
+                            "tr",
+                            "--default-download-mode",
+                            "audio",
+                            "--default-video-quality",
+                            "720p",
+                            "--default-audio-quality",
+                            "low",
+                            "--retry-on-network-failure",
+                            "0",
+                            "--default-exists-behavior",
+                            "fail",
+                            "--no-ask-for-disk-usage",
+                        ],
+                        env={"HOME": tmpdir},
+                    )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(
+                    default_lang="tr",
+                    default_download_mode="audio",
+                    default_video_quality="720p",
+                    default_audio_quality="low",
+                    retry_on_network_failure="0",
+                    default_exists_behavior="fail",
+                    ask_for_disk_usage="false",
+                ),
+            )
+            self.assertNotIn("(press Enter to use)", result.output)
+
+    def test_init_default_with_force_overwrites_existing_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = self.runner.invoke(
+                app,
+                ["init", "--default"],
+                env={"HOME": tmpdir},
+            )
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                with patch(
+                    "dubbed_video_downloader.cli.shutil.which",
+                    return_value=None,
+                ):
+                    second = self.runner.invoke(
+                        app,
+                        ["init", "--default", "--force", "--default-lang", "tr"],
+                        env={"HOME": tmpdir},
+                    )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(first.exit_code, 0, first.output)
+            self.assertEqual(second.exit_code, 0, second.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(default_lang="tr"),
+            )
+            self.assertNotIn("(press Enter to use)", second.output)
+
+    def test_config_init_default_allows_partial_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli.shutil.which",
+                return_value=None,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["config", "init", "--default", "--default-lang", "tr"],
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                self._expected_config_yaml(default_lang="tr"),
+            )
+
+    def test_interactive_init_explicit_lang_skips_language_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init", "--default-lang", "tr"],
+                    input="\n\n\n\n\n\n\n\n",
+                    env={"HOME": tmpdir},
+                )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("default_lang: tr\n", config_path.read_text(encoding="utf-8"))
+            self.assertNotIn(
+                "Dub language code to use when --lang is omitted.",
+                result.output,
+            )
+            self.assertEqual(result.output.count("(press Enter to use)"), 8)
 
     def test_init_refuses_overwrite_without_force(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

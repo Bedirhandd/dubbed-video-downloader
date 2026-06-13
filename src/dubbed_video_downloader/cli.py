@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sys
 import time
 import traceback
@@ -178,6 +179,10 @@ def _print_prompt_help(
     typer.echo(f"{default} (press Enter to use)")
 
 
+def _default_ffmpeg_path() -> str:
+    return shutil.which("ffmpeg") or app_config.DEFAULT_FFMPEG_PATH
+
+
 def _prompt_value(
     value: str | None,
     prompt: str,
@@ -185,18 +190,27 @@ def _prompt_value(
     *,
     description: str,
     accepted: str,
+    use_defaults: bool = False,
 ) -> str:
     if value is not None:
         return value
+    if use_defaults:
+        return default
     if _stdin_is_interactive():
         _print_prompt_help(prompt, description, accepted, default)
         return str(typer.prompt(prompt, default=default))
     return default
 
 
-def _prompt_retry_on_network_failure(value: int | None) -> int:
+def _prompt_retry_on_network_failure(
+    value: int | None,
+    *,
+    use_defaults: bool = False,
+) -> int:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
     if _stdin_is_interactive():
         _print_prompt_help(
             "Retry on network failure",
@@ -215,9 +229,15 @@ def _prompt_retry_on_network_failure(value: int | None) -> int:
     return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
 
 
-def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
+def _prompt_download_mode(
+    value: DownloadMode | None,
+    *,
+    use_defaults: bool = False,
+) -> DownloadMode | str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_DOWNLOAD_MODE
     if _stdin_is_interactive():
         _print_prompt_help(
             "Default download mode",
@@ -234,9 +254,11 @@ def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
     return app_config.DEFAULT_DOWNLOAD_MODE
 
 
-def _prompt_video_quality(value: str | None) -> str:
+def _prompt_video_quality(value: str | None, *, use_defaults: bool = False) -> str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_VIDEO_QUALITY.label
     if _stdin_is_interactive():
         _print_prompt_help(
             "Default video quality",
@@ -259,9 +281,11 @@ def _prompt_video_quality(value: str | None) -> str:
     return app_config.DEFAULT_VIDEO_QUALITY.label
 
 
-def _prompt_audio_quality(value: str | None) -> str:
+def _prompt_audio_quality(value: str | None, *, use_defaults: bool = False) -> str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_AUDIO_QUALITY.label
     if _stdin_is_interactive():
         _print_prompt_help(
             "Default audio quality",
@@ -280,9 +304,13 @@ def _prompt_audio_quality(value: str | None) -> str:
 
 def _prompt_exists_behavior(
     value: FileExistsBehavior | None,
+    *,
+    use_defaults: bool = False,
 ) -> FileExistsBehavior | str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_EXISTS_BEHAVIOR
     if _stdin_is_interactive():
         _print_prompt_help(
             "Default existing-file behavior",
@@ -299,9 +327,11 @@ def _prompt_exists_behavior(
     return app_config.DEFAULT_EXISTS_BEHAVIOR
 
 
-def _prompt_ask_for_disk_usage(value: bool | None) -> bool:
+def _prompt_ask_for_disk_usage(value: bool | None, *, use_defaults: bool = False) -> bool:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_ASK_FOR_DISK_USAGE
     if _stdin_is_interactive():
         _print_prompt_help(
             "Ask for disk usage",
@@ -464,6 +494,8 @@ def _init_config(
     default_exists_behavior: FileExistsBehavior | None,
     ask_for_disk_usage: bool | None,
     force: bool,
+    *,
+    use_defaults: bool = False,
 ) -> None:
     if not force:
         config_path = app_config.get_config_path()
@@ -482,29 +514,53 @@ def _init_config(
         app_config.DEFAULT_OUTPUT_DIR,
         description="Downloads will be saved under this directory.",
         accepted="absolute path, ~ path, or env-var path.",
+        use_defaults=use_defaults,
     )
-    selected_ffmpeg_path = _prompt_value(
-        ffmpeg_path,
-        "FFmpeg path",
-        app_config.DEFAULT_FFMPEG_PATH,
-        description="Executable used to merge video and dubbed audio.",
-        accepted="`ffmpeg`, `ffmpeg.exe`, or absolute path.",
-    )
+    if ffmpeg_path is not None:
+        selected_ffmpeg_path = ffmpeg_path
+    elif use_defaults:
+        selected_ffmpeg_path = _default_ffmpeg_path()
+    else:
+        selected_ffmpeg_path = _prompt_value(
+            ffmpeg_path,
+            "FFmpeg path",
+            app_config.DEFAULT_FFMPEG_PATH,
+            description="Executable used to merge video and dubbed audio.",
+            accepted="`ffmpeg`, `ffmpeg.exe`, or absolute path.",
+            use_defaults=use_defaults,
+        )
     selected_default_lang = _prompt_value(
         default_lang,
         "Default language",
         app_config.DEFAULT_LANG,
         description="Dub language code to use when --lang is omitted.",
         accepted="non-empty language code, e.g. en, tr, es.",
+        use_defaults=use_defaults,
     )
-    selected_default_download_mode = _prompt_download_mode(default_download_mode)
-    selected_default_video_quality = _prompt_video_quality(default_video_quality)
-    selected_default_audio_quality = _prompt_audio_quality(default_audio_quality)
+    selected_default_download_mode = _prompt_download_mode(
+        default_download_mode,
+        use_defaults=use_defaults,
+    )
+    selected_default_video_quality = _prompt_video_quality(
+        default_video_quality,
+        use_defaults=use_defaults,
+    )
+    selected_default_audio_quality = _prompt_audio_quality(
+        default_audio_quality,
+        use_defaults=use_defaults,
+    )
     selected_retry_on_network_failure = _prompt_retry_on_network_failure(
-        retry_on_network_failure
+        retry_on_network_failure,
+        use_defaults=use_defaults,
     )
-    selected_default_exists_behavior = _prompt_exists_behavior(default_exists_behavior)
-    selected_ask_for_disk_usage = _prompt_ask_for_disk_usage(ask_for_disk_usage)
+    selected_default_exists_behavior = _prompt_exists_behavior(
+        default_exists_behavior,
+        use_defaults=use_defaults,
+    )
+    selected_ask_for_disk_usage = _prompt_ask_for_disk_usage(
+        ask_for_disk_usage,
+        use_defaults=use_defaults,
+    )
     _write_config_or_exit(
         selected_output_dir,
         selected_ffmpeg_path,
@@ -522,6 +578,7 @@ def _init_config(
 def _print_config_recreate_hint() -> None:
     typer.echo("\nYou can create a new config with:")
     typer.echo("  dbdvdl init")
+    typer.echo("  dbdvdl init --default")
     typer.echo(
         "  dbdvdl init --output-dir ~/Videos "
         "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
@@ -762,6 +819,13 @@ def init_command(
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
     ] = False,
+    use_defaults: Annotated[
+        bool,
+        typer.Option(
+            "--default",
+            help="Write config using built-in defaults without prompts.",
+        ),
+    ] = False,
 ) -> None:
     """Create the required user config file."""
     _init_config(
@@ -775,6 +839,7 @@ def init_command(
         default_exists_behavior,
         ask_for_disk_usage,
         force,
+        use_defaults=use_defaults,
     )
 
 
@@ -848,6 +913,13 @@ def config_init_command(
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
     ] = False,
+    use_defaults: Annotated[
+        bool,
+        typer.Option(
+            "--default",
+            help="Write config using built-in defaults without prompts.",
+        ),
+    ] = False,
 ) -> None:
     """Create the required user config file."""
     _init_config(
@@ -861,6 +933,7 @@ def config_init_command(
         default_exists_behavior,
         ask_for_disk_usage,
         force,
+        use_defaults=use_defaults,
     )
 
 
