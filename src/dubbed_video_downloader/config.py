@@ -8,10 +8,12 @@ from typing import Any
 
 import yaml
 
+from . import languages
 from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode as _normalize_download_mode
 from .errors import ConfigError
+from .errors import InvalidLanguageCodeError
 from .exists_behavior import FileExistsBehavior
 from .exists_behavior import normalize_exists_behavior as _normalize_exists_behavior
 
@@ -216,7 +218,11 @@ def normalize_ffmpeg_path(value: str) -> str:
 
 
 def normalize_default_lang(value: str) -> str:
-    return _clean_string(value, "default_lang")
+    text = _clean_string(value, "default_lang")
+    try:
+        return languages.normalize_language_code(text, field="default_lang")
+    except InvalidLanguageCodeError as exc:
+        raise ConfigError(str(exc)) from exc
 
 
 def normalize_download_mode(value: Any) -> DownloadMode:

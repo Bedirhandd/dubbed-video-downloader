@@ -5,6 +5,7 @@ description = "Download YouTube videos or audio with a selected dubbed audio tra
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "langcodes==3.5.1",
     "PyYAML>=6.0.2",
     "rich>=15.0.0",
     "typer>=0.12.0",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,8 +12,26 @@ from dubbed_video_downloader import cli
 from dubbed_video_downloader import config
 from dubbed_video_downloader import core
 from dubbed_video_downloader import errors
+from dubbed_video_downloader import languages
 from dubbed_video_downloader import quality
 from dubbed_video_downloader.cli import app
+
+
+def _plain_cli_output(text: str) -> str:
+    without_ansi = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    return without_ansi.replace("\n", " ")
+
+
+def _audio_inventory(
+    *langs: str,
+    skipped_invalid_count: int = 0,
+    skipped_invalid_tags: tuple[str, ...] = (),
+) -> languages.AudioLanguageInventory:
+    return languages.AudioLanguageInventory(
+        langs=frozenset(langs),
+        skipped_invalid_count=skipped_invalid_count,
+        skipped_invalid_tags=skipped_invalid_tags,
+    )
 
 
 class CliTests(unittest.TestCase):
@@ -505,7 +524,7 @@ class CliTests(unittest.TestCase):
                 result.output,
             )
             self.assertIn(
-                "Accepted: non-empty language code, e.g. en, tr, es.",
+                "Accepted: BCP-47 language code, e.g. en, eng, en-US, tr.",
                 result.output,
             )
             self.assertIn("Which type of output to download", result.output)
@@ -655,6 +674,26 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertIn(
                 "default_lang: tr\n",
+                config_path.read_text(encoding="utf-8"),
+            )
+
+    def test_init_writes_normalized_default_lang(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self.runner.invoke(
+                app,
+                ["init", "--default-lang", "eng"],
+                env={"HOME": tmpdir},
+            )
+            config_path = (
+                Path(tmpdir)
+                / ".config"
+                / "dubbed-video-downloader"
+                / "config.yaml"
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn(
+                "default_lang: en\n",
                 config_path.read_text(encoding="utf-8"),
             )
 
@@ -1019,17 +1058,18 @@ class CliTests(unittest.TestCase):
 
     def test_download_help_includes_dry_run_and_verbose(self) -> None:
         result = self.runner.invoke(app, ["download", "--help"])
+        plain_output = _plain_cli_output(result.output)
 
         self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("--dry-run", result.output)
-        self.assertIn("--verbose", result.output)
-        self.assertIn("--debug", result.output)
-        self.assertIn("--mode", result.output)
-        self.assertIn("--video-quality", result.output)
-        self.assertIn("--audio-quality", result.output)
-        self.assertIn("--retry-on-network", result.output)
-        self.assertIn("--if-exists", result.output)
-        self.assertIn("--yes", result.output)
+        self.assertIn("dry-run", plain_output)
+        self.assertIn("verbose", plain_output)
+        self.assertIn("debug", plain_output)
+        self.assertIn("mode", plain_output)
+        self.assertIn("video-quality", plain_output)
+        self.assertIn("audio-quality", plain_output)
+        self.assertIn("retry-on-network", plain_output)
+        self.assertIn("if-exists", plain_output)
+        self.assertIn("yes", plain_output)
         self.assertIn("Overrides config", result.output)
         self.assertIn("default.", result.output)
         self.assertNotIn("[default: tr]", result.output)
@@ -1479,6 +1519,7 @@ class CliTests(unittest.TestCase):
                 plan = core.DownloadPlan(
                     url=kwargs["url"],
                     lang=kwargs["lang"],
+                    resolved_lang=kwargs["lang"],
                     title="Title",
                     uploader="Channel",
                     available_langs=("en",),
@@ -1566,6 +1607,7 @@ class CliTests(unittest.TestCase):
                 plan = core.DownloadPlan(
                     url=kwargs["url"],
                     lang=kwargs["lang"],
+                    resolved_lang=kwargs["lang"],
                     title="Title",
                     uploader="Channel",
                     available_langs=("en",),
@@ -1723,7 +1765,7 @@ class CliTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.exit_code, 2, result.output)
-        self.assertIn("--if-exists", result.output)
+        self.assertIn("if-exists", _plain_cli_output(result.output))
         download.assert_not_called()
 
     def test_download_dry_run_requires_config_before_network_work(self) -> None:
@@ -1769,6 +1811,7 @@ class CliTests(unittest.TestCase):
                     return_value=core.DownloadPlan(
                         url="https://www.youtube.com/watch?v=EXAMPLE",
                         lang="en",
+                        resolved_lang="en",
                         title="Title",
                         uploader="Channel",
                         available_langs=("en",),
@@ -1847,7 +1890,7 @@ class CliTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.exit_code, 2, result.output)
-        self.assertIn("--mode", result.output)
+        self.assertIn("mode", result.output)
         self.assertIn("mp3", result.output)
         download.assert_not_called()
 
@@ -1970,6 +2013,7 @@ class CliTests(unittest.TestCase):
                     return_value=core.DownloadPlan(
                         url="https://www.youtube.com/watch?v=EXAMPLE",
                         lang="en",
+                        resolved_lang="en",
                         download_mode=core.DownloadMode.AUDIO,
                         title="Title",
                         uploader="Channel",
@@ -2038,6 +2082,7 @@ class CliTests(unittest.TestCase):
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
+                    resolved_lang="en",
                     download_mode=core.DownloadMode.VIDEO,
                     title="Title",
                     uploader="Channel",
@@ -2086,6 +2131,7 @@ class CliTests(unittest.TestCase):
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
+                    resolved_lang="en",
                     title="Title",
                     uploader="Channel",
                     available_langs=("en",),
@@ -2129,6 +2175,7 @@ class CliTests(unittest.TestCase):
                 return_value=core.DownloadPlan(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
+                    resolved_lang="en",
                     download_mode=core.DownloadMode.VIDEO,
                     title="Title",
                     uploader="Channel",
@@ -2240,7 +2287,7 @@ class CliTests(unittest.TestCase):
     def test_langs_requires_config_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch(
-                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url"
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url"
             ) as langs:
                 result = self.runner.invoke(
                     app,
@@ -2254,11 +2301,12 @@ class CliTests(unittest.TestCase):
 
     def test_langs_help_includes_verbose(self) -> None:
         result = self.runner.invoke(app, ["langs", "--help"])
+        plain_output = _plain_cli_output(result.output)
 
         self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("--verbose", result.output)
-        self.assertIn("--debug", result.output)
-        self.assertIn("--retry-on-network", result.output)
+        self.assertIn("verbose", plain_output)
+        self.assertIn("debug", plain_output)
+        self.assertIn("retry-on-network", plain_output)
 
     def test_langs_passes_verbose_false_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2275,8 +2323,8 @@ class CliTests(unittest.TestCase):
             )
 
             with patch(
-                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
-                return_value={"tr", "en"},
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url",
+                return_value=_audio_inventory("tr", "en"),
             ) as langs:
                 result = self.runner.invoke(
                     app,
@@ -2310,8 +2358,8 @@ class CliTests(unittest.TestCase):
             )
 
             with patch(
-                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
-                return_value={"tr"},
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url",
+                return_value=_audio_inventory("tr"),
             ) as langs:
                 result = self.runner.invoke(
                     app,
@@ -2348,8 +2396,8 @@ class CliTests(unittest.TestCase):
             )
 
             with patch(
-                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
-                return_value={"tr"},
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url",
+                return_value=_audio_inventory("tr"),
             ) as langs:
                 result = self.runner.invoke(
                     app,
@@ -2384,7 +2432,7 @@ class CliTests(unittest.TestCase):
             )
 
             with patch(
-                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url",
                 side_effect=errors.MetadataExtractionError("metadata failed"),
             ) as langs:
                 result = self.runner.invoke(
@@ -2413,7 +2461,7 @@ class CliTests(unittest.TestCase):
             )
 
             with patch(
-                "dubbed_video_downloader.cli.core.get_available_audio_langs_for_url",
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url",
                 side_effect=errors.MetadataExtractionError("metadata failed"),
             ) as langs:
                 result = self.runner.invoke(
@@ -2526,6 +2574,7 @@ class CliTests(unittest.TestCase):
                 return_value=core.QualityReport(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
+                    resolved_lang="tr",
                     title="Title",
                     uploader="Channel",
                     available_langs=("en", "tr"),

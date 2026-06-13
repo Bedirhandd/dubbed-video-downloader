@@ -16,6 +16,7 @@ from . import config as app_config
 from . import core
 from . import doctor
 from . import errors
+from . import languages
 from . import quality
 from .download_mode import DownloadMode
 from .exists_behavior import FileExistsBehavior
@@ -534,7 +535,7 @@ def _init_config(
         "Default language",
         app_config.DEFAULT_LANG,
         description="Dub language code to use when --lang is omitted.",
-        accepted="non-empty language code, e.g. en, tr, es.",
+        accepted="BCP-47 language code, e.g. en, eng, en-US, tr.",
         use_defaults=use_defaults,
     )
     selected_default_download_mode = _prompt_download_mode(
@@ -600,6 +601,30 @@ def _print_command_header(action: str, url: str) -> None:
     typer.echo(f": {url}")
 
 
+def _print_skipped_invalid_tracks_warning(skipped_invalid_count: int) -> None:
+    if skipped_invalid_count <= 0:
+        return
+    warning = languages.skipped_tracks_warning(
+        languages.AudioLanguageInventory(
+            langs=frozenset(),
+            skipped_invalid_count=skipped_invalid_count,
+            skipped_invalid_tags=(),
+        )
+    )
+    if warning is not None:
+        typer.secho(warning, fg=typer.colors.YELLOW, err=True)
+
+
+def _print_language_selection(canonical_lang: str, resolved_lang: str) -> None:
+    if resolved_lang.casefold() != canonical_lang.casefold():
+        _print_label_value(
+            "Language",
+            f"{canonical_lang} (track: {resolved_lang})",
+        )
+        return
+    _print_label_value("Language", canonical_lang)
+
+
 def _print_download_plan(plan: core.DownloadPlan) -> None:
     typer.secho("Dry run", fg=typer.colors.YELLOW, bold=True, nl=False)
     typer.echo(": no files will be downloaded or created.")
@@ -607,7 +632,8 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
         _print_label_value("Title", plan.title)
     if plan.uploader:
         _print_label_value("Channel", plan.uploader)
-    _print_label_value("Language", plan.lang)
+    _print_language_selection(plan.lang, plan.resolved_lang)
+    _print_skipped_invalid_tracks_warning(plan.skipped_invalid_count)
     _print_label_value("Mode", plan.download_mode.value)
     if plan.video_quality:
         _print_label_value(
@@ -649,7 +675,8 @@ def _print_quality_report(report: core.QualityReport) -> None:
         _print_label_value("Title", report.title)
     if report.uploader:
         _print_label_value("Channel", report.uploader)
-    _print_label_value("Language", report.lang)
+    _print_language_selection(report.lang, report.resolved_lang)
+    _print_skipped_invalid_tracks_warning(report.skipped_invalid_count)
     if report.available_langs:
         _print_label_value("Available languages", ", ".join(report.available_langs))
     _print_label_value(
@@ -1269,6 +1296,9 @@ def download_command(
                         download_kwargs["approval_callback"] = approval_callback
                     download_result = core.download(**download_kwargs)
                 if isinstance(download_result, core.DownloadResult):
+                    _print_skipped_invalid_tracks_warning(
+                        download_result.skipped_invalid_count
+                    )
                     _print_quality_notes(download_result.quality_notes)
                     if download_result.status == core.DownloadStatus.CANCELLED:
                         typer.secho("Cancelled", fg=typer.colors.YELLOW, bold=True)
@@ -1336,7 +1366,7 @@ def langs_command(
         else loaded_config.retry_on_network_failure
     )
     try:
-        langs = core.get_available_audio_langs_for_url(
+        inventory = core.get_audio_language_inventory_for_url(
             url,
             verbose=verbose,
             debug=debug,
@@ -1345,11 +1375,22 @@ def langs_command(
     except errors.DubbedVideoDownloaderError as exc:
         _print_command_error(exc, debug=debug)
         raise typer.Exit(code=1) from exc
-    if not langs:
-        typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
+    if not inventory.langs:
+        if inventory.skipped_invalid_count > 0:
+            skipped = ", ".join(dict.fromkeys(inventory.skipped_invalid_tags))
+            detail = f" (skipped: {skipped})" if skipped else ""
+            typer.secho(
+                "Audio tracks were found but none have a valid language tag"
+                f"{detail}.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+        else:
+            typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
         raise typer.Exit(code=1)
 
-    for lang in sorted(langs):
+    _print_skipped_invalid_tracks_warning(inventory.skipped_invalid_count)
+    for lang in languages.display_language_tags(inventory.langs):
         typer.echo(lang)
 
 

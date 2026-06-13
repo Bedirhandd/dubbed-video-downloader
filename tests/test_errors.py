@@ -13,6 +13,7 @@ class ErrorTests(unittest.TestCase):
             errors.ConfigError,
             errors.QualityError,
             errors.MetadataExtractionError,
+            errors.InvalidLanguageCodeError,
             errors.LanguageNotFoundError,
             errors.DownloadError,
         ):

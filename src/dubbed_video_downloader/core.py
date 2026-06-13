@@ -23,6 +23,7 @@ import yt_dlp
 from yt_dlp.utils import YoutubeDLError
 
 from . import errors
+from . import languages
 from . import quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode
@@ -110,6 +111,7 @@ class DownloadProgress:
 class DownloadPlan:
     url: str
     lang: str
+    resolved_lang: str
     title: str | None
     uploader: str | None
     available_langs: tuple[str, ...]
@@ -123,6 +125,7 @@ class DownloadPlan:
     exists_behavior: FileExistsBehavior = DEFAULT_EXISTS_BEHAVIOR
     output_exists: bool = False
     estimated_size_bytes: int | None = None
+    skipped_invalid_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -130,17 +133,20 @@ class DownloadResult:
     status: DownloadStatus = DownloadStatus.DOWNLOADED
     output_path: Path | None = None
     quality_notes: tuple[str, ...] = ()
+    skipped_invalid_count: int = 0
 
 
 @dataclass(frozen=True)
 class QualityReport:
     url: str
     lang: str
+    resolved_lang: str
     title: str | None
     uploader: str | None
     available_langs: tuple[str, ...]
     video_qualities: tuple[str, ...]
     audio_qualities: tuple[str, ...]
+    skipped_invalid_count: int = 0
 
 
 def ydl_base_opts() -> dict[str, Any]:
@@ -182,15 +188,31 @@ def get_video_info(
 
 def get_available_audio_langs(info: dict[str, Any]) -> set[str]:
     """Return the set of available audio languages for this video."""
-    langs = set()
-    for format_info in info.get("formats", []):
-        if format_info.get("vcodec") == "none" and format_info.get("acodec") not in (
-            None,
-            "none",
-        ):
-            if format_info.get("language"):
-                langs.add(format_info["language"])
-    return langs
+    return set(collect_audio_language_inventory(info).langs)
+
+
+def collect_audio_language_inventory(
+    info: dict[str, Any],
+) -> languages.AudioLanguageInventory:
+    """Return validated audio language metadata for this video."""
+    return languages.collect_available_audio_langs(info)
+
+
+def get_audio_language_inventory_for_url(
+    url: str,
+    verbose: bool = False,
+    debug: bool = False,
+    retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
+) -> languages.AudioLanguageInventory:
+    """Fetch video metadata and return validated audio language inventory."""
+    return collect_audio_language_inventory(
+        get_video_info(
+            url,
+            verbose=verbose,
+            debug=debug,
+            retry_on_network_failure=retry_on_network_failure,
+        )
+    )
 
 
 def get_available_audio_langs_for_url(
@@ -210,6 +232,19 @@ def get_available_audio_langs_for_url(
     )
 
 
+def _resolve_video_language(
+    info: dict[str, Any],
+    canonical_lang: str,
+) -> tuple[languages.AudioLanguageInventory, str]:
+    inventory = collect_audio_language_inventory(info)
+    resolved_lang = languages.resolve_language_for_video(
+        canonical_lang,
+        inventory,
+        title=_optional_string(info.get("title")),
+    )
+    return inventory, resolved_lang
+
+
 def get_quality_report(
     url: str,
     lang: str,
@@ -224,35 +259,27 @@ def get_quality_report(
         debug=debug,
         retry_on_network_failure=retry_on_network_failure,
     )
-    ensure_lang(info, lang)
-    audio_candidates = quality.get_audio_quality_candidates(info, lang)
+    inventory, resolved_lang = _resolve_video_language(info, lang)
+    audio_candidates = quality.get_audio_quality_candidates(info, resolved_lang)
     return QualityReport(
         url=url,
         lang=lang,
+        resolved_lang=resolved_lang,
         title=_optional_string(info.get("title")),
         uploader=_optional_string(info.get("uploader")),
-        available_langs=tuple(sorted(get_available_audio_langs(info))),
+        available_langs=languages.display_language_tags(inventory.langs),
         video_qualities=quality.format_video_quality_labels(
             quality.get_available_video_heights(info)
         ),
         audio_qualities=quality.format_audio_quality_labels(audio_candidates),
+        skipped_invalid_count=inventory.skipped_invalid_count,
     )
 
 
-def ensure_lang(info: dict[str, Any], target: str) -> None:
+def ensure_lang(info: dict[str, Any], target: str) -> str:
     """Raise an error if the requested dub language is not available."""
-    langs = get_available_audio_langs(info)
-    if target not in langs:
-        title = info.get("title")
-        if not langs:
-            raise errors.LanguageNotFoundError(
-                f"No multi-language audio tracks found for '{title}'."
-            )
-        raise errors.LanguageNotFoundError(
-            f"Requested dub language not found for '{title}'.\n"
-            f"Requested: {target}\n"
-            f"Available: {', '.join(sorted(langs))}"
-        )
+    _, resolved_lang = _resolve_video_language(info, target)
+    return resolved_lang
 
 
 def outtmpl(lang: str, output_dir: str | Path = DEFAULT_OUTPUT_DIR) -> str:
@@ -285,10 +312,10 @@ def plan_download(
         debug=debug,
         retry_on_network_failure=retry_on_network_failure,
     )
-    ensure_lang(info, lang)
+    inventory, resolved_lang = _resolve_video_language(info, lang)
     quality_selection = quality.resolve_quality_selection(
         info=info,
-        lang=lang,
+        lang=resolved_lang,
         download_mode=selected_download_mode,
         video_quality=video_quality,
         audio_quality=audio_quality,
@@ -296,7 +323,7 @@ def plan_download(
     selected_info: list[dict[str, Any]] = []
     output_path = _planned_output_path(
         info=info,
-        lang=lang,
+        lang=resolved_lang,
         download_mode=selected_download_mode,
         ffmpeg_path=ffmpeg_path,
         output_dir=output_dir,
@@ -312,6 +339,7 @@ def plan_download(
     return DownloadPlan(
         url=url,
         lang=lang,
+        resolved_lang=resolved_lang,
         download_mode=selected_download_mode,
         video_quality=(
             quality_selection.video_quality.label
@@ -324,13 +352,14 @@ def plan_download(
         quality_notes=quality_selection.notes,
         title=_optional_string(info.get("title")),
         uploader=_optional_string(info.get("uploader")),
-        available_langs=tuple(sorted(get_available_audio_langs(info))),
+        available_langs=languages.display_language_tags(inventory.langs),
         output_path=output_path,
         exists_behavior=selected_exists_behavior,
         output_exists=output_exists,
         estimated_size_bytes=_estimated_download_size_bytes(
             selected_info[0] if selected_info else None
         ),
+        skipped_invalid_count=inventory.skipped_invalid_count,
     )
 
 
@@ -362,11 +391,11 @@ def download(
         retry_on_network_failure=retry_on_network_failure,
     )
     _report_download_stage(stage_callback, DownloadStage.CHECKING_LANGUAGES)
-    ensure_lang(info, lang)
+    inventory, resolved_lang = _resolve_video_language(info, lang)
     _report_download_stage(stage_callback, DownloadStage.SELECTING_QUALITIES)
     quality_selection = quality.resolve_quality_selection(
         info=info,
-        lang=lang,
+        lang=resolved_lang,
         download_mode=selected_download_mode,
         video_quality=video_quality,
         audio_quality=audio_quality,
@@ -375,7 +404,7 @@ def download(
     selected_info: list[dict[str, Any]] = []
     output_path = _planned_output_path(
         info=info,
-        lang=lang,
+        lang=resolved_lang,
         download_mode=selected_download_mode,
         ffmpeg_path=ffmpeg_path,
         output_dir=output_dir,
@@ -389,6 +418,7 @@ def download(
     download_plan = DownloadPlan(
         url=url,
         lang=lang,
+        resolved_lang=resolved_lang,
         download_mode=selected_download_mode,
         video_quality=(
             quality_selection.video_quality.label
@@ -401,13 +431,14 @@ def download(
         quality_notes=quality_selection.notes,
         title=_optional_string(info.get("title")),
         uploader=_optional_string(info.get("uploader")),
-        available_langs=tuple(sorted(get_available_audio_langs(info))),
+        available_langs=languages.display_language_tags(inventory.langs),
         output_path=output_path,
         exists_behavior=selected_exists_behavior,
         output_exists=_output_path_exists(output_path),
         estimated_size_bytes=_estimated_download_size_bytes(
             selected_info[0] if selected_info else None
         ),
+        skipped_invalid_count=inventory.skipped_invalid_count,
     )
     if _handle_existing_output(output_path, selected_exists_behavior):
         _report_download_stage(
@@ -418,12 +449,14 @@ def download(
             status=DownloadStatus.SKIPPED,
             output_path=output_path,
             quality_notes=quality_selection.notes,
+            skipped_invalid_count=inventory.skipped_invalid_count,
         )
     if approval_callback is not None and not approval_callback(download_plan):
         return DownloadResult(
             status=DownloadStatus.CANCELLED,
             output_path=output_path,
             quality_notes=quality_selection.notes,
+            skipped_invalid_count=inventory.skipped_invalid_count,
         )
 
     _report_download_stage(stage_callback, DownloadStage.PREPARING_OUTPUT_DIR)
@@ -441,7 +474,7 @@ def download(
                 try:
                     with yt_dlp.YoutubeDL(
                         _download_ydl_opts(
-                            lang=lang,
+                            lang=resolved_lang,
                             download_mode=selected_download_mode,
                             ffmpeg_path=ffmpeg_path,
                             output_dir=staging_run.output_dir,
@@ -479,11 +512,13 @@ def download(
             status=DownloadStatus.SKIPPED,
             output_path=output_path,
             quality_notes=quality_selection.notes,
+            skipped_invalid_count=inventory.skipped_invalid_count,
         )
     return DownloadResult(
         status=DownloadStatus.DOWNLOADED,
         output_path=output_path,
         quality_notes=quality_selection.notes,
+        skipped_invalid_count=inventory.skipped_invalid_count,
     )
 
 

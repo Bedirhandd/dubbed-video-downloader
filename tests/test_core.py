@@ -576,6 +576,47 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Requested: tr", str(context.exception))
         self.assertIn("Available: en", str(context.exception))
 
+    def test_plan_download_resolves_language_variants(self) -> None:
+        info = {
+            "id": "EXAMPLE",
+            "extractor": "youtube",
+            "title": "A Title",
+            "uploader": "Example Channel",
+            "formats": [
+                {
+                    "format_id": "video",
+                    "vcodec": "vp9",
+                    "acodec": "none",
+                    "ext": "webm",
+                    "url": "https://example.test/video.webm",
+                    "height": 720,
+                    "tbr": 500,
+                },
+                {
+                    "format_id": "en-us-audio",
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "en-US",
+                    "ext": "m4a",
+                    "url": "https://example.test/en-us.m4a",
+                    "tbr": 128,
+                },
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir) / "planned-output"
+            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+                plan = core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="en",
+                    output_dir=output_dir,
+                )
+
+        self.assertEqual(plan.lang, "en")
+        self.assertEqual(plan.resolved_lang, "en-US")
+        self.assertIn("en-US", str(plan.output_path))
+
     def test_download_suppresses_warnings_by_default(self) -> None:
         info = {
             "title": "A Title",

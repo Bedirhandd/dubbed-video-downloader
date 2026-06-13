@@ -170,6 +170,16 @@ class ConfigTests(unittest.TestCase):
 
         self.assertIn("default_lang", str(context.exception))
 
+    def test_default_lang_normalizes_aliases(self) -> None:
+        self.assertEqual(config.normalize_default_lang("eng"), "en")
+        self.assertEqual(config.normalize_default_lang("en_uk"), "en-GB")
+
+    def test_invalid_default_lang_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_default_lang("jp")
+
+        self.assertIn("default_lang", str(context.exception))
+
     def test_download_mode_accepts_video_and_audio(self) -> None:
         self.assertEqual(
             config.normalize_download_mode("video"),
