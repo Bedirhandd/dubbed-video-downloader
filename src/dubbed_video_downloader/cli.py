@@ -115,6 +115,14 @@ def _normalize_default_lang_or_exit(value: str) -> str:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_lang_or_exit(value: str) -> str:
+    try:
+        return languages.normalize_language_code(value, field="--lang")
+    except errors.InvalidLanguageCodeError as exc:
+        typer.secho(f"Input error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
 def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
     try:
         return app_config.normalize_download_mode(value)
@@ -1185,7 +1193,7 @@ def download_command(
         )
         ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
         effective_lang = (
-            _normalize_default_lang_or_exit(lang)
+            _normalize_lang_or_exit(lang)
             if lang is not None
             else loaded_config.default_lang
         )
@@ -1437,7 +1445,7 @@ def qualities_command(
     """Show available video qualities and dubbed audio quality candidates."""
     loaded_config = _load_config_or_exit()
     effective_lang = (
-        _normalize_default_lang_or_exit(lang)
+        _normalize_lang_or_exit(lang)
         if lang is not None
         else loaded_config.default_lang
     )

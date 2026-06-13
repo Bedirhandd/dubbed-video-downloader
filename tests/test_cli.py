@@ -1894,6 +1894,72 @@ class CliTests(unittest.TestCase):
         self.assertIn("mp3", result.output)
         download.assert_not_called()
 
+    def test_download_rejects_invalid_lang_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--lang",
+                        "jp",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("Input error:", result.output)
+        self.assertIn("--lang", result.output)
+        self.assertNotIn("default_lang", result.output)
+        self.assertNotIn("Config error:", result.output)
+        download.assert_not_called()
+
+    def test_qualities_rejects_invalid_lang_before_network_work(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.get_quality_report") as report:
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "qualities",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--lang",
+                        "jp",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("Input error:", result.output)
+        self.assertIn("--lang", result.output)
+        self.assertNotIn("default_lang", result.output)
+        self.assertNotIn("Config error:", result.output)
+        report.assert_not_called()
+
     def test_download_rejects_video_quality_in_audio_mode_before_network_work(
         self,
     ) -> None:
