@@ -95,7 +95,15 @@ class DownloadStage(str, Enum):
 
 
 DownloadStageCallback = Callable[[DownloadStage], None]
+DownloadProgressCallback = Callable[["DownloadProgress"], None]
 DownloadApprovalCallback = Callable[["DownloadPlan"], bool]
+
+
+@dataclass(frozen=True)
+class DownloadProgress:
+    speed_bytes_per_sec: float | None
+    eta_seconds: int | None
+    percent: float | None
 
 
 @dataclass(frozen=True)
@@ -340,6 +348,7 @@ def download(
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
     exists_behavior: FileExistsBehavior | str = DEFAULT_EXISTS_BEHAVIOR,
     stage_callback: DownloadStageCallback | None = None,
+    progress_callback: DownloadProgressCallback | None = None,
     approval_callback: DownloadApprovalCallback | None = None,
 ) -> DownloadResult:
     """Download a single URL with the specified dub language and mode."""
@@ -443,6 +452,7 @@ def download(
                             retry_on_network_failure=retry_on_network_failure,
                             exists_behavior=selected_exists_behavior,
                             stage_callback=stage_callback,
+                            progress_callback=progress_callback,
                         )
                     ) as ydl:
                         ydl.download([url])
@@ -490,6 +500,7 @@ def _download_ydl_opts(
     retry_on_network_failure: int,
     exists_behavior: FileExistsBehavior | str | None = None,
     stage_callback: DownloadStageCallback | None = None,
+    progress_callback: DownloadProgressCallback | None = None,
 ) -> dict[str, Any]:
     selected_download_mode = normalize_download_mode(download_mode)
     ydl_opts: dict[str, Any] = {
@@ -511,20 +522,49 @@ def _download_ydl_opts(
         )
     if ffmpeg_path:
         ydl_opts["ffmpeg_location"] = str(ffmpeg_path)
-    if stage_callback is not None:
-        ydl_opts["progress_hooks"] = [_make_progress_hook(stage_callback)]
-        ydl_opts["postprocessor_hooks"] = [
-            _make_postprocessor_hook(stage_callback, selected_download_mode)
+    if stage_callback is not None or progress_callback is not None:
+        ydl_opts["progress_hooks"] = [
+            _make_progress_hook(stage_callback, progress_callback)
         ]
+        if stage_callback is not None:
+            ydl_opts["postprocessor_hooks"] = [
+                _make_postprocessor_hook(stage_callback, selected_download_mode)
+            ]
     return ydl_opts
 
 
+def _parse_download_progress(progress: dict[str, Any]) -> DownloadProgress | None:
+    if progress.get("status") != "downloading":
+        return None
+
+    downloaded_bytes = progress.get("downloaded_bytes")
+    total_bytes = progress.get("total_bytes") or progress.get("total_bytes_estimate")
+    percent: float | None = None
+    if downloaded_bytes is not None and total_bytes:
+        percent = min(100.0, max(0.0, downloaded_bytes / total_bytes * 100))
+
+    speed = progress.get("speed")
+    eta = progress.get("eta")
+    return DownloadProgress(
+        speed_bytes_per_sec=float(speed) if speed is not None else None,
+        eta_seconds=int(eta) if eta is not None else None,
+        percent=percent,
+    )
+
+
 def _make_progress_hook(
-    stage_callback: DownloadStageCallback,
+    stage_callback: DownloadStageCallback | None,
+    progress_callback: DownloadProgressCallback | None = None,
 ) -> Callable[[dict[str, Any]], None]:
     def progress_hook(progress: dict[str, Any]) -> None:
-        if progress.get("status") == "downloading":
+        if progress.get("status") != "downloading":
+            return
+        if stage_callback is not None:
             stage_callback(DownloadStage.DOWNLOADING_MEDIA)
+        if progress_callback is not None:
+            parsed = _parse_download_progress(progress)
+            if parsed is not None:
+                progress_callback(parsed)
 
     return progress_hook
 
@@ -1772,6 +1812,7 @@ def _yt_dlp_output_opts(
         "quiet": True,
         "no_warnings": True,
         "verbose": False,
+        "noprogress": True,
     }
 
 

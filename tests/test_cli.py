@@ -716,6 +716,7 @@ class CliTests(unittest.TestCase):
             retry_on_network_failure=6,
             exists_behavior=config.FileExistsBehavior.OVERWRITE,
             stage_callback=ANY,
+            progress_callback=ANY,
         )
 
     def test_download_interactive_status_passes_stage_callback(self) -> None:
@@ -725,6 +726,7 @@ class CliTests(unittest.TestCase):
             def __init__(self, console: object, *, enabled: bool) -> None:
                 self.enabled = enabled
                 self.stages: list[core.DownloadStage] = []
+                self.progress_updates: list[core.DownloadProgress] = []
                 self.finish_called = False
                 self.fail_called = False
                 self.instances.append(self)
@@ -740,6 +742,9 @@ class CliTests(unittest.TestCase):
 
             def update(self, stage: core.DownloadStage) -> None:
                 self.stages.append(stage)
+
+            def update_progress(self, progress: core.DownloadProgress) -> None:
+                self.progress_updates.append(progress)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
@@ -787,7 +792,83 @@ class CliTests(unittest.TestCase):
         callback = download.call_args.kwargs["stage_callback"]
         callback(core.DownloadStage.DOWNLOADING_MEDIA)
         self.assertEqual(download_renderer.stages, [core.DownloadStage.DOWNLOADING_MEDIA])
+        progress = core.DownloadProgress(
+            speed_bytes_per_sec=4_500_000,
+            eta_seconds=3897,
+            percent=13.0,
+        )
+        download.call_args.kwargs["progress_callback"](progress)
+        self.assertEqual(download_renderer.progress_updates, [progress])
         self.assertTrue(download_renderer.finish_called)
+
+    def test_format_download_progress_helpers(self) -> None:
+        progress = core.DownloadProgress(
+            speed_bytes_per_sec=4_500_000,
+            eta_seconds=3897,
+            percent=13.2,
+        )
+        self.assertEqual(cli._format_download_speed(4_500_000), "4.5 MB/s")
+        self.assertEqual(cli._format_download_speed(None), "? MB/s")
+        self.assertEqual(cli._format_download_eta(3897), "01:04:57")
+        self.assertEqual(cli._format_download_eta(None), "--:--:--")
+        self.assertEqual(cli._format_download_percent(13.2), "13% Completed")
+        self.assertEqual(cli._format_download_percent(None), "?% Completed")
+        self.assertEqual(
+            cli._format_download_progress(progress),
+            "4.5 MB/s - ETA: 01:04:57 - 13% Completed",
+        )
+
+    def test_download_status_renderer_updates_progress_during_download(self) -> None:
+        class FakeStatus:
+            def __init__(self, text: str, spinner: str) -> None:
+                self.text = text
+                self.spinner = spinner
+                self.started = False
+                self.stopped = False
+                self.updates: list[str] = []
+
+            def start(self) -> None:
+                self.started = True
+
+            def stop(self) -> None:
+                self.stopped = True
+
+            def update(self, text: str) -> None:
+                self.updates.append(text)
+
+        class FakeConsole:
+            def __init__(self) -> None:
+                self.prints: list[tuple[str, bool]] = []
+                self.statuses: list[FakeStatus] = []
+
+            def print(self, text: str, *, markup: bool) -> None:
+                self.prints.append((text, markup))
+
+            def status(self, text: str, *, spinner: str) -> FakeStatus:
+                status = FakeStatus(text, spinner)
+                self.statuses.append(status)
+                return status
+
+        fake_console = FakeConsole()
+        renderer = cli._DownloadStatusRenderer(fake_console, enabled=True)
+        progress = core.DownloadProgress(
+            speed_bytes_per_sec=4_500_000,
+            eta_seconds=3897,
+            percent=13.0,
+        )
+
+        renderer.update(core.DownloadStage.DOWNLOADING_MEDIA)
+        with patch("dubbed_video_downloader.cli.time.monotonic", side_effect=[0.0, 0.0, 1.0]):
+            renderer.update_progress(progress)
+            renderer.update_progress(progress)
+
+        status = fake_console.statuses[0]
+        self.assertEqual(
+            status.updates,
+            [
+                "Downloading media...  4.5 MB/s - ETA: 01:04:57 - 13% Completed",
+            ],
+        )
 
     def test_download_status_renderer_prints_completed_and_failed_stages(self) -> None:
         class FakeStatus:

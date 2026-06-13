@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Annotated
@@ -37,6 +38,7 @@ Examples:
 """
 
 DOWNLOAD_STATUS_SPINNER = "bouncingBar"
+DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECONDS = 0.25
 
 DOWNLOAD_STAGE_TEXT = {
     core.DownloadStage.CHECKING_CONFIG: "Checking configuration...",
@@ -324,6 +326,7 @@ class _DownloadStatusRenderer:
         self._console = console
         self._status: Status | None = None
         self._current_stage: core.DownloadStage | None = None
+        self._last_progress_update_at: float | None = None
 
     def __enter__(self) -> _DownloadStatusRenderer:
         return self
@@ -342,6 +345,7 @@ class _DownloadStatusRenderer:
             self._print_stage_marker("done", self._current_stage)
 
         self._current_stage = stage
+        self._last_progress_update_at = None
         text = _download_stage_text(stage)
         if self._status is None:
             self._status = self._console.status(
@@ -351,6 +355,29 @@ class _DownloadStatusRenderer:
             self._status.start()
         else:
             self._status.update(text)
+
+    def update_progress(self, progress: core.DownloadProgress) -> None:
+        if (
+            not self.enabled
+            or self._current_stage != core.DownloadStage.DOWNLOADING_MEDIA
+            or self._status is None
+        ):
+            return
+
+        now = time.monotonic()
+        if (
+            self._last_progress_update_at is not None
+            and now - self._last_progress_update_at
+            < DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECONDS
+        ):
+            return
+
+        self._last_progress_update_at = now
+        text = (
+            f"{_download_stage_text(self._current_stage)}  "
+            f"{_format_download_progress(progress)}"
+        )
+        self._status.update(text)
 
     def finish(self) -> None:
         if not self.enabled:
@@ -597,6 +624,34 @@ def _format_size_bytes(size_bytes: int) -> str:
     if size < 10 and not size.is_integer():
         return f"{size:.1f} {units[unit_index]}"
     return f"{size:.0f} {units[unit_index]}"
+
+
+def _format_download_speed(speed_bytes_per_sec: float | None) -> str:
+    if speed_bytes_per_sec is None:
+        return "? MB/s"
+    return f"{_format_size_bytes(int(speed_bytes_per_sec))}/s"
+
+
+def _format_download_eta(eta_seconds: int | None) -> str:
+    if eta_seconds is None:
+        return "--:--:--"
+    hours, remainder = divmod(eta_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _format_download_percent(percent: float | None) -> str:
+    if percent is None:
+        return "?% Completed"
+    return f"{percent:.0f}% Completed"
+
+
+def _format_download_progress(progress: core.DownloadProgress) -> str:
+    return (
+        f"{_format_download_speed(progress.speed_bytes_per_sec)} - "
+        f"ETA: {_format_download_eta(progress.eta_seconds)} - "
+        f"{_format_download_percent(progress.percent)}"
+    )
 
 
 def _confirm_disk_usage(plan: core.DownloadPlan) -> bool:
@@ -1122,6 +1177,9 @@ def download_command(
                 ) as download_status:
                     if download_status.enabled:
                         download_kwargs["stage_callback"] = download_status.update
+                        download_kwargs["progress_callback"] = (
+                            download_status.update_progress
+                        )
                     if effective_ask_for_disk_usage and not yes:
                         def approval_callback(plan: core.DownloadPlan) -> bool:
                             download_status.finish()

@@ -61,6 +61,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(opts["quiet"])
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
+        self.assertTrue(opts["noprogress"])
         self.assertEqual(opts["retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
         self.assertEqual(opts["fragment_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
         self.assertEqual(opts["extractor_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
@@ -612,6 +613,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(opts["quiet"])
         self.assertTrue(opts["no_warnings"])
         self.assertFalse(opts["verbose"])
+        self.assertTrue(opts["noprogress"])
         self.assertEqual(opts["format"], 'bv+bestaudio[language="tr"]')
         self.assertEqual(opts["merge_output_format"], "mkv")
         self.assertEqual(opts["retries"], 2)
@@ -797,6 +799,100 @@ class CoreTests(unittest.TestCase):
                 core.DownloadStage.MERGING_MEDIA,
             ],
         )
+
+    def test_parse_download_progress_returns_none_for_non_downloading_status(self) -> None:
+        self.assertIsNone(core._parse_download_progress({"status": "finished"}))
+
+    def test_parse_download_progress_parses_full_progress(self) -> None:
+        progress = core._parse_download_progress(
+            {
+                "status": "downloading",
+                "downloaded_bytes": 128_449_230,
+                "total_bytes": 988_479_000,
+                "speed": 4_500_000,
+                "eta": 3897,
+            }
+        )
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        self.assertEqual(progress.speed_bytes_per_sec, 4_500_000)
+        self.assertEqual(progress.eta_seconds, 3897)
+        self.assertAlmostEqual(progress.percent, 12.995, places=2)
+
+    def test_parse_download_progress_uses_total_bytes_estimate(self) -> None:
+        progress = core._parse_download_progress(
+            {
+                "status": "downloading",
+                "downloaded_bytes": 500,
+                "total_bytes_estimate": 1000,
+            }
+        )
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        self.assertEqual(progress.percent, 50.0)
+
+    def test_parse_download_progress_returns_none_percent_when_total_unknown(
+        self,
+    ) -> None:
+        progress = core._parse_download_progress(
+            {
+                "status": "downloading",
+                "downloaded_bytes": 500,
+            }
+        )
+
+        self.assertIsNotNone(progress)
+        assert progress is not None
+        self.assertIsNone(progress.percent)
+
+    def test_download_progress_hook_invokes_progress_callback(self) -> None:
+        info = {
+            "title": "A Title",
+            "formats": [
+                {
+                    "vcodec": "none",
+                    "acodec": "mp4a.40.2",
+                    "language": "tr",
+                },
+            ],
+        }
+        progress_updates: list[core.DownloadProgress] = []
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "tr" / "A_Title" / "A_Title.mkv"
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                patch(
+                    "dubbed_video_downloader.core._planned_output_path",
+                    return_value=output_path,
+                ),
+                self._patch_successful_staged_finalization(),
+                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            ):
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    progress_callback=progress_updates.append,
+                )
+
+        opts = youtube_dl.call_args.args[0]
+        opts["progress_hooks"][0](
+            {
+                "status": "downloading",
+                "downloaded_bytes": 128_449_230,
+                "total_bytes": 988_479_000,
+                "speed": 4_500_000,
+                "eta": 3897,
+            }
+        )
+
+        self.assertEqual(len(progress_updates), 1)
+        self.assertEqual(progress_updates[0].speed_bytes_per_sec, 4_500_000)
+        self.assertEqual(progress_updates[0].eta_seconds, 3897)
+        self.assertAlmostEqual(progress_updates[0].percent, 12.995, places=2)
 
     def test_download_audio_mode_does_not_report_merging_from_postprocessor_hook(
         self,
