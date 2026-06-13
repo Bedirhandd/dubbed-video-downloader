@@ -684,6 +684,14 @@ def _print_saved_output(resolved: Path) -> None:
     typer.secho(f"Saved to {resolved}", fg=typer.colors.GREEN)
 
 
+def _print_download_size(resolved: Path) -> None:
+    size_bytes = resolved.stat().st_size
+    typer.secho(
+        f"Size: {_format_size_bytes(size_bytes)}",
+        fg=typer.colors.GREEN,
+    )
+
+
 @app.command("init")
 def init_command(
     output_dir: Annotated[
@@ -1206,6 +1214,7 @@ def download_command(
                     else None
                 )
                 _print_saved_output(saved_path)
+                _print_download_size(saved_path)
         except errors.DubbedVideoDownloaderError as exc:
             failures += 1
             _print_command_error(exc, debug=debug)

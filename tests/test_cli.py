@@ -20,9 +20,16 @@ class CliTests(unittest.TestCase):
         self.runner = CliRunner()
 
     @staticmethod
-    def _download_result_with_file(output_path: Path) -> core.DownloadResult:
+    def _download_result_with_file(
+        output_path: Path,
+        *,
+        size_bytes: int = 0,
+    ) -> core.DownloadResult:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.touch()
+        if size_bytes:
+            output_path.write_bytes(b"x" * size_bytes)
+        else:
+            output_path.touch()
         return core.DownloadResult(output_path=output_path)
 
     def test_init_writes_default_config(self) -> None:
@@ -1071,6 +1078,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Skipped", result.output)
         self.assertIn(f"Output already exists: {output_path}", result.output)
         self.assertNotIn("Saved to", result.output)
+        self.assertNotIn("Size:", result.output)
         download.assert_called_once()
 
     def test_download_prompts_for_estimated_disk_usage_when_enabled(self) -> None:
@@ -1101,7 +1109,10 @@ class CliTests(unittest.TestCase):
                     estimated_size_bytes=139_000_000,
                 )
                 approved.append(kwargs["approval_callback"](plan))
-                return self._download_result_with_file(output_path)
+                return self._download_result_with_file(
+                    output_path,
+                    size_bytes=1_500_000,
+                )
 
             with patch(
                 "dubbed_video_downloader.cli._stdin_is_interactive",
@@ -1122,6 +1133,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("~139 MB", result.output)
         self.assertIn("Finished", result.output)
         self.assertIn(f"Saved to {output_path.resolve()}", result.output)
+        self.assertIn("Size: 1.5 MB", result.output)
         self.assertEqual(approved, [True])
         download.assert_called_once()
 
@@ -1154,6 +1166,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Finished", result.output)
         self.assertIn("output file is missing", result.output)
         self.assertNotIn("Saved to", result.output)
+        self.assertNotIn("Size:", result.output)
         download.assert_called_once()
 
     def test_download_decline_disk_usage_prompt_cancels_url(self) -> None:
@@ -1209,6 +1222,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("Cancelled", result.output)
         self.assertNotIn("Finished", result.output)
         self.assertNotIn("Saved to", result.output)
+        self.assertNotIn("Size:", result.output)
         download.assert_called_once()
 
     def test_download_yes_bypasses_disk_usage_prompt(self) -> None:
