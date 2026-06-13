@@ -612,6 +612,23 @@ def _confirm_disk_usage(plan: core.DownloadPlan) -> bool:
     )
 
 
+def _confirm_saved_output(output_path: Path | None) -> Path:
+    if output_path is None:
+        raise errors.DownloadError(
+            "Download finished but no output path was recorded."
+        )
+    resolved = output_path.resolve()
+    if not resolved.is_file():
+        raise errors.DownloadError(
+            f"Download finished but output file is missing: {resolved}"
+        )
+    return resolved
+
+
+def _print_saved_output(resolved: Path) -> None:
+    typer.secho(f"Saved to {resolved}", fg=typer.colors.GREEN)
+
+
 @app.command("init")
 def init_command(
     output_dir: Annotated[
@@ -1125,6 +1142,12 @@ def download_command(
                             )
                         continue
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
+                saved_path = _confirm_saved_output(
+                    download_result.output_path
+                    if isinstance(download_result, core.DownloadResult)
+                    else None
+                )
+                _print_saved_output(saved_path)
         except errors.DubbedVideoDownloaderError as exc:
             failures += 1
             _print_command_error(exc, debug=debug)

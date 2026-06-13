@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from typer.testing import CliRunner
 
@@ -18,6 +18,12 @@ from dubbed_video_downloader.cli import app
 class CliTests(unittest.TestCase):
     def setUp(self) -> None:
         self.runner = CliRunner()
+
+    @staticmethod
+    def _download_result_with_file(output_path: Path) -> core.DownloadResult:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.touch()
+        return core.DownloadResult(output_path=output_path)
 
     def test_init_writes_default_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -664,8 +670,10 @@ class CliTests(unittest.TestCase):
             )
             override_output = home / "Videos" / "override"
             override_ffmpeg = home / "bin" / "ffmpeg"
+            output_path = override_output / "en" / "Title.mkv"
 
             with patch("dubbed_video_downloader.cli.core.download") as download:
+                download.return_value = self._download_result_with_file(output_path)
                 result = self.runner.invoke(
                     app,
                     [
@@ -707,6 +715,7 @@ class CliTests(unittest.TestCase):
             debug=False,
             retry_on_network_failure=6,
             exists_behavior=config.FileExistsBehavior.OVERWRITE,
+            stage_callback=ANY,
         )
 
     def test_download_interactive_status_passes_stage_callback(self) -> None:
@@ -744,6 +753,7 @@ class CliTests(unittest.TestCase):
                 "default_lang: en\n",
                 encoding="utf-8",
             )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
 
             with (
                 patch(
@@ -756,6 +766,7 @@ class CliTests(unittest.TestCase):
                 ),
                 patch("dubbed_video_downloader.cli.core.download") as download,
             ):
+                download.return_value = self._download_result_with_file(output_path)
                 result = self.runner.invoke(
                     app,
                     ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
@@ -846,8 +857,10 @@ class CliTests(unittest.TestCase):
                 "default_download_mode: audio\n",
                 encoding="utf-8",
             )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.webm"
 
             with patch("dubbed_video_downloader.cli.core.download") as download:
+                download.return_value = self._download_result_with_file(output_path)
                 result = self.runner.invoke(
                     app,
                     [
@@ -886,8 +899,10 @@ class CliTests(unittest.TestCase):
                 "default_lang: en\n",
                 encoding="utf-8",
             )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
 
             with patch("dubbed_video_downloader.cli.core.download") as download:
+                download.return_value = self._download_result_with_file(output_path)
                 result = self.runner.invoke(
                     app,
                     [
@@ -927,8 +942,10 @@ class CliTests(unittest.TestCase):
                 "default_exists_behavior: fail\n",
                 encoding="utf-8",
             )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
 
             with patch("dubbed_video_downloader.cli.core.download") as download:
+                download.return_value = self._download_result_with_file(output_path)
                 result = self.runner.invoke(
                     app,
                     ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
@@ -972,6 +989,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Skipped", result.output)
         self.assertIn(f"Output already exists: {output_path}", result.output)
+        self.assertNotIn("Saved to", result.output)
         download.assert_called_once()
 
     def test_download_prompts_for_estimated_disk_usage_when_enabled(self) -> None:
@@ -1002,7 +1020,7 @@ class CliTests(unittest.TestCase):
                     estimated_size_bytes=139_000_000,
                 )
                 approved.append(kwargs["approval_callback"](plan))
-                return core.DownloadResult(output_path=output_path)
+                return self._download_result_with_file(output_path)
 
             with patch(
                 "dubbed_video_downloader.cli._stdin_is_interactive",
@@ -1022,7 +1040,39 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("~139 MB", result.output)
         self.assertIn("Finished", result.output)
+        self.assertIn(f"Saved to {output_path.resolve()}", result.output)
         self.assertEqual(approved, [True])
+        download.assert_called_once()
+
+    def test_download_reports_missing_output_file_after_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: en\n",
+                encoding="utf-8",
+            )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
+
+            with patch(
+                "dubbed_video_downloader.cli.core.download",
+                return_value=core.DownloadResult(output_path=output_path),
+            ) as download:
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("Finished", result.output)
+        self.assertIn("output file is missing", result.output)
+        self.assertNotIn("Saved to", result.output)
         download.assert_called_once()
 
     def test_download_decline_disk_usage_prompt_cancels_url(self) -> None:
@@ -1077,6 +1127,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("could not be estimated", result.output)
         self.assertIn("Cancelled", result.output)
         self.assertNotIn("Finished", result.output)
+        self.assertNotIn("Saved to", result.output)
         download.assert_called_once()
 
     def test_download_yes_bypasses_disk_usage_prompt(self) -> None:
@@ -1093,12 +1144,14 @@ class CliTests(unittest.TestCase):
                 "ask_for_disk_usage: true\n",
                 encoding="utf-8",
             )
+            output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
 
             with patch(
                 "dubbed_video_downloader.cli._stdin_is_interactive",
                 return_value=False,
             ):
                 with patch("dubbed_video_downloader.cli.core.download") as download:
+                    download.return_value = self._download_result_with_file(output_path)
                     result = self.runner.invoke(
                         app,
                         [
