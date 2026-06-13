@@ -45,6 +45,11 @@ nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
+.pytest_cache/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
 
 # Django stuff:
 *.log
