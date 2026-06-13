@@ -438,6 +438,17 @@ def _init_config(
     ask_for_disk_usage: bool | None,
     force: bool,
 ) -> None:
+    if not force:
+        config_path = app_config.get_config_path()
+        if config_path.exists():
+            typer.secho(
+                f"Config error: Config file already exists at {config_path}. "
+                "Use --force to overwrite it.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
     selected_output_dir = _prompt_value(
         output_dir,
         "Output directory",

@@ -51,6 +51,28 @@ class CliTests(unittest.TestCase):
         self.assertEqual(first.exit_code, 0, first.output)
         self.assertEqual(second.exit_code, 1, second.output)
         self.assertIn("--force", second.output)
+        self.assertNotIn("Output directory", second.output)
+        self.assertNotIn("(press Enter to use)", second.output)
+
+    def test_interactive_init_refuses_overwrite_before_prompts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first = self.runner.invoke(app, ["init"], env={"HOME": tmpdir})
+            with patch(
+                "dubbed_video_downloader.cli._stdin_is_interactive",
+                return_value=True,
+            ):
+                second = self.runner.invoke(
+                    app,
+                    ["init"],
+                    input="\n\n\n\n\n\n\n\n\n",
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertEqual(second.exit_code, 1, second.output)
+        self.assertIn("--force", second.output)
+        self.assertNotIn("Output directory", second.output)
+        self.assertNotIn("(press Enter to use)", second.output)
 
     def test_interactive_init_explains_each_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
