@@ -123,6 +123,12 @@ def _normalize_lang_or_exit(value: str) -> str:
         raise typer.Exit(code=1) from exc
 
 
+def _effective_lang_or_exit(*, lang: str | None, default_lang: str) -> str:
+    if lang is not None:
+        return _normalize_lang_or_exit(lang)
+    return _normalize_default_lang_or_exit(default_lang)
+
+
 def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
     try:
         return app_config.normalize_download_mode(value)
@@ -1192,10 +1198,9 @@ def download_command(
             else loaded_config.ffmpeg_path
         )
         ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
-        effective_lang = (
-            _normalize_lang_or_exit(lang)
-            if lang is not None
-            else loaded_config.default_lang
+        effective_lang = _effective_lang_or_exit(
+            lang=lang,
+            default_lang=loaded_config.default_lang,
         )
         effective_download_mode = (
             _normalize_download_mode_or_exit(mode)
@@ -1444,10 +1449,9 @@ def qualities_command(
 ) -> None:
     """Show available video qualities and dubbed audio quality candidates."""
     loaded_config = _load_config_or_exit()
-    effective_lang = (
-        _normalize_lang_or_exit(lang)
-        if lang is not None
-        else loaded_config.default_lang
+    effective_lang = _effective_lang_or_exit(
+        lang=lang,
+        default_lang=loaded_config.default_lang,
     )
     effective_retry_on_network_failure = (
         _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)

@@ -147,17 +147,26 @@ def resolve_language_for_video(
             + "No multi-language audio tracks found."
         )
 
-    for available in inventory.langs:
-        if available.casefold() == requested.casefold():
-            return available
+    requested_key = _metadata_lang_key(requested)
+    exact_matches = sorted(
+        (
+            available
+            for available in inventory.langs
+            if _metadata_lang_key(available) == requested_key
+        ),
+        key=_raw_tag_sort_key,
+    )
+    if exact_matches:
+        return exact_matches[0]
 
-    resolved = langcodes.closest_supported_match(
+    raw_by_standard = _raw_tags_by_standard(inventory.langs)
+    resolved_standard = langcodes.closest_supported_match(
         requested,
-        sorted(inventory.langs),
+        sorted(raw_by_standard),
         max_distance=MAX_VARIANT_DISTANCE,
     )
-    if resolved is not None:
-        return resolved
+    if resolved_standard is not None:
+        return _select_raw_tag(raw_by_standard[resolved_standard], requested_key)
 
     available_display = ", ".join(display_language_tags(inventory.langs))
     raise errors.LanguageNotFoundError(
@@ -166,6 +175,42 @@ def resolve_language_for_video(
         f"Requested: {requested}\n"
         f"Available: {available_display}"
     )
+
+
+def _metadata_lang_key(tag: str) -> str:
+    return tag.strip().casefold()
+
+
+def _standardized_metadata_tag(tag: str) -> str:
+    stripped = tag.strip()
+    try:
+        return langcodes.standardize_tag(stripped)
+    except LanguageTagError:
+        return stripped
+
+
+def _raw_tag_sort_key(tag: str) -> tuple[int, str]:
+    return (len(tag), tag)
+
+
+def _raw_tags_by_standard(langs: frozenset[str]) -> dict[str, tuple[str, ...]]:
+    raw_by_standard: dict[str, list[str]] = {}
+    for tag in langs:
+        standard = _standardized_metadata_tag(tag)
+        raw_by_standard.setdefault(standard, []).append(tag)
+    return {
+        standard: tuple(sorted(raw_tags, key=_raw_tag_sort_key))
+        for standard, raw_tags in raw_by_standard.items()
+    }
+
+
+def _select_raw_tag(raw_tags: tuple[str, ...], requested_key: str) -> str:
+    exact_matches = [
+        tag for tag in raw_tags if _metadata_lang_key(tag) == requested_key
+    ]
+    if exact_matches:
+        return sorted(exact_matches, key=_raw_tag_sort_key)[0]
+    return raw_tags[0]
 
 
 def _language_error_prefix(title: str | None) -> str:

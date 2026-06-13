@@ -87,6 +87,30 @@ class LanguageTests(unittest.TestCase):
         with self.assertRaises(errors.LanguageNotFoundError):
             languages.resolve_language_for_video("tr", inventory)
 
+    def test_resolve_language_for_video_matches_padded_metadata_tag(self) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({" en "}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        self.assertEqual(
+            languages.resolve_language_for_video("en", inventory),
+            " en ",
+        )
+
+    def test_resolve_language_for_video_prefers_shorter_exact_stripped_match(self) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({" en ", "en"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        self.assertEqual(
+            languages.resolve_language_for_video("en", inventory),
+            "en",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

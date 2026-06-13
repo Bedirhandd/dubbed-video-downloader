@@ -180,6 +180,17 @@ class ConfigTests(unittest.TestCase):
 
         self.assertIn("default_lang", str(context.exception))
 
+    def test_load_config_accepts_unnormalized_default_lang(self) -> None:
+        loaded_config = config.config_from_mapping(
+            {
+                "output_dir": "/tmp/dbdvdl-output",
+                "ffmpeg_path": "ffmpeg",
+                "default_lang": "jp",
+            }
+        )
+
+        self.assertEqual(loaded_config.default_lang, "jp")
+
     def test_download_mode_accepts_video_and_audio(self) -> None:
         self.assertEqual(
             config.normalize_download_mode("video"),

@@ -117,7 +117,7 @@ def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) 
     return AppConfig(
         output_dir=normalize_output_dir(output_dir),
         ffmpeg_path=normalize_ffmpeg_path(ffmpeg_path),
-        default_lang=normalize_default_lang(default_lang),
+        default_lang=_clean_string(default_lang, "default_lang"),
         default_download_mode=normalize_download_mode(default_download_mode),
         default_video_quality=normalize_video_quality(default_video_quality),
         default_audio_quality=normalize_audio_quality(default_audio_quality),

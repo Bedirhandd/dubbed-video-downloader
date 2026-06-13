@@ -1960,6 +1960,110 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("Config error:", result.output)
         report.assert_not_called()
 
+    def test_download_allows_lang_override_with_invalid_default_lang_in_config(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: jp\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("dubbed_video_downloader.cli.core.download") as download,
+                patch(
+                    "dubbed_video_downloader.cli.core.plan_download",
+                    return_value=core.DownloadPlan(
+                        url="https://www.youtube.com/watch?v=EXAMPLE",
+                        lang="tr",
+                        resolved_lang="tr",
+                        title="Title",
+                        uploader="Channel",
+                        available_langs=("tr",),
+                        output_path=home / "Downloads" / "from-config" / "tr" / "Title.mkv",
+                    ),
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--lang",
+                        "tr",
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertNotIn("Config error:", result.output)
+        download.assert_not_called()
+
+    def test_download_rejects_invalid_default_lang_when_lang_not_overridden(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: jp\n",
+                encoding="utf-8",
+            )
+
+            with patch("dubbed_video_downloader.cli.core.download") as download:
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 1, result.output)
+        self.assertIn("Config error:", result.output)
+        self.assertIn("default_lang", result.output)
+        download.assert_not_called()
+
+    def test_langs_works_with_invalid_default_lang_in_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            config_path = (
+                home / ".config" / "dubbed-video-downloader" / "config.yaml"
+            )
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text(
+                "output_dir: ~/Downloads/from-config\n"
+                "ffmpeg_path: ffmpeg\n"
+                "default_lang: jp\n",
+                encoding="utf-8",
+            )
+
+            with patch(
+                "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url",
+                return_value=_audio_inventory("tr", "en"),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["langs", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertNotIn("Config error:", result.output)
+        self.assertIn("en", result.output)
+        self.assertIn("tr", result.output)
+
     def test_download_rejects_video_quality_in_audio_mode_before_network_work(
         self,
     ) -> None:
