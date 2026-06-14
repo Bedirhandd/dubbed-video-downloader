@@ -1096,32 +1096,36 @@ class CliTests(unittest.TestCase):
             override_ffmpeg = home / "bin" / "ffmpeg"
             output_path = override_output / "en" / "Title.mkv"
 
-            with patch("dubbed_video_downloader.cli.core.download") as download:
-                download.return_value = self._download_result_with_file(output_path)
-                result = self.runner.invoke(
-                    app,
-                    [
-                        "download",
-                        "https://www.youtube.com/watch?v=EXAMPLE",
-                        "--lang",
-                        "en",
-                        "--mode",
-                        "video",
-                        "--video-quality",
-                        "720p",
-                        "--audio-quality",
-                        "low",
-                        "--output-dir",
-                        str(override_output),
-                        "--ffmpeg-path",
-                        str(override_ffmpeg),
-                        "--retry-on-network-failure",
-                        "6",
-                        "--if-exists",
-                        "overwrite",
-                    ],
-                    env={"HOME": tmpdir},
-                )
+            with patch(
+                "dubbed_video_downloader.cli._download_status_enabled",
+                return_value=False,
+            ):
+                with patch("dubbed_video_downloader.cli.core.download") as download:
+                    download.return_value = self._download_result_with_file(output_path)
+                    result = self.runner.invoke(
+                        app,
+                        [
+                            "download",
+                            "https://www.youtube.com/watch?v=EXAMPLE",
+                            "--lang",
+                            "en",
+                            "--mode",
+                            "video",
+                            "--video-quality",
+                            "720p",
+                            "--audio-quality",
+                            "low",
+                            "--output-dir",
+                            str(override_output),
+                            "--ffmpeg-path",
+                            str(override_ffmpeg),
+                            "--retry-on-network-failure",
+                            "6",
+                            "--if-exists",
+                            "overwrite",
+                        ],
+                        env={"HOME": tmpdir},
+                    )
 
         self.assertEqual(result.exit_code, 0, result.output)
         download.assert_called_once_with(
@@ -1139,8 +1143,6 @@ class CliTests(unittest.TestCase):
             debug=False,
             retry_on_network_failure=6,
             exists_behavior=config.FileExistsBehavior.OVERWRITE,
-            stage_callback=ANY,
-            progress_callback=ANY,
         )
 
     def test_download_interactive_status_passes_stage_callback(self) -> None:
