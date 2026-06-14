@@ -29,12 +29,28 @@ Before opening a pull request, make sure your branch is up to date with the targ
 
 ## Testing
 
-The automated test suite is fully offline. Install dev dependencies and run tests with coverage:
+The automated test suite is fully offline. A network guard blocks TCP socket
+connections during test execution unless you explicitly opt out for local debugging
+with `DBDVDL_TESTS_ALLOW_NETWORK=1`.
+
+Install dev dependencies and run the full quality gate:
 
 ```bash
 uv sync --group dev
+uv run ruff check src tests
+uv run ruff format --check src tests
 uv run coverage run -m unittest discover -s tests -v
 uv run coverage report
+```
+
+### Pre-commit hooks
+
+Install hooks once after syncing dev dependencies:
+
+```bash
+uv sync --group dev
+uv run pre-commit install
+uv run pre-commit run --all-files
 ```
 
 Platform-specific tests may call `skipTest` on unusual filesystem layouts; skips are expected and do not fail CI.

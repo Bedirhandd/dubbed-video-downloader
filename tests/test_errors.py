@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from dubbed_video_downloader import config
-from dubbed_video_downloader import errors
-from dubbed_video_downloader import quality
+from dubbed_video_downloader import config, errors, quality
 
 
 class ErrorTests(unittest.TestCase):

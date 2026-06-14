@@ -7,17 +7,12 @@ import traceback
 from pathlib import Path
 from typing import Annotated
 
+import typer
 from rich.console import Console
 from rich.status import Status
-import typer
 
-from . import __version__
+from . import __version__, core, doctor, errors, languages, quality
 from . import config as app_config
-from . import core
-from . import doctor
-from . import errors
-from . import languages
-from . import quality
 from .download_mode import DownloadMode
 from .exists_behavior import FileExistsBehavior
 
@@ -342,7 +337,9 @@ def _prompt_exists_behavior(
     return app_config.DEFAULT_EXISTS_BEHAVIOR
 
 
-def _prompt_ask_for_disk_usage(value: bool | None, *, use_defaults: bool = False) -> bool:
+def _prompt_ask_for_disk_usage(
+    value: bool | None, *, use_defaults: bool = False
+) -> bool:
     if value is not None:
         return value
     if use_defaults:
@@ -767,9 +764,7 @@ def _confirm_disk_usage(plan: core.DownloadPlan) -> bool:
 
 def _confirm_saved_output(output_path: Path | None) -> Path:
     if output_path is None:
-        raise errors.DownloadError(
-            "Download finished but no output path was recorded."
-        )
+        raise errors.DownloadError("Download finished but no output path was recorded.")
     resolved = output_path.resolve()
     if not resolved.is_file():
         raise errors.DownloadError(
@@ -1183,7 +1178,9 @@ def download_command(
         debug=debug,
         dry_run=dry_run,
     )
-    with _DownloadStatusRenderer(status_console, enabled=status_enabled) as setup_status:
+    with _DownloadStatusRenderer(
+        status_console, enabled=status_enabled
+    ) as setup_status:
         setup_status.update(core.DownloadStage.CHECKING_CONFIG)
         loaded_config = _load_config_or_exit()
         setup_status.update(core.DownloadStage.PREPARING_OPTIONS)
@@ -1302,6 +1299,7 @@ def download_command(
                             download_status.update_progress
                         )
                     if effective_ask_for_disk_usage and not yes:
+
                         def approval_callback(plan: core.DownloadPlan) -> bool:
                             download_status.finish()
                             return _confirm_disk_usage(plan)
@@ -1393,8 +1391,7 @@ def langs_command(
             skipped = ", ".join(dict.fromkeys(inventory.skipped_invalid_tags))
             detail = f" (skipped: {skipped})" if skipped else ""
             typer.secho(
-                "Audio tracks were found but none have a valid language tag"
-                f"{detail}.",
+                f"Audio tracks were found but none have a valid language tag{detail}.",
                 fg=typer.colors.RED,
                 err=True,
             )

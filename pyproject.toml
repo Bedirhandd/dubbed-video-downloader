@@ -23,6 +23,8 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "coverage[toml]>=7.6.0",
+    "pre-commit>=4.0.0",
+    "ruff==0.15.17",
 ]
 
 [tool.uv]
@@ -31,8 +33,27 @@ package = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/dubbed_video_downloader"]
 
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+extend-ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dubbed_video_downloader"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.coverage.run]
 branch = true
+relative_files = true
 source_pkgs = ["dubbed_video_downloader"]
 
 [tool.coverage.report]

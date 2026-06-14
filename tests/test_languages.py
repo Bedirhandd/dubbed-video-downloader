@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from dubbed_video_downloader import errors
-from dubbed_video_downloader import languages
+from dubbed_video_downloader import errors, languages
 
 
 class LanguageTests(unittest.TestCase):
@@ -15,9 +14,11 @@ class LanguageTests(unittest.TestCase):
 
     def test_normalize_language_code_rejects_invalid_values(self) -> None:
         for value in ("", " ", "jp", "und"):
-            with self.subTest(value=value):
-                with self.assertRaises(errors.InvalidLanguageCodeError):
-                    languages.normalize_language_code(value)
+            with (
+                self.subTest(value=value),
+                self.assertRaises(errors.InvalidLanguageCodeError),
+            ):
+                languages.normalize_language_code(value)
 
     def test_collect_available_audio_langs_skips_invalid_tracks(self) -> None:
         inventory = languages.collect_available_audio_langs(
@@ -99,7 +100,9 @@ class LanguageTests(unittest.TestCase):
             " en ",
         )
 
-    def test_resolve_language_for_video_prefers_shorter_exact_stripped_match(self) -> None:
+    def test_resolve_language_for_video_prefers_shorter_exact_stripped_match(
+        self,
+    ) -> None:
         inventory = languages.AudioLanguageInventory(
             langs=frozenset({" en ", "en"}),
             skipped_invalid_count=0,

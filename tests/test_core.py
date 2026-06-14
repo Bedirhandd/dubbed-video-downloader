@@ -10,9 +10,7 @@ from unittest.mock import patch
 
 from yt_dlp.utils import YoutubeDLError
 
-from dubbed_video_downloader import core
-from dubbed_video_downloader import errors
-from dubbed_video_downloader import quality
+from dubbed_video_downloader import core, errors, quality
 
 
 class CoreTests(unittest.TestCase):
@@ -63,8 +61,12 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(opts["verbose"])
         self.assertTrue(opts["noprogress"])
         self.assertEqual(opts["retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
-        self.assertEqual(opts["fragment_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
-        self.assertEqual(opts["extractor_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE)
+        self.assertEqual(
+            opts["fragment_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE
+        )
+        self.assertEqual(
+            opts["extractor_retries"], core.DEFAULT_RETRY_ON_NETWORK_FAILURE
+        )
         self.assertNotIn("file_access_retries", opts)
         self.assertEqual(
             set(opts["retry_sleep_functions"]),
@@ -179,7 +181,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
@@ -237,7 +241,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
@@ -282,13 +288,15 @@ class CoreTests(unittest.TestCase):
             ],
         }
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-                plan = core.plan_download(
-                    url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
-                    output_dir=Path(tmpdir),
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+        ):
+            plan = core.plan_download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                output_dir=Path(tmpdir),
+            )
 
         self.assertEqual(plan.estimated_size_bytes, 139_000_000)
 
@@ -322,13 +330,15 @@ class CoreTests(unittest.TestCase):
             ],
         }
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-                plan = core.plan_download(
-                    url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
-                    output_dir=Path(tmpdir),
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+        ):
+            plan = core.plan_download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                output_dir=Path(tmpdir),
+            )
 
         self.assertIsNone(plan.estimated_size_bytes)
 
@@ -362,7 +372,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
@@ -435,7 +447,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
@@ -467,13 +481,15 @@ class CoreTests(unittest.TestCase):
             ],
         }
 
-        with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-            with self.assertRaises(quality.QualityError) as context:
-                core.plan_download(
-                    url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
-                    video_quality="720p",
-                )
+        with (
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+            self.assertRaises(quality.QualityError) as context,
+        ):
+            core.plan_download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                video_quality="720p",
+            )
 
         self.assertIn("No usable video qualities were found", str(context.exception))
 
@@ -501,13 +517,15 @@ class CoreTests(unittest.TestCase):
             ],
         }
 
-        with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-            with self.assertRaises(quality.QualityError) as context:
-                core.plan_download(
-                    url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
-                    video_quality="1080p",
-                )
+        with (
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+            self.assertRaises(quality.QualityError) as context,
+        ):
+            core.plan_download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                video_quality="1080p",
+            )
 
         self.assertIn("Requested video quality 1080p", str(context.exception))
         self.assertIn("360p, 720p", str(context.exception))
@@ -534,7 +552,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="tr",
@@ -562,13 +582,15 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
-                with self.assertRaises(errors.LanguageNotFoundError) as context:
-                    core.plan_download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=output_dir,
-                    )
+            with (
+                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+                self.assertRaises(errors.LanguageNotFoundError) as context,
+            ):
+                core.plan_download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                )
 
             self.assertFalse(output_dir.exists())
 
@@ -606,7 +628,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
@@ -647,7 +671,9 @@ class CoreTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir) / "planned-output"
-            with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+            with patch(
+                "dubbed_video_downloader.core.get_video_info", return_value=info
+            ):
                 plan = core.plan_download(
                     url="https://www.youtube.com/watch?v=EXAMPLE",
                     lang="en",
@@ -705,7 +731,9 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(opts["overwrites"])
         self.assertFalse(opts["continuedl"])
         self.assertFalse(opts["nopart"])
-        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+        ydl.download.assert_called_once_with(
+            ["https://www.youtube.com/watch?v=EXAMPLE"]
+        )
 
     def test_download_approval_callback_runs_before_media_download(self) -> None:
         info = {
@@ -748,7 +776,9 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(result.status, core.DownloadStatus.DOWNLOADED)
         self.assertEqual(len(approved_plans), 1)
         self.assertEqual(approved_plans[0].output_path, output_path)
-        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+        ydl.download.assert_called_once_with(
+            ["https://www.youtube.com/watch?v=EXAMPLE"]
+        )
 
     def test_download_declined_approval_cancels_without_downloading(self) -> None:
         info = {
@@ -882,7 +912,9 @@ class CoreTests(unittest.TestCase):
             ],
         )
 
-    def test_parse_download_progress_returns_none_for_non_downloading_status(self) -> None:
+    def test_parse_download_progress_returns_none_for_non_downloading_status(
+        self,
+    ) -> None:
         self.assertIsNone(core._parse_download_progress({"status": "finished"}))
 
     def test_parse_download_progress_parses_full_progress(self) -> None:
@@ -1050,7 +1082,9 @@ class CoreTests(unittest.TestCase):
         opts = youtube_dl.call_args.args[0]
         self.assertEqual(opts["format"], 'bestaudio[language="tr"]')
         self.assertNotIn("merge_output_format", opts)
-        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+        ydl.download.assert_called_once_with(
+            ["https://www.youtube.com/watch?v=EXAMPLE"]
+        )
 
     def test_download_video_and_audio_quality_build_safe_selector(self) -> None:
         info = {
@@ -1116,7 +1150,9 @@ class CoreTests(unittest.TestCase):
             opts["format"],
             'bv[height=720]+bestaudio[language="tr"][format_id="tr-audio-low"]',
         )
-        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+        ydl.download.assert_called_once_with(
+            ["https://www.youtube.com/watch?v=EXAMPLE"]
+        )
 
     def test_download_enables_verbose_ytdlp_output_without_debug(self) -> None:
         info = {
@@ -1208,13 +1244,13 @@ class CoreTests(unittest.TestCase):
                 return_value=Path("/tmp/example/tr/A_Title/A_Title.mkv"),
             ),
             patch("dubbed_video_downloader.core.Path.mkdir", side_effect=cause),
+            self.assertRaises(errors.DownloadError) as context,
         ):
-            with self.assertRaises(errors.DownloadError) as context:
-                core.download(
-                    url="https://www.youtube.com/watch?v=EXAMPLE",
-                    lang="tr",
-                    output_dir=Path("/tmp/example"),
-                )
+            core.download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                output_dir=Path("/tmp/example"),
+            )
 
         self.assertIs(context.exception.__cause__, cause)
         self.assertIn("Could not prepare output directory", str(context.exception))
@@ -1253,13 +1289,13 @@ class CoreTests(unittest.TestCase):
                     return_value=output_path,
                 ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core.download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=output_dir,
-                    )
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                )
 
             self.assertIsInstance(context.exception.__cause__, OSError)
             self.assertIn("Could not prepare output directory", str(context.exception))
@@ -1298,13 +1334,13 @@ class CoreTests(unittest.TestCase):
                     return_value=output_path,
                 ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core.download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=output_dir,
-                    )
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                )
 
             self.assertIsInstance(context.exception.__cause__, OSError)
             self.assertIn("Could not prepare output directory", str(context.exception))
@@ -1365,9 +1401,7 @@ class CoreTests(unittest.TestCase):
             output_dir = Path(tmpdir)
             output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
             staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
-            staged_output_path = (
-                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
-            )
+            staged_output_path = staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
 
             def download_to_staging(urls: list[str]) -> None:
                 staged_output_path.parent.mkdir(parents=True)
@@ -1529,15 +1563,17 @@ class CoreTests(unittest.TestCase):
                     return_value=staging_output_dir,
                 ),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL"),
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core.download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=output_dir,
-                    )
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=output_dir,
+                )
 
-            self.assertIn("Completed staged download is missing", str(context.exception))
+            self.assertIn(
+                "Completed staged download is missing", str(context.exception)
+            )
             self.assertFalse(staging_output_dir.exists())
 
     def test_download_skip_race_preserves_existing_final_output(self) -> None:
@@ -1556,9 +1592,7 @@ class CoreTests(unittest.TestCase):
             output_dir = Path(tmpdir)
             output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
             staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
-            staged_output_path = (
-                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
-            )
+            staged_output_path = staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
 
             def download_while_output_appears(urls: list[str]) -> None:
                 staged_output_path.parent.mkdir(parents=True)
@@ -1607,9 +1641,7 @@ class CoreTests(unittest.TestCase):
             output_dir = Path(tmpdir)
             output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
             staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
-            staged_output_path = (
-                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
-            )
+            staged_output_path = staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
 
             def download_while_output_appears(urls: list[str]) -> None:
                 staged_output_path.parent.mkdir(parents=True)
@@ -1661,9 +1693,7 @@ class CoreTests(unittest.TestCase):
             output_dir = Path(tmpdir)
             output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
             staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
-            staged_output_path = (
-                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
-            )
+            staged_output_path = staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
             original_link = core.os.link
 
             def download_to_staging(urls: list[str]) -> None:
@@ -1722,9 +1752,7 @@ class CoreTests(unittest.TestCase):
             output_dir = Path(tmpdir)
             output_path = output_dir / "tr" / "A_Title" / "A_Title.mkv"
             staging_output_dir = output_dir / "tmp" / ".incomplete" / "run"
-            staged_output_path = (
-                staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
-            )
+            staged_output_path = staging_output_dir / "tr" / "A_Title" / "A_Title.mkv"
             original_link = core.os.link
 
             def download_to_staging(urls: list[str]) -> None:
@@ -1825,9 +1853,13 @@ class CoreTests(unittest.TestCase):
                 )
 
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "downloaded media"
+            )
             self.assertFalse(staged_output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
 
     def test_finalize_overwrite_supports_redirected_final_directory(self) -> None:
         output_root, redirected_root = self._assume_cross_filesystem_temp_roots()
@@ -1861,9 +1893,13 @@ class CoreTests(unittest.TestCase):
             )
 
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "downloaded media"
+            )
             self.assertFalse(staged_output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
 
     def test_finalize_non_overwrite_uses_hard_link_before_copying(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1893,7 +1929,9 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
             link.assert_called_once_with(staged_output_path, output_path)
             copyfileobj.assert_not_called()
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "downloaded media"
+            )
             self.assertFalse(staged_output_path.exists())
 
     def test_finalize_non_overwrite_supports_redirected_final_directory(self) -> None:
@@ -1929,9 +1967,13 @@ class CoreTests(unittest.TestCase):
             )
 
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "downloaded media"
+            )
             self.assertFalse(staged_output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
 
     def test_finalize_non_overwrite_copies_when_hard_link_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1983,16 +2025,22 @@ class CoreTests(unittest.TestCase):
                 )
 
             self.assertEqual(status, core.DownloadStatus.DOWNLOADED)
-            self.assertEqual(output_path.read_text(encoding="utf-8"), "downloaded media")
+            self.assertEqual(
+                output_path.read_text(encoding="utf-8"), "downloaded media"
+            )
             self.assertEqual(len(published_sources), 1)
             self.assertEqual(
                 published_sources[0].parent,
                 output_path.parent / core.FINALIZING_COPY_DIR_NAME,
             )
-            self.assertEqual(published_sources[0].name, f"{staged_output_path.parent.name}.tmp")
+            self.assertEqual(
+                published_sources[0].name, f"{staged_output_path.parent.name}.tmp"
+            )
             self.assertFalse(published_sources[0].exists())
             self.assertFalse(staged_output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
 
     def test_finalize_copy_fallback_skip_race_preserves_existing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2043,7 +2091,9 @@ class CoreTests(unittest.TestCase):
             )
             self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
 
     def test_finalize_copy_fallback_fail_race_reports_existing_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2076,15 +2126,15 @@ class CoreTests(unittest.TestCase):
                     "dubbed_video_downloader.core._publish_file_no_clobber",
                     side_effect=create_output_before_publish,
                 ),
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core._finalize_staged_download(
-                        staged_output_path=staged_output_path,
-                        final_output_path=output_path,
-                        output_dir=output_dir,
-                        staging_output_dir=staged_output_path.parent,
-                        exists_behavior=core.FileExistsBehavior.FAIL,
-                    )
+                core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    output_dir=output_dir,
+                    staging_output_dir=staged_output_path.parent,
+                    exists_behavior=core.FileExistsBehavior.FAIL,
+                )
 
             self.assertIn("Output already exists", str(context.exception))
             self.assertEqual(output_path.read_text(encoding="utf-8"), "external media")
@@ -2095,7 +2145,9 @@ class CoreTests(unittest.TestCase):
             )
             self.assertFalse(publish_sources[0].exists())
             self.assertTrue(staged_output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
 
     def test_finalize_copy_fallback_removes_partial_output_on_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2119,19 +2171,21 @@ class CoreTests(unittest.TestCase):
                     "dubbed_video_downloader.core.shutil.copyfileobj",
                     side_effect=fail_after_partial_copy,
                 ),
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core._finalize_staged_download(
-                        staged_output_path=staged_output_path,
-                        final_output_path=output_path,
-                        output_dir=output_dir,
-                        staging_output_dir=staged_output_path.parent,
-                        exists_behavior=core.FileExistsBehavior.SKIP,
-                    )
+                core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    output_dir=output_dir,
+                    staging_output_dir=staged_output_path.parent,
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
 
             self.assertIn("Could not finalize output", str(context.exception))
             self.assertFalse(output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
             self.assertTrue(staged_output_path.exists())
 
     def test_finalize_copy_fallback_fails_closed_when_publish_unsupported(
@@ -2156,19 +2210,23 @@ class CoreTests(unittest.TestCase):
                         "unsupported"
                     ),
                 ),
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core._finalize_staged_download(
-                        staged_output_path=staged_output_path,
-                        final_output_path=output_path,
-                        output_dir=output_dir,
-                        staging_output_dir=staged_output_path.parent,
-                        exists_behavior=core.FileExistsBehavior.SKIP,
-                    )
+                core._finalize_staged_download(
+                    staged_output_path=staged_output_path,
+                    final_output_path=output_path,
+                    output_dir=output_dir,
+                    staging_output_dir=staged_output_path.parent,
+                    exists_behavior=core.FileExistsBehavior.SKIP,
+                )
 
-            self.assertIn("atomic no-clobber publish is unavailable", str(context.exception))
+            self.assertIn(
+                "atomic no-clobber publish is unavailable", str(context.exception)
+            )
             self.assertFalse(output_path.exists())
-            self.assertFalse((output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists())
+            self.assertFalse(
+                (output_path.parent / core.FINALIZING_COPY_DIR_NAME).exists()
+            )
             self.assertTrue(staged_output_path.exists())
 
     def test_publish_file_no_clobber_moves_source_without_overwriting(self) -> None:
@@ -2375,10 +2433,7 @@ class CoreTests(unittest.TestCase):
 
             stale_dir = output_dir / "tmp" / ".incomplete" / "stale-run"
             finalizing_dir = (
-                output_dir
-                / "tr"
-                / "A_Title"
-                / core.FINALIZING_COPY_DIR_NAME
+                output_dir / "tr" / "A_Title" / core.FINALIZING_COPY_DIR_NAME
             )
             finalizing_copy = finalizing_dir / f"{stale_dir.name}.tmp"
             finalizing_dir.mkdir(parents=True)
@@ -2483,8 +2538,7 @@ class CoreTests(unittest.TestCase):
 
             def fail_finalizing_copy_unlink(path, *args, **kwargs) -> None:
                 if (
-                    path == finalizing_copy.name
-                    and kwargs.get("dir_fd") is not None
+                    path == finalizing_copy.name and kwargs.get("dir_fd") is not None
                 ) or Path(path) == finalizing_copy:
                     raise OSError("cannot delete finalizing copy")
                 return original_unlink(path, *args, **kwargs)
@@ -2553,9 +2607,7 @@ class CoreTests(unittest.TestCase):
                     candidate_dir = incomplete_dir / name
                     self.assertTrue(candidate_dir.exists())
                     self.assertTrue((candidate_dir / "keep.txt").exists())
-                    self.assertFalse(
-                        (candidate_dir / core.RUN_LOCK_FILENAME).exists()
-                    )
+                    self.assertFalse((candidate_dir / core.RUN_LOCK_FILENAME).exists())
 
     def test_stale_incomplete_cleanup_preserves_symlinked_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -2573,9 +2625,7 @@ class CoreTests(unittest.TestCase):
                 encoding="utf-8",
             )
             try:
-                (candidate_dir / core.RUN_METADATA_FILENAME).symlink_to(
-                    target_metadata
-                )
+                (candidate_dir / core.RUN_METADATA_FILENAME).symlink_to(target_metadata)
             except (NotImplementedError, OSError):
                 return
             (candidate_dir / "keep.txt").write_text("keep", encoding="utf-8")
@@ -2734,14 +2784,14 @@ class CoreTests(unittest.TestCase):
                 ),
                 self._patch_successful_staged_finalization(),
                 patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+                self.assertRaises(errors.DownloadError) as context,
             ):
-                with self.assertRaises(errors.DownloadError) as context:
-                    core.download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=Path(tmpdir),
-                        exists_behavior=core.FileExistsBehavior.FAIL,
-                    )
+                core.download(
+                    url="https://www.youtube.com/watch?v=EXAMPLE",
+                    lang="tr",
+                    output_dir=Path(tmpdir),
+                    exists_behavior=core.FileExistsBehavior.FAIL,
+                )
 
         self.assertIn("Output already exists", str(context.exception))
         youtube_dl.assert_not_called()
@@ -2784,7 +2834,9 @@ class CoreTests(unittest.TestCase):
         opts = youtube_dl.call_args.args[0]
         self.assertTrue(opts["overwrites"])
         self.assertFalse(opts["continuedl"])
-        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+        ydl.download.assert_called_once_with(
+            ["https://www.youtube.com/watch?v=EXAMPLE"]
+        )
 
     def test_download_fail_behavior_downloads_when_output_is_missing(self) -> None:
         info = {
@@ -2820,7 +2872,9 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(result.status, core.DownloadStatus.DOWNLOADED)
         opts = youtube_dl.call_args.args[0]
         self.assertFalse(opts["overwrites"])
-        ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+        ydl.download.assert_called_once_with(
+            ["https://www.youtube.com/watch?v=EXAMPLE"]
+        )
 
     def test_existing_directory_at_output_path_always_fails(self) -> None:
         info = {
@@ -2849,14 +2903,14 @@ class CoreTests(unittest.TestCase):
                             "dubbed_video_downloader.core._planned_output_path",
                             return_value=output_path,
                         ),
+                        self.assertRaises(errors.DownloadError) as context,
                     ):
-                        with self.assertRaises(errors.DownloadError) as context:
-                            core.download(
-                                url="https://www.youtube.com/watch?v=EXAMPLE",
-                                lang="tr",
-                                output_dir=Path(tmpdir),
-                                exists_behavior=exists_behavior,
-                            )
+                        core.download(
+                            url="https://www.youtube.com/watch?v=EXAMPLE",
+                            lang="tr",
+                            output_dir=Path(tmpdir),
+                            exists_behavior=exists_behavior,
+                        )
 
                 self.assertIn("not a file", str(context.exception))
 
@@ -2909,20 +2963,20 @@ class CoreTests(unittest.TestCase):
         }
         cause = YoutubeDLError("planning failed")
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with (
-                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
-                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
-            ):
-                ydl = youtube_dl.return_value.__enter__.return_value
-                ydl.process_ie_result.side_effect = cause
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+            patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            self.assertRaises(errors.DownloadError) as context,
+        ):
+            ydl = youtube_dl.return_value.__enter__.return_value
+            ydl.process_ie_result.side_effect = cause
 
-                with self.assertRaises(errors.DownloadError) as context:
-                    core.plan_download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=Path(tmpdir),
-                    )
+            core.plan_download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                output_dir=Path(tmpdir),
+            )
 
         self.assertIs(context.exception.__cause__, cause)
         self.assertIn("Could not plan download output", str(context.exception))
@@ -2941,21 +2995,21 @@ class CoreTests(unittest.TestCase):
             ],
         }
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with (
-                patch("dubbed_video_downloader.core.get_video_info", return_value=info),
-                patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
-            ):
-                ydl = youtube_dl.return_value.__enter__.return_value
-                ydl.process_ie_result.return_value = info
-                ydl.prepare_filename.return_value = ""
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+            patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+            self.assertRaises(errors.DownloadError) as context,
+        ):
+            ydl = youtube_dl.return_value.__enter__.return_value
+            ydl.process_ie_result.return_value = info
+            ydl.prepare_filename.return_value = ""
 
-                with self.assertRaises(errors.DownloadError) as context:
-                    core.plan_download(
-                        url="https://www.youtube.com/watch?v=EXAMPLE",
-                        lang="tr",
-                        output_dir=Path(tmpdir),
-                    )
+            core.plan_download(
+                url="https://www.youtube.com/watch?v=EXAMPLE",
+                lang="tr",
+                output_dir=Path(tmpdir),
+            )
 
         self.assertIn("Could not determine planned output path", str(context.exception))
 

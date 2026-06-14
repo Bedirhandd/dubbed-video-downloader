@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from .download_mode import DownloadMode
-from .download_mode import normalize_download_mode
+from .download_mode import DownloadMode, normalize_download_mode
 from .errors import QualityError
 
 MIN_VIDEO_HEIGHT = 144
@@ -351,9 +350,7 @@ def _audio_candidate_selector(
             f"[{candidate.bitrate_field}={_format_number(candidate.bitrate_kbps)}]"
         )
     fallback = (
-        "worstaudio"
-        if audio_quality.kind == AudioQualityKind.LOW
-        else "bestaudio"
+        "worstaudio" if audio_quality.kind == AudioQualityKind.LOW else "bestaudio"
     )
     return f"{fallback}{language_filter}"
 
@@ -370,7 +367,9 @@ def _format_items(info: dict[str, Any]) -> tuple[dict[str, Any], ...]:
     formats = info.get("formats", [])
     if not isinstance(formats, list):
         return ()
-    return tuple(format_info for format_info in formats if isinstance(format_info, dict))
+    return tuple(
+        format_info for format_info in formats if isinstance(format_info, dict)
+    )
 
 
 def _is_video_only_format(format_info: dict[str, Any]) -> bool:

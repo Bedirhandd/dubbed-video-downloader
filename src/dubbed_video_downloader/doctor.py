@@ -69,10 +69,16 @@ def _config_check(
 def _output_dir_check(output_dir: Path) -> CheckResult:
     if output_dir.exists():
         if not output_dir.is_dir():
-            return CheckResult("Output directory", False, f"{output_dir} is not a directory")
+            return CheckResult(
+                "Output directory", False, f"{output_dir} is not a directory"
+            )
         if not _is_writable(output_dir):
-            return CheckResult("Output directory", False, f"{output_dir} is not writable")
-        return CheckResult("Output directory", True, f"{output_dir} exists and is writable")
+            return CheckResult(
+                "Output directory", False, f"{output_dir} is not writable"
+            )
+        return CheckResult(
+            "Output directory", True, f"{output_dir} exists and is writable"
+        )
 
     parent = output_dir.parent
     while not parent.exists() and parent != parent.parent:
@@ -125,7 +131,9 @@ def _command_check(name: str, executable: str, args: list[str]) -> CheckResult:
 
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip().splitlines()
-        message = detail[0] if detail else f"{path} exited with code {completed.returncode}"
+        message = (
+            detail[0] if detail else f"{path} exited with code {completed.returncode}"
+        )
         return CheckResult(name, False, message)
 
     output_lines = completed.stdout.strip().splitlines()
