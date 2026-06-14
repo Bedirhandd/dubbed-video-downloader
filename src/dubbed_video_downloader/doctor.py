@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from . import config
+from . import config, errors
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ def _config_check(
     path = config_path or config.get_config_path()
     try:
         app_config = config.load_config(path)
-    except config.ConfigError as exc:
+    except errors.ConfigError as exc:
         return CheckResult("Config", False, str(exc)), None
     return CheckResult("Config", True, str(path)), app_config
 

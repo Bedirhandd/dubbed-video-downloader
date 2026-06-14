@@ -36,6 +36,9 @@ jobs:
       - name: Check Ruff formatting
         run: uv run ruff format --check src tests
 
+      - name: Run mypy
+        run: uv run mypy
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -62,6 +65,12 @@ jobs:
 
       - name: Report coverage
         run: uv run coverage report
+
+      - name: Enforce coverage threshold
+        run: uv run coverage report --fail-under=79
+
+      - name: Coverage summary
+        run: uv run coverage report --skip-covered --skip-empty
 
       - name: Generate coverage XML
         run: uv run coverage xml
