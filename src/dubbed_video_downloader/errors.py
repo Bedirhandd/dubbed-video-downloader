@@ -19,6 +19,10 @@ class MetadataExtractionError(DubbedVideoDownloaderError):
     """Raised when video metadata cannot be extracted."""
 
 
+class InvalidLanguageCodeError(DubbedVideoDownloaderError):
+    """Raised when a user-supplied language code is invalid."""
+
+
 class LanguageNotFoundError(DubbedVideoDownloaderError):
     """Raised when the requested dubbed language is unavailable."""
 

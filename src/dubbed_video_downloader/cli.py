@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import shutil
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Annotated
 
+from rich.console import Console
+from rich.status import Status
 import typer
 
 from . import __version__
@@ -12,6 +16,7 @@ from . import config as app_config
 from . import core
 from . import doctor
 from . import errors
+from . import languages
 from . import quality
 from .download_mode import DownloadMode
 from .exists_behavior import FileExistsBehavior
@@ -33,6 +38,23 @@ Examples:
 
   dbdvdl qualities https://www.youtube.com/watch?v=VIDEO_ID --lang tr
 """
+
+DOWNLOAD_STATUS_SPINNER = "bouncingBar"
+DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECONDS = 0.25
+
+DOWNLOAD_STAGE_TEXT = {
+    core.DownloadStage.CHECKING_CONFIG: "Checking configuration...",
+    core.DownloadStage.PREPARING_OPTIONS: "Preparing options...",
+    core.DownloadStage.FETCHING_METADATA: "Fetching metadata...",
+    core.DownloadStage.CHECKING_LANGUAGES: "Checking available languages...",
+    core.DownloadStage.SELECTING_QUALITIES: "Selecting qualities...",
+    core.DownloadStage.PLANNING_OUTPUT: "Planning output path...",
+    core.DownloadStage.PREPARING_OUTPUT_DIR: "Preparing output directory...",
+    core.DownloadStage.DOWNLOADING_MEDIA: "Downloading media...",
+    core.DownloadStage.MERGING_MEDIA: "Merging media...",
+    core.DownloadStage.FINALIZING_OUTPUT: "Finalizing output...",
+    core.DownloadStage.SKIPPING_EXISTING_OUTPUT: "Skipping existing output...",
+}
 
 app = typer.Typer(
     help=(
@@ -93,6 +115,20 @@ def _normalize_default_lang_or_exit(value: str) -> str:
         raise typer.Exit(code=1) from exc
 
 
+def _normalize_lang_or_exit(value: str) -> str:
+    try:
+        return languages.normalize_language_code(value, field="--lang")
+    except errors.InvalidLanguageCodeError as exc:
+        typer.secho(f"Input error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _effective_lang_or_exit(*, lang: str | None, default_lang: str) -> str:
+    if lang is not None:
+        return _normalize_lang_or_exit(lang)
+    return _normalize_default_lang_or_exit(default_lang)
+
+
 def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
     try:
         return app_config.normalize_download_mode(value)
@@ -141,18 +177,65 @@ def _print_command_error(exc: BaseException, *, debug: bool) -> None:
         traceback.print_exception(exc, file=sys.stderr)
 
 
-def _prompt_value(value: str | None, prompt: str, default: str) -> str:
+def _print_prompt_help(
+    heading: str,
+    description: str,
+    accepted: str,
+    default: str | int,
+) -> None:
+    typer.echo()
+    typer.secho(heading, fg=typer.colors.CYAN, bold=True)
+    typer.echo(f"  {description}")
+    typer.echo("  ", nl=False)
+    typer.secho("Accepted: ", fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.echo(accepted)
+    typer.echo("  ", nl=False)
+    typer.secho("Default: ", fg=typer.colors.CYAN, bold=True, nl=False)
+    typer.echo(f"{default} (press Enter to use)")
+
+
+def _default_ffmpeg_path() -> str:
+    return shutil.which("ffmpeg") or app_config.DEFAULT_FFMPEG_PATH
+
+
+def _prompt_value(
+    value: str | None,
+    prompt: str,
+    default: str,
+    *,
+    description: str,
+    accepted: str,
+    use_defaults: bool = False,
+) -> str:
     if value is not None:
         return value
+    if use_defaults:
+        return default
     if _stdin_is_interactive():
+        _print_prompt_help(prompt, description, accepted, default)
         return str(typer.prompt(prompt, default=default))
     return default
 
 
-def _prompt_retry_on_network_failure(value: int | None) -> int:
+def _prompt_retry_on_network_failure(
+    value: int | None,
+    *,
+    use_defaults: bool = False,
+) -> int:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Retry on network failure",
+            (
+                "How many times to retry transient metadata, extraction, and "
+                "media download failures."
+            ),
+            "non-negative integer; 0 disables retries.",
+            app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
+        )
         return typer.prompt(
             "Retry on network failure",
             default=app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
@@ -161,10 +244,22 @@ def _prompt_retry_on_network_failure(value: int | None) -> int:
     return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
 
 
-def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
+def _prompt_download_mode(
+    value: DownloadMode | None,
+    *,
+    use_defaults: bool = False,
+) -> DownloadMode | str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_DOWNLOAD_MODE
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default download mode",
+            "Which type of output to download when --mode is omitted.",
+            "`video` | `audio`.",
+            app_config.DEFAULT_DOWNLOAD_MODE.value,
+        )
         return str(
             typer.prompt(
                 "Default download mode",
@@ -174,10 +269,24 @@ def _prompt_download_mode(value: DownloadMode | None) -> DownloadMode | str:
     return app_config.DEFAULT_DOWNLOAD_MODE
 
 
-def _prompt_video_quality(value: str | None) -> str:
+def _prompt_video_quality(value: str | None, *, use_defaults: bool = False) -> str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_VIDEO_QUALITY.label
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default video quality",
+            (
+                "Which video quality to select for video-mode downloads when "
+                "--video-quality is omitted."
+            ),
+            (
+                "`best` | `medium` | `low` | exact resolution "
+                "(`144p`-`8640p`, e.g. `720p`)."
+            ),
+            app_config.DEFAULT_VIDEO_QUALITY.label,
+        )
         return str(
             typer.prompt(
                 "Default video quality",
@@ -187,10 +296,18 @@ def _prompt_video_quality(value: str | None) -> str:
     return app_config.DEFAULT_VIDEO_QUALITY.label
 
 
-def _prompt_audio_quality(value: str | None) -> str:
+def _prompt_audio_quality(value: str | None, *, use_defaults: bool = False) -> str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_AUDIO_QUALITY.label
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default audio quality",
+            "Which dubbed audio quality to select when --audio-quality is omitted.",
+            "`best` | `medium` | `low`.",
+            app_config.DEFAULT_AUDIO_QUALITY.label,
+        )
         return str(
             typer.prompt(
                 "Default audio quality",
@@ -202,10 +319,20 @@ def _prompt_audio_quality(value: str | None) -> str:
 
 def _prompt_exists_behavior(
     value: FileExistsBehavior | None,
+    *,
+    use_defaults: bool = False,
 ) -> FileExistsBehavior | str:
     if value is not None:
         return value
+    if use_defaults:
+        return app_config.DEFAULT_EXISTS_BEHAVIOR
     if _stdin_is_interactive():
+        _print_prompt_help(
+            "Default existing-file behavior",
+            "What to do when the planned output file already exists.",
+            "`skip` | `fail` | `overwrite`.",
+            app_config.DEFAULT_EXISTS_BEHAVIOR.value,
+        )
         return str(
             typer.prompt(
                 "Default existing-file behavior",
@@ -215,8 +342,128 @@ def _prompt_exists_behavior(
     return app_config.DEFAULT_EXISTS_BEHAVIOR
 
 
+def _prompt_ask_for_disk_usage(value: bool | None, *, use_defaults: bool = False) -> bool:
+    if value is not None:
+        return value
+    if use_defaults:
+        return app_config.DEFAULT_ASK_FOR_DISK_USAGE
+    if _stdin_is_interactive():
+        _print_prompt_help(
+            "Ask for disk usage",
+            "Whether downloads should ask for confirmation after estimating size.",
+            "`yes` | `no`.",
+            str(app_config.DEFAULT_ASK_FOR_DISK_USAGE).lower(),
+        )
+        return typer.confirm(
+            "Ask for disk usage",
+            default=app_config.DEFAULT_ASK_FOR_DISK_USAGE,
+        )
+    return app_config.DEFAULT_ASK_FOR_DISK_USAGE
+
+
 def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
+
+
+class _DownloadStatusRenderer:
+    def __init__(self, console: Console, *, enabled: bool) -> None:
+        self.enabled = enabled
+        self._console = console
+        self._status: Status | None = None
+        self._current_stage: core.DownloadStage | None = None
+        self._last_progress_update_at: float | None = None
+
+    def __enter__(self) -> _DownloadStatusRenderer:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if exc_type is None:
+            self.finish()
+        else:
+            self.fail()
+
+    def update(self, stage: core.DownloadStage) -> None:
+        if not self.enabled or stage == self._current_stage:
+            return
+
+        if self._current_stage is not None:
+            self._print_stage_marker("done", self._current_stage)
+
+        self._current_stage = stage
+        self._last_progress_update_at = None
+        text = _download_stage_text(stage)
+        if self._status is None:
+            self._status = self._console.status(
+                text,
+                spinner=DOWNLOAD_STATUS_SPINNER,
+            )
+            self._status.start()
+        else:
+            self._status.update(text)
+
+    def update_progress(self, progress: core.DownloadProgress) -> None:
+        if (
+            not self.enabled
+            or self._current_stage != core.DownloadStage.DOWNLOADING_MEDIA
+            or self._status is None
+        ):
+            return
+
+        now = time.monotonic()
+        if (
+            self._last_progress_update_at is not None
+            and now - self._last_progress_update_at
+            < DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECONDS
+        ):
+            return
+
+        self._last_progress_update_at = now
+        text = (
+            f"{_download_stage_text(self._current_stage)}  "
+            f"{_format_download_progress(progress)}"
+        )
+        self._status.update(text)
+
+    def finish(self) -> None:
+        if not self.enabled:
+            return
+        self._stop_status()
+        if self._current_stage is not None:
+            self._print_stage_marker("done", self._current_stage)
+            self._current_stage = None
+
+    def fail(self) -> None:
+        if not self.enabled:
+            return
+        self._stop_status()
+        if self._current_stage is not None:
+            self._print_stage_marker("failed", self._current_stage)
+            self._current_stage = None
+
+    def _stop_status(self) -> None:
+        if self._status is not None:
+            self._status.stop()
+            self._status = None
+
+    def _print_stage_marker(self, marker: str, stage: core.DownloadStage) -> None:
+        self._console.print(
+            f"[{marker}] {_download_stage_text(stage)}",
+            markup=False,
+        )
+
+
+def _download_stage_text(stage: core.DownloadStage) -> str:
+    return DOWNLOAD_STAGE_TEXT[stage]
+
+
+def _download_status_enabled(
+    console: Console,
+    *,
+    verbose: bool,
+    debug: bool,
+    dry_run: bool,
+) -> bool:
+    return not (verbose or debug or dry_run) and console.is_interactive
 
 
 def _write_config_or_exit(
@@ -228,6 +475,7 @@ def _write_config_or_exit(
     default_audio_quality: str,
     retry_on_network_failure: int,
     default_exists_behavior: FileExistsBehavior | str,
+    ask_for_disk_usage: bool,
     force: bool,
 ) -> None:
     try:
@@ -240,6 +488,7 @@ def _write_config_or_exit(
             default_audio_quality=default_audio_quality,
             retry_on_network_failure=retry_on_network_failure,
             default_exists_behavior=default_exists_behavior,
+            ask_for_disk_usage=ask_for_disk_usage,
             overwrite=force,
         )
     except app_config.ConfigError as exc:
@@ -258,30 +507,75 @@ def _init_config(
     default_audio_quality: str | None,
     retry_on_network_failure: int | None,
     default_exists_behavior: FileExistsBehavior | None,
+    ask_for_disk_usage: bool | None,
     force: bool,
+    *,
+    use_defaults: bool = False,
 ) -> None:
+    if not force:
+        config_path = app_config.get_config_path()
+        if config_path.exists():
+            typer.secho(
+                f"Config error: Config file already exists at {config_path}. "
+                "Use --force to overwrite it.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
     selected_output_dir = _prompt_value(
         output_dir,
         "Output directory",
         app_config.DEFAULT_OUTPUT_DIR,
+        description="Downloads will be saved under this directory.",
+        accepted="absolute path, ~ path, or env-var path.",
+        use_defaults=use_defaults,
     )
-    selected_ffmpeg_path = _prompt_value(
-        ffmpeg_path,
-        "FFmpeg path",
-        app_config.DEFAULT_FFMPEG_PATH,
-    )
+    if ffmpeg_path is not None:
+        selected_ffmpeg_path = ffmpeg_path
+    elif use_defaults:
+        selected_ffmpeg_path = _default_ffmpeg_path()
+    else:
+        selected_ffmpeg_path = _prompt_value(
+            ffmpeg_path,
+            "FFmpeg path",
+            app_config.DEFAULT_FFMPEG_PATH,
+            description="Executable used to merge video and dubbed audio.",
+            accepted="`ffmpeg`, `ffmpeg.exe`, or absolute path.",
+            use_defaults=use_defaults,
+        )
     selected_default_lang = _prompt_value(
         default_lang,
         "Default language",
         app_config.DEFAULT_LANG,
+        description="Dub language code to use when --lang is omitted.",
+        accepted="BCP-47 language code, e.g. en, eng, en-US, tr.",
+        use_defaults=use_defaults,
     )
-    selected_default_download_mode = _prompt_download_mode(default_download_mode)
-    selected_default_video_quality = _prompt_video_quality(default_video_quality)
-    selected_default_audio_quality = _prompt_audio_quality(default_audio_quality)
+    selected_default_download_mode = _prompt_download_mode(
+        default_download_mode,
+        use_defaults=use_defaults,
+    )
+    selected_default_video_quality = _prompt_video_quality(
+        default_video_quality,
+        use_defaults=use_defaults,
+    )
+    selected_default_audio_quality = _prompt_audio_quality(
+        default_audio_quality,
+        use_defaults=use_defaults,
+    )
     selected_retry_on_network_failure = _prompt_retry_on_network_failure(
-        retry_on_network_failure
+        retry_on_network_failure,
+        use_defaults=use_defaults,
     )
-    selected_default_exists_behavior = _prompt_exists_behavior(default_exists_behavior)
+    selected_default_exists_behavior = _prompt_exists_behavior(
+        default_exists_behavior,
+        use_defaults=use_defaults,
+    )
+    selected_ask_for_disk_usage = _prompt_ask_for_disk_usage(
+        ask_for_disk_usage,
+        use_defaults=use_defaults,
+    )
     _write_config_or_exit(
         selected_output_dir,
         selected_ffmpeg_path,
@@ -291,6 +585,7 @@ def _init_config(
         selected_default_audio_quality,
         selected_retry_on_network_failure,
         selected_default_exists_behavior,
+        selected_ask_for_disk_usage,
         force,
     )
 
@@ -298,12 +593,13 @@ def _init_config(
 def _print_config_recreate_hint() -> None:
     typer.echo("\nYou can create a new config with:")
     typer.echo("  dbdvdl init")
+    typer.echo("  dbdvdl init --default")
     typer.echo(
         "  dbdvdl init --output-dir ~/Videos "
         "--ffmpeg-path /path/to/ffmpeg --default-lang tr "
         "--default-download-mode video --default-video-quality best "
         "--default-audio-quality best --retry-on-network-failure 3 "
-        "--default-exists-behavior skip"
+        "--default-exists-behavior skip --no-ask-for-disk-usage"
     )
 
 
@@ -319,6 +615,30 @@ def _print_command_header(action: str, url: str) -> None:
     typer.echo(f": {url}")
 
 
+def _print_skipped_invalid_tracks_warning(skipped_invalid_count: int) -> None:
+    if skipped_invalid_count <= 0:
+        return
+    warning = languages.skipped_tracks_warning(
+        languages.AudioLanguageInventory(
+            langs=frozenset(),
+            skipped_invalid_count=skipped_invalid_count,
+            skipped_invalid_tags=(),
+        )
+    )
+    if warning is not None:
+        typer.secho(warning, fg=typer.colors.YELLOW, err=True)
+
+
+def _print_language_selection(canonical_lang: str, resolved_lang: str) -> None:
+    if resolved_lang.casefold() != canonical_lang.casefold():
+        _print_label_value(
+            "Language",
+            f"{canonical_lang} (track: {resolved_lang})",
+        )
+        return
+    _print_label_value("Language", canonical_lang)
+
+
 def _print_download_plan(plan: core.DownloadPlan) -> None:
     typer.secho("Dry run", fg=typer.colors.YELLOW, bold=True, nl=False)
     typer.echo(": no files will be downloaded or created.")
@@ -326,7 +646,8 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
         _print_label_value("Title", plan.title)
     if plan.uploader:
         _print_label_value("Channel", plan.uploader)
-    _print_label_value("Language", plan.lang)
+    _print_language_selection(plan.lang, plan.resolved_lang)
+    _print_skipped_invalid_tracks_warning(plan.skipped_invalid_count)
     _print_label_value("Mode", plan.download_mode.value)
     if plan.video_quality:
         _print_label_value(
@@ -341,6 +662,7 @@ def _print_download_plan(plan: core.DownloadPlan) -> None:
         _print_label_value("Available languages", ", ".join(plan.available_langs))
     _print_quality_notes(plan.quality_notes)
     _print_label_value("Output", plan.output_path)
+    _print_label_value("Estimated disk usage", _format_estimated_disk_usage(plan))
     _print_label_value("If output exists", plan.exists_behavior.value)
     _print_label_value("Output exists", "yes" if plan.output_exists else "no")
     if plan.output_exists:
@@ -367,7 +689,8 @@ def _print_quality_report(report: core.QualityReport) -> None:
         _print_label_value("Title", report.title)
     if report.uploader:
         _print_label_value("Channel", report.uploader)
-    _print_label_value("Language", report.lang)
+    _print_language_selection(report.lang, report.resolved_lang)
+    _print_skipped_invalid_tracks_warning(report.skipped_invalid_count)
     if report.available_langs:
         _print_label_value("Available languages", ", ".join(report.available_langs))
     _print_label_value(
@@ -377,6 +700,93 @@ def _print_quality_report(report: core.QualityReport) -> None:
     _print_label_value(
         "Audio qualities",
         ", ".join(report.audio_qualities) if report.audio_qualities else "none found",
+    )
+
+
+def _format_estimated_disk_usage(plan: core.DownloadPlan) -> str:
+    if plan.estimated_size_bytes is None:
+        return "unknown"
+    return f"~{_format_size_bytes(plan.estimated_size_bytes)}"
+
+
+def _format_size_bytes(size_bytes: int) -> str:
+    units = ("B", "KB", "MB", "GB", "TB")
+    size = float(size_bytes)
+    unit_index = 0
+    while size >= 1000 and unit_index < len(units) - 1:
+        size /= 1000
+        unit_index += 1
+
+    if unit_index == 0:
+        return f"{int(size)} {units[unit_index]}"
+    if size < 10 and not size.is_integer():
+        return f"{size:.1f} {units[unit_index]}"
+    return f"{size:.0f} {units[unit_index]}"
+
+
+def _format_download_speed(speed_bytes_per_sec: float | None) -> str:
+    if speed_bytes_per_sec is None:
+        return "? MB/s"
+    return f"{_format_size_bytes(int(speed_bytes_per_sec))}/s"
+
+
+def _format_download_eta(eta_seconds: int | None) -> str:
+    if eta_seconds is None:
+        return "--:--:--"
+    hours, remainder = divmod(eta_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _format_download_percent(percent: float | None) -> str:
+    if percent is None:
+        return "?% Completed"
+    return f"{percent:.0f}% Completed"
+
+
+def _format_download_progress(progress: core.DownloadProgress) -> str:
+    return (
+        f"{_format_download_speed(progress.speed_bytes_per_sec)} - "
+        f"ETA: {_format_download_eta(progress.eta_seconds)} - "
+        f"{_format_download_percent(progress.percent)}"
+    )
+
+
+def _confirm_disk_usage(plan: core.DownloadPlan) -> bool:
+    if plan.estimated_size_bytes is None:
+        return typer.confirm(
+            "This download's disk usage could not be estimated. Continue?",
+            default=True,
+        )
+    return typer.confirm(
+        "This download is estimated to use "
+        f"{_format_estimated_disk_usage(plan)} of disk space. Continue?",
+        default=True,
+    )
+
+
+def _confirm_saved_output(output_path: Path | None) -> Path:
+    if output_path is None:
+        raise errors.DownloadError(
+            "Download finished but no output path was recorded."
+        )
+    resolved = output_path.resolve()
+    if not resolved.is_file():
+        raise errors.DownloadError(
+            f"Download finished but output file is missing: {resolved}"
+        )
+    return resolved
+
+
+def _print_saved_output(resolved: Path) -> None:
+    typer.secho(f"Saved to {resolved}", fg=typer.colors.GREEN)
+
+
+def _print_download_size(resolved: Path) -> None:
+    size_bytes = resolved.stat().st_size
+    typer.secho(
+        f"Size: {_format_size_bytes(size_bytes)}",
+        fg=typer.colors.GREEN,
     )
 
 
@@ -439,9 +849,23 @@ def init_command(
             help="Default behavior when the planned output file already exists.",
         ),
     ] = None,
+    ask_for_disk_usage: Annotated[
+        bool | None,
+        typer.Option(
+            "--ask-for-disk-usage/--no-ask-for-disk-usage",
+            help="Ask for confirmation with an estimated disk usage before downloads.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
+    ] = False,
+    use_defaults: Annotated[
+        bool,
+        typer.Option(
+            "--default",
+            help="Write config using built-in defaults without prompts.",
+        ),
     ] = False,
 ) -> None:
     """Create the required user config file."""
@@ -454,7 +878,9 @@ def init_command(
         default_audio_quality,
         retry_on_network_failure,
         default_exists_behavior,
+        ask_for_disk_usage,
         force,
+        use_defaults=use_defaults,
     )
 
 
@@ -517,9 +943,23 @@ def config_init_command(
             help="Default behavior when the planned output file already exists.",
         ),
     ] = None,
+    ask_for_disk_usage: Annotated[
+        bool | None,
+        typer.Option(
+            "--ask-for-disk-usage/--no-ask-for-disk-usage",
+            help="Ask for confirmation with an estimated disk usage before downloads.",
+        ),
+    ] = None,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite the existing config file."),
+    ] = False,
+    use_defaults: Annotated[
+        bool,
+        typer.Option(
+            "--default",
+            help="Write config using built-in defaults without prompts.",
+        ),
     ] = False,
 ) -> None:
     """Create the required user config file."""
@@ -532,7 +972,9 @@ def config_init_command(
         default_audio_quality,
         retry_on_network_failure,
         default_exists_behavior,
+        ask_for_disk_usage,
         force,
+        use_defaults=use_defaults,
     )
 
 
@@ -551,6 +993,7 @@ def config_show_command() -> None:
     typer.echo(
         f"Default exists behavior: {loaded_config.default_exists_behavior.value}"
     )
+    typer.echo(f"Ask for disk usage: {str(loaded_config.ask_for_disk_usage).lower()}")
 
 
 @config_app.command("remove")
@@ -688,7 +1131,10 @@ def download_command(
         bool,
         typer.Option(
             "--dry-run",
-            help="Validate metadata and print the planned output without downloading.",
+            help=(
+                "Validate metadata and print the planned output and estimated "
+                "disk usage without downloading."
+            ),
         ),
     ] = False,
     verbose: Annotated[
@@ -720,58 +1166,89 @@ def download_command(
             help="Behavior when the planned output file already exists. Overrides config default.",
         ),
     ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Approve disk usage confirmation prompts for this download run.",
+        ),
+    ] = False,
 ) -> None:
     """Download URL(s) with a dub language."""
-    loaded_config = _load_config_or_exit()
-    effective_output_dir = (
-        _normalize_output_dir_or_exit(output_dir)
-        if output_dir is not None
-        else loaded_config.output_dir
+    status_console = Console(stderr=True)
+    status_enabled = _download_status_enabled(
+        status_console,
+        verbose=verbose,
+        debug=debug,
+        dry_run=dry_run,
     )
-    effective_ffmpeg_path = (
-        _normalize_ffmpeg_path_or_exit(ffmpeg_path)
-        if ffmpeg_path is not None
-        else loaded_config.ffmpeg_path
-    )
-    ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
-    effective_lang = (
-        _normalize_default_lang_or_exit(lang)
-        if lang is not None
-        else loaded_config.default_lang
-    )
-    effective_download_mode = (
-        _normalize_download_mode_or_exit(mode)
-        if mode is not None
-        else loaded_config.default_download_mode
-    )
-    if video_quality is not None and effective_download_mode == DownloadMode.AUDIO:
-        typer.secho(
-            "Input error: --video-quality can only be used with --mode video.",
-            fg=typer.colors.RED,
-            err=True,
+    with _DownloadStatusRenderer(status_console, enabled=status_enabled) as setup_status:
+        setup_status.update(core.DownloadStage.CHECKING_CONFIG)
+        loaded_config = _load_config_or_exit()
+        setup_status.update(core.DownloadStage.PREPARING_OPTIONS)
+        effective_output_dir = (
+            _normalize_output_dir_or_exit(output_dir)
+            if output_dir is not None
+            else loaded_config.output_dir
         )
-        raise typer.Exit(code=1)
+        effective_ffmpeg_path = (
+            _normalize_ffmpeg_path_or_exit(ffmpeg_path)
+            if ffmpeg_path is not None
+            else loaded_config.ffmpeg_path
+        )
+        ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
+        effective_lang = _effective_lang_or_exit(
+            lang=lang,
+            default_lang=loaded_config.default_lang,
+        )
+        effective_download_mode = (
+            _normalize_download_mode_or_exit(mode)
+            if mode is not None
+            else loaded_config.default_download_mode
+        )
+        if video_quality is not None and effective_download_mode == DownloadMode.AUDIO:
+            typer.secho(
+                "Input error: --video-quality can only be used with --mode video.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
-    effective_video_quality = (
-        _normalize_video_quality_or_exit(video_quality)
-        if video_quality is not None
-        else loaded_config.default_video_quality
-    )
-    effective_audio_quality = (
-        _normalize_audio_quality_or_exit(audio_quality)
-        if audio_quality is not None
-        else loaded_config.default_audio_quality
-    )
-    effective_retry_on_network_failure = (
-        _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
-        if retry_on_network_failure is not None
-        else loaded_config.retry_on_network_failure
-    )
-    effective_exists_behavior = (
-        _normalize_exists_behavior_or_exit(if_exists)
-        if if_exists is not None
-        else loaded_config.default_exists_behavior
-    )
+        effective_video_quality = (
+            _normalize_video_quality_or_exit(video_quality)
+            if video_quality is not None
+            else loaded_config.default_video_quality
+        )
+        effective_audio_quality = (
+            _normalize_audio_quality_or_exit(audio_quality)
+            if audio_quality is not None
+            else loaded_config.default_audio_quality
+        )
+        effective_retry_on_network_failure = (
+            _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
+            if retry_on_network_failure is not None
+            else loaded_config.retry_on_network_failure
+        )
+        effective_exists_behavior = (
+            _normalize_exists_behavior_or_exit(if_exists)
+            if if_exists is not None
+            else loaded_config.default_exists_behavior
+        )
+        effective_ask_for_disk_usage = loaded_config.ask_for_disk_usage
+        if (
+            effective_ask_for_disk_usage
+            and not dry_run
+            and not yes
+            and not _stdin_is_interactive()
+        ):
+            typer.secho(
+                "Refusing to download non-interactively with disk usage "
+                "confirmation enabled. Use --yes to approve.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
     failures = 0
     for url in urls:
@@ -802,21 +1279,43 @@ def download_command(
                     )
                 typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
             else:
-                download_result = core.download(
-                    url=url,
-                    lang=effective_lang,
-                    download_mode=effective_download_mode,
-                    ffmpeg_path=ffmpeg_location,
-                    output_dir=effective_output_dir,
-                    video_quality=effective_video_quality,
-                    audio_quality=effective_audio_quality,
-                    verbose=verbose,
-                    debug=debug,
-                    retry_on_network_failure=effective_retry_on_network_failure,
-                    exists_behavior=effective_exists_behavior,
-                )
+                download_kwargs = {
+                    "url": url,
+                    "lang": effective_lang,
+                    "download_mode": effective_download_mode,
+                    "ffmpeg_path": ffmpeg_location,
+                    "output_dir": effective_output_dir,
+                    "video_quality": effective_video_quality,
+                    "audio_quality": effective_audio_quality,
+                    "verbose": verbose,
+                    "debug": debug,
+                    "retry_on_network_failure": effective_retry_on_network_failure,
+                    "exists_behavior": effective_exists_behavior,
+                }
+                with _DownloadStatusRenderer(
+                    status_console,
+                    enabled=status_enabled,
+                ) as download_status:
+                    if download_status.enabled:
+                        download_kwargs["stage_callback"] = download_status.update
+                        download_kwargs["progress_callback"] = (
+                            download_status.update_progress
+                        )
+                    if effective_ask_for_disk_usage and not yes:
+                        def approval_callback(plan: core.DownloadPlan) -> bool:
+                            download_status.finish()
+                            return _confirm_disk_usage(plan)
+
+                        download_kwargs["approval_callback"] = approval_callback
+                    download_result = core.download(**download_kwargs)
                 if isinstance(download_result, core.DownloadResult):
+                    _print_skipped_invalid_tracks_warning(
+                        download_result.skipped_invalid_count
+                    )
                     _print_quality_notes(download_result.quality_notes)
+                    if download_result.status == core.DownloadStatus.CANCELLED:
+                        typer.secho("Cancelled", fg=typer.colors.YELLOW, bold=True)
+                        continue
                     if download_result.status == core.DownloadStatus.SKIPPED:
                         typer.secho("Skipped", fg=typer.colors.YELLOW, bold=True)
                         if download_result.output_path is not None:
@@ -825,6 +1324,13 @@ def download_command(
                             )
                         continue
                 typer.secho("Finished", fg=typer.colors.GREEN, bold=True)
+                saved_path = _confirm_saved_output(
+                    download_result.output_path
+                    if isinstance(download_result, core.DownloadResult)
+                    else None
+                )
+                _print_saved_output(saved_path)
+                _print_download_size(saved_path)
         except errors.DubbedVideoDownloaderError as exc:
             failures += 1
             _print_command_error(exc, debug=debug)
@@ -873,7 +1379,7 @@ def langs_command(
         else loaded_config.retry_on_network_failure
     )
     try:
-        langs = core.get_available_audio_langs_for_url(
+        inventory = core.get_audio_language_inventory_for_url(
             url,
             verbose=verbose,
             debug=debug,
@@ -882,11 +1388,22 @@ def langs_command(
     except errors.DubbedVideoDownloaderError as exc:
         _print_command_error(exc, debug=debug)
         raise typer.Exit(code=1) from exc
-    if not langs:
-        typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
+    if not inventory.langs:
+        if inventory.skipped_invalid_count > 0:
+            skipped = ", ".join(dict.fromkeys(inventory.skipped_invalid_tags))
+            detail = f" (skipped: {skipped})" if skipped else ""
+            typer.secho(
+                "Audio tracks were found but none have a valid language tag"
+                f"{detail}.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+        else:
+            typer.secho("No multi-language audio tracks found.", fg=typer.colors.YELLOW)
         raise typer.Exit(code=1)
 
-    for lang in sorted(langs):
+    _print_skipped_invalid_tracks_warning(inventory.skipped_invalid_count)
+    for lang in languages.display_language_tags(inventory.langs):
         typer.echo(lang)
 
 
@@ -932,10 +1449,9 @@ def qualities_command(
 ) -> None:
     """Show available video qualities and dubbed audio quality candidates."""
     loaded_config = _load_config_or_exit()
-    effective_lang = (
-        _normalize_default_lang_or_exit(lang)
-        if lang is not None
-        else loaded_config.default_lang
+    effective_lang = _effective_lang_or_exit(
+        lang=lang,
+        default_lang=loaded_config.default_lang,
     )
     effective_retry_on_network_failure = (
         _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)

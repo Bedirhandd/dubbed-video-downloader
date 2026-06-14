@@ -132,6 +132,7 @@ default_video_quality: best
 default_audio_quality: best
 retry_on_network_failure: 3
 default_exists_behavior: skip
+ask_for_disk_usage: false
 ```
 
 `ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
@@ -148,15 +149,23 @@ kaç kez yeniden deneneceğini belirler. Network retry davranışını kapatmak 
 `0` kullanabilirsiniz.
 `default_exists_behavior`, planlanan çıktı dosyası zaten varsa ne yapılacağını
 belirler. Desteklenen değerler `skip`, `fail` ve `overwrite`.
+`ask_for_disk_usage: true`, her gerçek indirmeden önce seçilen medya boyutu
+tahmin edildikten sonra onay sorulmasını sağlar. Bu anahtarı içermeyen mevcut
+config dosyaları `false` gibi davranır.
 
 Config dosyasını görmek veya kaldırmak için:
 
 ```bash
 uv run dbdvdl config show
-uv run dbdvdl config remove
+uv run dbdvdl config remove -y
 ```
 
+Onay sorulmasını istiyorsanız `-y` vermeyin; scriptlerde `--yes` de
+kullanabilirsiniz. Non-interactive ortamlarda `config remove` için `-y` veya
+`--yes` gerekir.
 Kaldırdıktan sonra yeni config oluşturmak için tekrar `uv run dbdvdl init` çalıştırabilirsiniz.
+`dbdvdl init` default değerlerle veya açıkça verilen flaglerle non-interactive
+çalışabilir; mevcut config dosyasını değiştirmek için `--force` kullanın.
 
 Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
 
@@ -176,12 +185,15 @@ uv run dbdvdl download \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg \
   --retry-on-network-failure 5 \
-  --if-exists skip
+  --if-exists skip \
+  --yes
 ```
 
 CLI seçenekleri o çalıştırma için config değerlerini ezer; buna
 `--mode`, `--video-quality`, `--audio-quality` ve
 `--retry-on-network-failure` ile `--if-exists` da dahildir.
+`ask_for_disk_usage: true` olduğunda scriptlerde tahmini disk kullanımı onayını
+vermek için `--yes` veya `-y` kullanın.
 
 Mevcut çıktı davranışı açıkça seçilir:
 
@@ -194,8 +206,21 @@ uv run dbdvdl download URL --if-exists overwrite
 - `skip` varsayılandır; final çıktı dosyası zaten varsa indirme yapmadan
   başarıyla biter.
 - `fail`, final çıktı dosyası zaten varsa o URL için hata verir.
-- `overwrite`, yt-dlp'nin overwrite davranışını kullanarak final çıktı dosyasını
+- `overwrite`, tamamlanmış geçici indirmeden sonra final çıktı dosyasını
   değiştirir.
+
+İndirmeler önce geçici bir staging klasörüne yazılır:
+
+```text
+<çıktı-klasörü>/tmp/.incomplete/<run-id>/...
+```
+
+Yalnızca tamamen bitmiş indirme final
+`<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` konumuna taşınır. Ctrl+C'ye
+basarsanız veya indirme hata verirse aktif staging klasörü silinir ve kısmi
+medya sonraki çalıştırmada otomatik devam ettirilmez. Süreç zorla kapatılırsa
+veya bilgisayar temizlik çalışmadan kapanırsa, eski ve aktif olmayan staging
+klasörleri bir sonraki gerçek `download` komutu başladığında temizlenir.
 
 Belirli bir URL ve dublaj dili için kullanılabilir kalite seçeneklerini görmek
 için `qualities` komutunu kullanabilirsiniz:
@@ -219,16 +244,19 @@ Kalite davranışı açık çözünürlüklerde bilinçli olarak katıdır:
 
 URL'yi, etkin dublaj dilini, etkin indirme modunu ve kaliteyi doğrulayıp
 mevcut çıktı davranışını ve planlanan çıktı yolunu görmek için `--dry-run`
-kullanabilirsiniz. Bu mod indirme, birleştirme veya çıktı klasörü oluşturma
-işlemi yapmaz:
+kullanabilirsiniz. Bu mod tahmini disk kullanımını da gösterir; indirme,
+birleştirme veya çıktı klasörü oluşturma işlemi yapmaz:
 
 ```bash
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-CLI çıktısını sade tutmak için yt-dlp ilerleme, bilgi, uyarı ve debug mesajları
-varsayılan olarak gizlenir. yt-dlp ilerleme, bilgi ve uyarılarını görmek için
-`download` veya `langs` komutlarında `--verbose` kullanabilirsiniz:
+Etkileşimli `download` çalıştırmalarında varsayılan olarak meta veri alma,
+kalite seçme, medyayı indirme ve medyayı birleştirme gibi ana adımlar için kısa
+durum satırları gösterilir. CLI çıktısını sade tutmak için ham yt-dlp ilerleme,
+bilgi, uyarı ve debug mesajları gizli kalır. Bunların yerine yt-dlp ilerleme,
+bilgi ve uyarılarını görmek için `download` veya `langs` komutlarında
+`--verbose` kullanabilirsiniz:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
@@ -249,16 +277,29 @@ Video modunda araç şu işlemleri yapar:
 2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
 3. İstenen video kalitesini ve dublaj ses kalitesini seçer.
 4. Planlanan çıktı yolunu seçilen `--if-exists` davranışına göre kontrol eder.
-5. Videoyu ve seçilen ses parçasını indirir.
-6. Bunları `.mkv` dosyasında birleştirir.
-7. Dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör yapısına kaydeder.
+5. `ask_for_disk_usage: true` ise disk kullanımı onayı ister.
+6. Videoyu ve seçilen ses parçasını geçici staging klasörüne indirir.
+7. Bunları `.mkv` dosyasında birleştirir.
+8. Tamamlanan dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör
+   yapısına taşır.
 
 Ses modunda araç yalnızca seçilen dublajlı ses akışını indirir ve yt-dlp'nin
 seçtiği doğal ses uzantısıyla aynı klasör yapısına kaydeder. `--video-quality`
 yalnızca video modunda geçerlidir.
 
-`--dry-run` ile araç doğrulama, çıktı yolu önizlemesi ve mevcut çıktı
-önizlemesinden sonra durur.
+`--dry-run` ile araç doğrulama, çıktı yolu önizlemesi, tahmini disk kullanımı
+önizlemesi ve mevcut çıktı önizlemesinden sonra durur.
+
+`ask_for_disk_usage: true` ayarlandığında gerçek `download` çalıştırmaları
+medya baytları yazılmadan önce onay ister:
+
+```text
+This download is estimated to use ~139 MB of disk space. Continue? [Y/n]
+```
+
+yt-dlp seçilen medya boyutunu tahmin edemezse onay mesajı disk kullanımının
+bilinmediğini söyler. Non-interactive ortamlarda bu onay için `--yes` veya
+`-y` gerekir; aksi halde komut indirme metadata'sı alınmadan çıkar.
 
 ## Bağımlılıkları Güncelleme
 

@@ -131,6 +131,7 @@ default_video_quality: best
 default_audio_quality: best
 retry_on_network_failure: 3
 default_exists_behavior: skip
+ask_for_disk_usage: false
 ```
 
 Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
@@ -147,15 +148,22 @@ extraction, and media download failures are retried. Set it to `0` to disable
 network retries.
 Use `default_exists_behavior` to control what happens when the planned output
 file already exists. Supported values are `skip`, `fail`, and `overwrite`.
+Use `ask_for_disk_usage: true` to ask for confirmation before each real
+download after the tool estimates the selected media size. Existing configs that
+do not include this key behave as `false`.
 
 Inspect or remove the config with:
 
 ```bash
 uv run dbdvdl config show
-uv run dbdvdl config remove
+uv run dbdvdl config remove -y
 ```
 
+Omit `-y` to be prompted before removal, or use `--yes` in scripts. In
+non-interactive environments, `config remove` requires `-y` or `--yes`.
 After removing it, run `uv run dbdvdl init` again to create a fresh config.
+`dbdvdl init` can also run non-interactively with defaults or explicit flags;
+use `--force` to replace an existing config file.
 
 You can pass multiple URLs and optional output/FFmpeg settings:
 
@@ -175,12 +183,15 @@ uv run dbdvdl download \
   --output-dir ~/Downloads/dbdvdl-output \
   --ffmpeg-path /path/to/ffmpeg \
   --retry-on-network-failure 5 \
-  --if-exists skip
+  --if-exists skip \
+  --yes
 ```
 
 CLI options override config values for that run, including
 `--mode`, `--video-quality`, `--audio-quality`, and
-`--retry-on-network-failure`, and `--if-exists`.
+`--retry-on-network-failure`, and `--if-exists`. When
+`ask_for_disk_usage: true`, use `--yes` or `-y` in scripts to approve the
+estimated disk usage prompt non-interactively.
 
 Existing output behavior is explicit:
 
@@ -193,7 +204,20 @@ uv run dbdvdl download URL --if-exists overwrite
 - `skip` is the default and finishes successfully without downloading when the
   final output file already exists.
 - `fail` stops that URL with an error when the final output file already exists.
-- `overwrite` replaces the final output file using yt-dlp's overwrite behavior.
+- `overwrite` replaces the final output file after a complete staged download.
+
+Downloads are written to a temporary staging directory first:
+
+```text
+<output-dir>/tmp/.incomplete/<run-id>/...
+```
+
+Only a fully completed download is moved into the final
+`<output-dir>/<lang>/<channel>/<title>/` location. If you press Ctrl+C or the
+download fails, the active staging directory is removed and partial media is not
+resumed automatically on the next run. If the process is force-killed or the
+computer powers off before cleanup can run, stale inactive staging directories
+are removed the next time a real `download` command starts.
 
 Use `qualities` to inspect the choices available for a specific URL and dub
 language:
@@ -220,15 +244,18 @@ Quality behavior is intentionally strict for dubbed video output:
 
 Use `--dry-run` to validate the URL, effective dub language, and effective
 download mode, quality, and existing-output behavior, then print the planned
-output path without downloading, merging, or creating output folders:
+output path and estimated disk usage without downloading, merging, or creating
+output folders:
 
 ```bash
 uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-By default, yt-dlp progress, info, warnings, and debug messages are hidden to
-keep CLI output focused. Use `--verbose` on `download` or `langs` to show
-yt-dlp progress, info, and warnings:
+By default, interactive `download` runs show short status lines for each major
+step, such as fetching metadata, selecting qualities, downloading media, and
+merging media. Raw yt-dlp progress, info, warnings, and debug messages remain
+hidden to keep CLI output focused. Use `--verbose` on `download` or `langs` to
+show yt-dlp progress, info, and warnings instead:
 
 ```bash
 uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
@@ -249,16 +276,28 @@ In video mode, the tool will:
 2. Print an error with available languages if the requested language is missing.
 3. Select the requested video quality and dubbed audio quality.
 4. Check the planned output path against the selected `--if-exists` behavior.
-5. Download the video and the requested audio stream.
-6. Merge them into `.mkv`.
-7. Save them under `<output-dir>/<lang>/<channel>/<title>/`.
+5. Ask for disk usage approval when `ask_for_disk_usage: true`.
+6. Download the video and the requested audio stream into temporary staging.
+7. Merge them into `.mkv`.
+8. Move the completed file into `<output-dir>/<lang>/<channel>/<title>/`.
 
 In audio mode, the tool downloads only the selected dubbed audio stream and
 saves it under the same folder structure with the native audio extension chosen
 by yt-dlp. `--video-quality` is only valid in video mode.
 
-With `--dry-run`, the tool stops after validation, output path preview, and
-existing-output preview.
+With `--dry-run`, the tool stops after validation, output path preview,
+estimated disk usage preview, and existing-output preview.
+
+When `ask_for_disk_usage: true` is set, real `download` runs prompt before
+media bytes are written:
+
+```text
+This download is estimated to use ~139 MB of disk space. Continue? [Y/n]
+```
+
+If yt-dlp cannot estimate the selected media size, the prompt says the disk
+usage is unknown. In non-interactive environments this confirmation requires
+`--yes` or `-y`; otherwise the command exits before download metadata is fetched.
 
 ## Updating Dependencies
 

@@ -384,7 +384,7 @@ def _is_audio_format(format_info: dict[str, Any], lang: str) -> bool:
     return (
         format_info.get("vcodec") == "none"
         and format_info.get("acodec") not in (None, "none")
-        and format_info.get("language") == lang
+        and (format_info.get("language") or "").strip() == lang.strip()
     )
 
 

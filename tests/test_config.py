@@ -31,7 +31,8 @@ class ConfigTests(unittest.TestCase):
                 "default_video_quality: 720p\n"
                 "default_audio_quality: low\n"
                 "retry_on_network_failure: 5\n"
-                "default_exists_behavior: overwrite\n",
+                "default_exists_behavior: overwrite\n"
+                "ask_for_disk_usage: true\n",
                 encoding="utf-8",
             )
 
@@ -49,6 +50,7 @@ class ConfigTests(unittest.TestCase):
             loaded_config.default_exists_behavior,
             config.FileExistsBehavior.OVERWRITE,
         )
+        self.assertTrue(loaded_config.ask_for_disk_usage)
 
     def test_missing_optional_keys_use_defaults(self) -> None:
         loaded_config = config.config_from_mapping(
@@ -82,6 +84,10 @@ class ConfigTests(unittest.TestCase):
             loaded_config.default_exists_behavior,
             config.DEFAULT_EXISTS_BEHAVIOR,
         )
+        self.assertEqual(
+            loaded_config.ask_for_disk_usage,
+            config.DEFAULT_ASK_FOR_DISK_USAGE,
+        )
 
     def test_unknown_keys_are_ignored(self) -> None:
         loaded_config = config.config_from_mapping(
@@ -94,6 +100,7 @@ class ConfigTests(unittest.TestCase):
                 "default_audio_quality": "medium",
                 "retry_on_network_failure": 4,
                 "default_exists_behavior": "fail",
+                "ask_for_disk_usage": True,
                 "future": "accepted",
             }
         )
@@ -109,6 +116,7 @@ class ConfigTests(unittest.TestCase):
             loaded_config.default_exists_behavior,
             config.FileExistsBehavior.FAIL,
         )
+        self.assertTrue(loaded_config.ask_for_disk_usage)
 
     def test_missing_ffmpeg_path_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:
@@ -161,6 +169,27 @@ class ConfigTests(unittest.TestCase):
             config.normalize_default_lang(" ")
 
         self.assertIn("default_lang", str(context.exception))
+
+    def test_default_lang_normalizes_aliases(self) -> None:
+        self.assertEqual(config.normalize_default_lang("eng"), "en")
+        self.assertEqual(config.normalize_default_lang("en_uk"), "en-GB")
+
+    def test_invalid_default_lang_fails(self) -> None:
+        with self.assertRaises(config.ConfigError) as context:
+            config.normalize_default_lang("jp")
+
+        self.assertIn("default_lang", str(context.exception))
+
+    def test_load_config_accepts_unnormalized_default_lang(self) -> None:
+        loaded_config = config.config_from_mapping(
+            {
+                "output_dir": "/tmp/dbdvdl-output",
+                "ffmpeg_path": "ffmpeg",
+                "default_lang": "jp",
+            }
+        )
+
+        self.assertEqual(loaded_config.default_lang, "jp")
 
     def test_download_mode_accepts_video_and_audio(self) -> None:
         self.assertEqual(
@@ -271,6 +300,18 @@ class ConfigTests(unittest.TestCase):
             config.normalize_retry_on_network_failure(True)
 
         self.assertIn("retry_on_network_failure", str(context.exception))
+
+    def test_ask_for_disk_usage_accepts_booleans(self) -> None:
+        self.assertTrue(config.normalize_ask_for_disk_usage(True))
+        self.assertFalse(config.normalize_ask_for_disk_usage(False))
+
+    def test_ask_for_disk_usage_rejects_non_booleans(self) -> None:
+        for value in ("true", 1, None):
+            with self.subTest(value=value):
+                with self.assertRaises(config.ConfigError) as context:
+                    config.normalize_ask_for_disk_usage(value)
+
+                self.assertIn("ask_for_disk_usage", str(context.exception))
 
     def test_relative_output_dir_fails(self) -> None:
         with self.assertRaises(config.ConfigError) as context:
