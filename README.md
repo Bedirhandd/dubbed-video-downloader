@@ -1,327 +1,124 @@
 # YouTube Dubbed Video Downloader
 
-A Python CLI that uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/) to download YouTube video or audio with a specific **dub language** (for example Turkish, English, or Spanish).
+Download YouTube videos or audio with the **dub language you actually want** - Japanese, French, Portuguese, and more.
 
-This tool is helpful if you want to:
+AI has made it easier than ever for creators to publish the same video with dubbed audio in multiple languages. Channels that once shipped in one language now often offer German, Hindi, Korean, and more on a single upload.
 
-- Download YouTube videos with **dubbed audio tracks** and multi-language support.
-- Save video downloads as `.mkv` files with the chosen dubbed audio merged with video.
-- Save audio downloads as the selected dubbed audio stream in its native format.
-- Organize downloads by **language, channel, and title**.
-- Work with creators who provide **multiple audio tracks** on YouTube.
+On YouTube, switching to another dub is a few clicks away. Off YouTube, getting the track you want is a different story. Most downloaders grab the default stream, hide alternate languages behind format strings, or save files with names that tell you nothing.
 
-The CLI saves video-mode downloads in this folder structure:
+So how do you download a video with the French dub, or save just the Japanese audio? This CLI is built for that: find the dubbed track, pick the quality, and save the result in a predictable place.
 
-```text
-<output-dir>/<lang>/<channel>/<title>/<title>.mkv
+> Türkçe dokümantasyon için [README-TR.md](README-TR.md) dosyasına bakın.
 
-Example:
-~/Downloads/dbdvdl-output/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_Course.mkv
-```
+## Why this exists
 
-Audio-mode downloads use the same folder structure and keep the native audio
-extension selected by yt-dlp, such as `.webm` or `.m4a`.
+This tool wraps [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/) with a small, purpose-built workflow:
 
-## Tested Environment
+- **Language-first** - list available dubs before you commit to a download.
+- **Organized output** - files land under `language / channel / title`, not a random filename in your Downloads folder.
+- **Video or audio** - merge dubbed audio into `.mkv`, or save the audio stream on its own.
+- **Sensible defaults** - a short setup step stores your preferences; override anything per run when you need to.
 
-- Python `3.12.3`
-- `yt-dlp==2026.3.17`
-- `yt-dlp-ejs==0.8.0`
-- Node.js `22.22.2`
-- Dependency management with [uv](https://docs.astral.sh/uv/)
+Behind the scenes, downloads are staged in a temporary folder and only moved into place when complete. Interrupted runs clean up after themselves. You can preview a download with `--dry-run` before anything hits disk.
 
-## Requirements
+## Quick start
 
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Python `>=3.10` (uv can use the project `.python-version`)
-- Node.js on your system `PATH` for yt-dlp's YouTube JavaScript challenge solver
-- **FFmpeg** installed and accessible in your system `PATH`, or set in the config file
+**Requirements:** [uv](https://docs.astral.sh/uv/), Python 3.10+, [Node.js](https://nodejs.org/) (for YouTube's JS solver), and **FFmpeg** on your `PATH`.
 
-Check if Node.js and FFmpeg are available:
+**Platform:** This project is currently developed and tested on Linux. Windows and macOS are not supported yet and will likely not work as expected.
 
 ```bash
-node --version
-ffmpeg -version
-```
-
-If FFmpeg is not installed, download it from the official site: [https://ffmpeg.org/](https://ffmpeg.org/)
-
-## Installation
-
-Clone the repo, then install uv if needed:
-
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows PowerShell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Sync the project environment:
-
-```bash
+git clone https://github.com/Bedirhandd/dubbed-video-downloader.git
+cd dubbed-video-downloader
 uv sync
-```
-
-uv will create `.venv/` and install the dependencies from `pyproject.toml` and `uv.lock`.
-The project includes `yt-dlp-ejs`; Node.js is still needed to run the solver for full YouTube format and dubbed-audio discovery.
-
-## Usage
-
-Use the CLI with uv:
-
-```bash
-uv run dbdvdl --help
 uv run dbdvdl init
-uv run dbdvdl config show
 uv run dbdvdl doctor
-uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --mode audio
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --video-quality 720p
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-Before using `langs`, `qualities`, or `download`, create the required user config:
+`doctor` checks Python, your config, FFmpeg, Node.js, and the pinned yt-dlp packages - a quick way to confirm everything is ready.
+
+**First download:**
 
 ```bash
-uv run dbdvdl init
+# See which dub languages a video offers
+uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Download with your default language (set during init)
+uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Or pick a language and quality explicitly
+uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko --video-quality 1080p
 ```
 
-You can also use the equivalent config subcommand:
+Run `uv run dbdvdl --help` for the full command list.
 
-```bash
-uv run dbdvdl config init
-```
+## Commands
 
-To choose a different default dub language during setup:
 
-```bash
-uv run dbdvdl init --default-lang tr
-```
+| Command         | What it does                                                              |
+| --------------- | ------------------------------------------------------------------------- |
+| `init`          | Create `~/.config/dubbed-video-downloader/config.yaml` with your defaults |
+| `doctor`        | Verify Python, config, FFmpeg, Node.js, and dependencies                  |
+| `langs URL`     | List dubbed audio languages available for a video                         |
+| `qualities URL` | Show video and audio quality options for a language                       |
+| `download URL…` | Download one or more videos                                               |
+| `config show`   | Print your current configuration                                          |
+| `config remove` | Remove the config file                                                    |
 
-To choose audio-only downloads by default during setup:
 
-```bash
-uv run dbdvdl init --default-download-mode audio
-```
+Useful flags on `download`: `--lang`, `--mode video|audio`, `--video-quality`, `--audio-quality`, `--dry-run`, `--if-exists skip|fail|overwrite`, `--verbose`, `--debug`.
 
-To choose how existing output files are handled by default:
+## Where files go
 
-```bash
-uv run dbdvdl init --default-exists-behavior fail
-```
-
-This writes:
+Video downloads are saved as `.mkv`:
 
 ```text
-~/.config/dubbed-video-downloader/config.yaml
+~/Downloads/dbdvdl-output/es/<channel>/<title>/<title>.mkv
 ```
 
-with:
+Audio-only downloads use the same folder layout and keep the native extension (`.webm`, `.m4a`, etc.).
 
-```yaml
-output_dir: ~/Downloads/dbdvdl-output
-ffmpeg_path: ffmpeg
-default_lang: en
-default_download_mode: video
-default_video_quality: best
-default_audio_quality: best
-retry_on_network_failure: 3
-default_exists_behavior: skip
-ask_for_disk_usage: false
-```
+During a download, partial files stay in `<output-dir>/tmp/.incomplete/` until the job finishes successfully.
 
-Use `ffmpeg_path: ffmpeg` to resolve FFmpeg from your system `PATH`, or set it to an absolute executable path.
-Use `default_lang` as the dub language when `download` is run without `--lang`.
-Use `default_download_mode` as the mode when `download` is run without
-`--mode`. Supported values are `video` and `audio`.
-Use `default_video_quality` for video-mode resolution selection when
-`--video-quality` is omitted. Supported values are `best`, `medium`, `low`, or
-an exact resolution such as `2160p`, `1080p`, or `720p`.
-Use `default_audio_quality` for the selected dubbed audio stream when
-`--audio-quality` is omitted. Supported values are `best`, `medium`, and `low`.
-Use `retry_on_network_failure` to control how many times transient metadata,
-extraction, and media download failures are retried. Set it to `0` to disable
-network retries.
-Use `default_exists_behavior` to control what happens when the planned output
-file already exists. Supported values are `skip`, `fail`, and `overwrite`.
-Use `ask_for_disk_usage: true` to ask for confirmation before each real
-download after the tool estimates the selected media size. Existing configs that
-do not include this key behave as `false`.
+## Configuration
 
-Inspect or remove the config with:
+`dbdvdl init` writes a YAML config to `~/.config/dubbed-video-downloader/config.yaml`. You can set defaults for output folder, dub language, download mode, quality presets, network retries, and how to handle files that already exist.
 
 ```bash
+uv run dbdvdl init --default-lang de
 uv run dbdvdl config show
-uv run dbdvdl config remove -y
 ```
 
-Omit `-y` to be prompted before removal, or use `--yes` in scripts. In
-non-interactive environments, `config remove` requires `-y` or `--yes`.
-After removing it, run `uv run dbdvdl init` again to create a fresh config.
-`dbdvdl init` can also run non-interactively with defaults or explicit flags;
-use `--force` to replace an existing config file.
+CLI flags override config values for a single run. For the full list of keys and behavior, run `uv run dbdvdl init --help` or inspect an initialized config with `config show`.
 
-You can pass multiple URLs and optional output/FFmpeg settings:
+## Coming soon
 
-The CLI saves to the configured `output_dir` and uses the configured
-`default_lang`, `default_download_mode`, and `default_exists_behavior`. If you
-pass `--output-dir`, use an absolute path; `~` is accepted. CLI options
-override config values for that run.
+- **Batch downloading** - queue playlists, channels, or URL lists with shared defaults
+- **Output format customization** - choose container and naming beyond the current defaults
+- **GUI** - a desktop interface for the same workflow, without memorizing flags
+- **Windows compatibility** - smoother first-run setup and packaging on Windows
 
-```bash
-uv run dbdvdl download \
-  "https://www.youtube.com/watch?v=EXAMPLE1" \
-  "https://www.youtube.com/watch?v=EXAMPLE2" \
-  --lang tr \
-  --mode video \
-  --video-quality 1080p \
-  --audio-quality best \
-  --output-dir ~/Downloads/dbdvdl-output \
-  --ffmpeg-path /path/to/ffmpeg \
-  --retry-on-network-failure 5 \
-  --if-exists skip \
-  --yes
-```
+## Report an issue
 
-CLI options override config values for that run, including
-`--mode`, `--video-quality`, `--audio-quality`, and
-`--retry-on-network-failure`, and `--if-exists`. When
-`ask_for_disk_usage: true`, use `--yes` or `-y` in scripts to approve the
-estimated disk usage prompt non-interactively.
+Found a bug, crash, or behavior that does not match the docs? [Open an issue](https://github.com/Bedirhandd/dubbed-video-downloader/issues) on GitHub.
 
-Existing output behavior is explicit:
+Helpful details to include:
 
-```bash
-uv run dbdvdl download URL --if-exists skip
-uv run dbdvdl download URL --if-exists fail
-uv run dbdvdl download URL --if-exists overwrite
-```
+- The command you ran
+- What you expected vs. what actually happened
+- Your OS and Python version (`dbdvdl doctor` output is useful here)
+- Verbose or debug output if the failure is hard to reproduce (`--verbose` or `--debug`)
 
-- `skip` is the default and finishes successfully without downloading when the
-  final output file already exists.
-- `fail` stops that URL with an error when the final output file already exists.
-- `overwrite` replaces the final output file after a complete staged download.
-
-Downloads are written to a temporary staging directory first:
-
-```text
-<output-dir>/tmp/.incomplete/<run-id>/...
-```
-
-Only a fully completed download is moved into the final
-`<output-dir>/<lang>/<channel>/<title>/` location. If you press Ctrl+C or the
-download fails, the active staging directory is removed and partial media is not
-resumed automatically on the next run. If the process is force-killed or the
-computer powers off before cleanup can run, stale inactive staging directories
-are removed the next time a real `download` command starts.
-
-Use `qualities` to inspect the choices available for a specific URL and dub
-language:
-
-```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
-```
-
-Quality behavior is intentionally strict for dubbed video output:
-
-- Video mode selects a video-only stream and merges it with the requested
-  dubbed audio stream.
-- `best` uses yt-dlp's best matching video-only stream.
-- Video `medium` chooses the available video-only height closest to `720p`.
-- Video `low` chooses the lowest available video-only height.
-- Video exact values such as `1080p` require that exact height; if unavailable,
-  the command fails and prints the available heights.
-- Audio `medium` chooses the selected-language audio stream closest to `128k`
-  when bitrate metadata is available; otherwise it falls back to `best` with a
-  note.
-- Audio `low` chooses the lowest selected-language audio bitrate when metadata
-  is available; otherwise it uses yt-dlp's worst matching audio selector with a
-  note.
-
-Use `--dry-run` to validate the URL, effective dub language, and effective
-download mode, quality, and existing-output behavior, then print the planned
-output path and estimated disk usage without downloading, merging, or creating
-output folders:
-
-```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
-```
-
-By default, interactive `download` runs show short status lines for each major
-step, such as fetching metadata, selecting qualities, downloading media, and
-merging media. Raw yt-dlp progress, info, warnings, and debug messages remain
-hidden to keep CLI output focused. Use `--verbose` on `download` or `langs` to
-show yt-dlp progress, info, and warnings instead:
-
-```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --verbose
-```
-
-Use `--debug` for deeper troubleshooting. This enables yt-dlp debug output and
-prints tracebacks for per-URL download failures:
-
-```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --debug
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --debug
-```
-
-In video mode, the tool will:
-
-1. Check if the requested dub language is available for each video.
-2. Print an error with available languages if the requested language is missing.
-3. Select the requested video quality and dubbed audio quality.
-4. Check the planned output path against the selected `--if-exists` behavior.
-5. Ask for disk usage approval when `ask_for_disk_usage: true`.
-6. Download the video and the requested audio stream into temporary staging.
-7. Merge them into `.mkv`.
-8. Move the completed file into `<output-dir>/<lang>/<channel>/<title>/`.
-
-In audio mode, the tool downloads only the selected dubbed audio stream and
-saves it under the same folder structure with the native audio extension chosen
-by yt-dlp. `--video-quality` is only valid in video mode.
-
-With `--dry-run`, the tool stops after validation, output path preview,
-estimated disk usage preview, and existing-output preview.
-
-When `ask_for_disk_usage: true` is set, real `download` runs prompt before
-media bytes are written:
-
-```text
-This download is estimated to use ~139 MB of disk space. Continue? [Y/n]
-```
-
-If yt-dlp cannot estimate the selected media size, the prompt says the disk
-usage is unknown. In non-interactive environments this confirmation requires
-`--yes` or `-y`; otherwise the command exits before download metadata is fetched.
-
-## Updating Dependencies
-
-To upgrade yt-dlp within the uv-managed project:
-
-```bash
-uv lock --upgrade-package yt-dlp
-uv lock --upgrade-package yt-dlp-ejs
-uv sync
-```
-
-Commit the updated `uv.lock` when dependency versions change. Do not edit `uv.lock` manually.
+Suggestions and feature ideas are welcome too - whether or not they appear on the [coming soon](#coming-soon) list.
 
 ## Contributing
 
-Contributions and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for commit, branch, and pull request guidelines.
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit style, and how to run the test suite locally.
 
-## Notes
+## Legal disclaimer
 
-- If YouTube extraction fails or behaves unexpectedly, rerun the same `langs` or `download` command with `--verbose` to show yt-dlp progress and warnings, or `--debug` for debug logs and tracebacks.
-- Output paths can be customized with `--output-dir`.
+This tool is provided for **educational and personal use only**. Respect [YouTube's Terms of Service](https://www.youtube.com/static?template=terms) and the rights of content creators. Downloading and redistributing videos without permission may violate copyright laws.
 
-## Legal Disclaimer
+## License
 
-- This tool is provided for **educational and personal use only**.
-- Respect YouTube's [Terms of Service](https://www.youtube.com/static?template=terms) and the rights of content creators.
-- Downloading and redistributing videos without permission may violate copyright laws.
+This project is licensed under the [MIT License](LICENSE).

@@ -1,329 +1,122 @@
 # YouTube Dublajlı Video İndirici
 
-[yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.org/) kullanarak YouTube video veya seslerini belirli bir **dublaj diliyle** (örneğin Türkçe, İngilizce veya İspanyolca) indirmenizi sağlayan Python CLI aracı.
+YouTube videolarını veya seslerini **istediğiniz dublaj diliyle** indirin - Japonca, Fransızca, Portekizce ve daha fazlası.
 
-Araç şu durumlar için kullanılabilir:
+Yapay zeka, içerik üreticilerinin aynı videoyu birden fazla dilde dublajlı sesle yayınlamasını her zamankinden kolaylaştırdı. Eskiden tek dilde yayınlayan kanallar artık çoğu zaman Almanca, Hintçe, Korece ve daha fazlasını tek bir yüklemede sunuyor.
 
-- **Dublajlı YouTube videolarını** indirmek (çok dilli ses desteği).
-- Video indirmelerini seçilen dublajlı ses parçasıyla `.mkv` olarak kaydetmek.
-- Ses indirmelerini seçilen dublajlı ses akışının kendi formatında kaydetmek.
-- Dosyaları **dil, kanal ve başlık** klasör yapısına göre düzenlemek.
-- Çoklu ses parçası sunan kanallarla çalışmak (örneğin MrBeast).
+YouTube'da başka bir dublaja geçmek birkaç tıklama. YouTube dışında istediğiniz parçayı almak başka bir hikaye. Çoğu indirici varsayılan akışı alır, alternatif dilleri format dizelerinin arkasına gizler ya da dosyaları size hiçbir şey anlatmayan isimlerle kaydeder.
 
-CLI, video modundaki indirmeleri `.mkv` formatında kaydeder ve şu klasör
-yapısını oluşturur:
+Peki Fransızca dublajlı videoyu nasıl indireceksiniz, ya da yalnızca Japonca sesi nasıl kaydedeceksiniz? Bu CLI tam bunun için: dublaj parçasını bulur, kaliteyi seçer ve sonucu öngörülebilir bir yere kaydeder.
 
-```text
-<çıktı-klasörü>/<dil>/<kanal>/<başlık>/<başlık>.mkv
+> İngilizce dokümantasyon için [README.md](README.md) dosyasına bakın.
 
-Örnek:
-~/Downloads/dbdvdl-output/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_Course.mkv
-```
+## Neden var?
 
-Ses modundaki indirmeler aynı klasör yapısını kullanır ve yt-dlp'nin seçtiği
-`.webm` veya `.m4a` gibi doğal ses uzantısını korur.
+Bu araç [yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.org/) üzerine küçük, amaca yönelik bir iş akışı kurar:
 
-## Test Edilen Ortam
+- **Dil öncelikli** - indirmeye başlamadan önce mevcut dublajları listeler.
+- **Düzenli çıktı** - dosyalar `dil / kanal / başlık` altına gider; İndirilenler klasöründe rastgele bir dosya adıyla kalmaz.
+- **Video veya ses** - dublajlı sesi `.mkv` içinde birleştirir ya da yalnızca ses akışını kaydeder.
+- **Mantıklı varsayılanlar** - kısa bir kurulum adımı tercihlerinizi saklar; gerektiğinde her çalıştırmada geçersiz kılabilirsiniz.
 
-- Python `3.12.3`
-- yt-dlp `2026.3.17`
-- yt-dlp-ejs `0.8.0`
-- Node.js `22.22.2`
-- Bağımlılık yönetimi için [uv](https://docs.astral.sh/uv/)
+Perde arkasında indirmeler önce geçici bir klasöre alınır ve yalnızca tamamlandığında asıl konuma taşınır. Yarıda kesilen çalışmalar kendini temizler. Diske bir şey yazılmadan önce `--dry-run` ile indirmeyi önizleyebilirsiniz.
 
-## Gereksinimler
+## Hızlı başlangıç
 
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Python `>=3.10` (uv proje `.python-version` dosyasını kullanabilir)
-- yt-dlp'nin YouTube JavaScript çözümleyicisi için sistem `PATH` içinde Node.js
-- **FFmpeg** sistem `PATH` içinde olmalı veya config dosyasında belirtilmeli
+**Gereksinimler:** [uv](https://docs.astral.sh/uv/), Python 3.10+, [Node.js](https://nodejs.org/) (YouTube JS çözücüsü için) ve `PATH` üzerinde **FFmpeg**.
 
-Node.js ve FFmpeg kurulu mu kontrol etmek için:
+**Platform:** Bu proje şu an Linux üzerinde geliştirilmekte ve test edilmektedir. Windows ve macOS henüz desteklenmemektedir ve büyük ihtimalle beklendiği gibi çalışmaz.
 
 ```bash
-node --version
-ffmpeg -version
-```
-
-Yüklü değilse resmi siteden indirebilirsiniz: [https://ffmpeg.org/](https://ffmpeg.org/)
-
-## Kurulum
-
-Repoyu klonlayın, sonra gerekirse uv kurun:
-
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows PowerShell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Proje ortamını senkronize edin:
-
-```bash
+git clone https://github.com/Bedirhandd/dubbed-video-downloader.git
+cd dubbed-video-downloader
 uv sync
-```
-
-uv `.venv/` klasörünü oluşturur ve bağımlılıkları `pyproject.toml` ile `uv.lock` üzerinden kurar.
-Projede `yt-dlp-ejs` bağımlılığı bulunur; YouTube formatlarını ve dublajlı sesleri tam görebilmek için Node.js yine de gereklidir.
-
-## Kullanım
-
-CLI'ı uv ile kullanın:
-
-```bash
-uv run dbdvdl --help
 uv run dbdvdl init
-uv run dbdvdl config show
 uv run dbdvdl doctor
-uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE"
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --mode audio
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --video-quality 720p
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
 ```
 
-`langs`, `qualities` veya `download` kullanmadan önce gerekli kullanıcı config dosyasını oluşturun:
+`doctor`, Python'u, config dosyanızı, FFmpeg'i, Node.js'i ve sabitlenmiş yt-dlp paketlerini kontrol eder - her şeyin hazır olduğunu doğrulamanın hızlı yolu.
+
+**İlk indirme:**
 
 ```bash
-uv run dbdvdl init
+# Videonun hangi dublaj dillerini sunduğunu görün
+uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Varsayılan dilinizle indirin (init sırasında ayarlanır)
+uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+
+# Ya da dili ve kaliteyi açıkça seçin
+uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko --video-quality 1080p
 ```
 
-Aynı işlem için eşdeğer config alt komutunu da kullanabilirsiniz:
+Tüm komut listesi için `uv run dbdvdl --help` çalıştırın.
 
-```bash
-uv run dbdvdl config init
-```
+## Komutlar
 
-Kurulum sırasında farklı bir varsayılan dublaj dili seçmek için:
+| Komut | Ne yapar |
+| --- | --- |
+| `init` | Varsayılanlarınızla `~/.config/dubbed-video-downloader/config.yaml` oluşturur |
+| `doctor` | Python, config, FFmpeg, Node.js ve bağımlılıkları doğrular |
+| `langs URL` | Bir video için kullanılabilir dublaj dillerini listeler |
+| `qualities URL` | Bir dil için video ve ses kalite seçeneklerini gösterir |
+| `download URL…` | Bir veya daha fazla video indirir |
+| `config show` | Geçerli yapılandırmanızı yazdırır |
+| `config remove` | Config dosyasını kaldırır |
 
-```bash
-uv run dbdvdl init --default-lang tr
-```
+`download` üzerinde kullanışlı bayraklar: `--lang`, `--mode video|audio`, `--video-quality`, `--audio-quality`, `--dry-run`, `--if-exists skip|fail|overwrite`, `--verbose`, `--debug`.
 
-Varsayılan olarak sadece ses indirmek için:
+## Dosyalar nereye gider?
 
-```bash
-uv run dbdvdl init --default-download-mode audio
-```
-
-Mevcut çıktı dosyaları için varsayılan davranışı seçmek için:
-
-```bash
-uv run dbdvdl init --default-exists-behavior fail
-```
-
-Bu komut şuraya yazar:
+Video indirmeleri `.mkv` olarak kaydedilir:
 
 ```text
-~/.config/dubbed-video-downloader/config.yaml
+~/Downloads/dbdvdl-output/es/<channel>/<title>/<title>.mkv
 ```
 
-İçerik:
+Yalnızca ses indirmeleri aynı klasör düzenini kullanır ve doğal uzantıyı korur (`.webm`, `.m4a` vb.).
 
-```yaml
-output_dir: ~/Downloads/dbdvdl-output
-ffmpeg_path: ffmpeg
-default_lang: en
-default_download_mode: video
-default_video_quality: best
-default_audio_quality: best
-retry_on_network_failure: 3
-default_exists_behavior: skip
-ask_for_disk_usage: false
-```
+İndirme sırasında kısmi dosyalar, işlem başarıyla bitene kadar `<output-dir>/tmp/.incomplete/` altında kalır.
 
-`ffmpeg_path: ffmpeg` FFmpeg'i sistem `PATH` içinden bulur. İsterseniz bunun yerine mutlak executable yolu verebilirsiniz.
-`default_lang`, `download` komutu `--lang` olmadan çalıştırıldığında kullanılacak dublaj dilidir.
-`default_download_mode`, `download` komutu `--mode` olmadan çalıştırıldığında
-kullanılacak indirme modudur. Desteklenen değerler `video` ve `audio`.
-`default_video_quality`, `--video-quality` verilmediğinde video modundaki
-çözünürlük seçimini belirler. Desteklenen değerler `best`, `medium`, `low` veya
-`2160p`, `1080p`, `720p` gibi tam çözünürlüklerdir.
-`default_audio_quality`, `--audio-quality` verilmediğinde seçilen dublaj ses
-akışının kalitesini belirler. Desteklenen değerler `best`, `medium` ve `low`.
-`retry_on_network_failure`, geçici metadata, çıkarım ve medya indirme hatalarında
-kaç kez yeniden deneneceğini belirler. Network retry davranışını kapatmak için
-`0` kullanabilirsiniz.
-`default_exists_behavior`, planlanan çıktı dosyası zaten varsa ne yapılacağını
-belirler. Desteklenen değerler `skip`, `fail` ve `overwrite`.
-`ask_for_disk_usage: true`, her gerçek indirmeden önce seçilen medya boyutu
-tahmin edildikten sonra onay sorulmasını sağlar. Bu anahtarı içermeyen mevcut
-config dosyaları `false` gibi davranır.
+## Yapılandırma
 
-Config dosyasını görmek veya kaldırmak için:
+`dbdvdl init`, `~/.config/dubbed-video-downloader/config.yaml` dosyasına bir YAML config yazar. Çıktı klasörü, dublaj dili, indirme modu, kalite ön ayarları, ağ yeniden denemeleri ve mevcut dosyaların nasıl ele alınacağı için varsayılanlar belirleyebilirsiniz.
 
 ```bash
+uv run dbdvdl init --default-lang de
 uv run dbdvdl config show
-uv run dbdvdl config remove -y
 ```
 
-Onay sorulmasını istiyorsanız `-y` vermeyin; scriptlerde `--yes` de
-kullanabilirsiniz. Non-interactive ortamlarda `config remove` için `-y` veya
-`--yes` gerekir.
-Kaldırdıktan sonra yeni config oluşturmak için tekrar `uv run dbdvdl init` çalıştırabilirsiniz.
-`dbdvdl init` default değerlerle veya açıkça verilen flaglerle non-interactive
-çalışabilir; mevcut config dosyasını değiştirmek için `--force` kullanın.
+CLI bayrakları tek bir çalıştırma için config değerlerini geçersiz kılar. Tüm anahtarların ve davranışın tam listesi için `uv run dbdvdl init --help` çalıştırın ya da oluşturulmuş config'i `config show` ile inceleyin.
 
-Birden fazla URL ve opsiyonel çıktı/FFmpeg ayarları verebilirsiniz:
+## Yakında
 
-CLI config içindeki `output_dir` altına kaydeder ve `default_lang` değerini
-kullanır. Ayrıca `default_download_mode` ve `default_exists_behavior`
-değerlerini kullanır. `--output-dir` verirseniz mutlak yol kullanın; `~`
-desteklenir. CLI seçenekleri o çalıştırma için config değerlerini ezer.
+- **Toplu indirme** - oynatma listelerini, kanalları veya URL listelerini ortak varsayılanlarla kuyruğa alma
+- **Çıktı formatı özelleştirme** - mevcut varsayılanların ötesinde konteyner ve adlandırma seçimi
+- **GUI** - bayrakları ezberlemeden aynı iş akışı için masaüstü arayüzü
+- **Windows uyumluluğu** - Windows'ta daha sorunsuz ilk kurulum ve paketleme
 
-```bash
-uv run dbdvdl download \
-  "https://www.youtube.com/watch?v=EXAMPLE1" \
-  "https://www.youtube.com/watch?v=EXAMPLE2" \
-  --lang tr \
-  --mode video \
-  --video-quality 1080p \
-  --audio-quality best \
-  --output-dir ~/Downloads/dbdvdl-output \
-  --ffmpeg-path /path/to/ffmpeg \
-  --retry-on-network-failure 5 \
-  --if-exists skip \
-  --yes
-```
+## Sorun bildirin
 
-CLI seçenekleri o çalıştırma için config değerlerini ezer; buna
-`--mode`, `--video-quality`, `--audio-quality` ve
-`--retry-on-network-failure` ile `--if-exists` da dahildir.
-`ask_for_disk_usage: true` olduğunda scriptlerde tahmini disk kullanımı onayını
-vermek için `--yes` veya `-y` kullanın.
+Bir hata, çökme veya dokümantasyonla uyuşmayan bir davranış mı buldunuz? GitHub'da [issue açın](https://github.com/Bedirhandd/dubbed-video-downloader/issues).
 
-Mevcut çıktı davranışı açıkça seçilir:
+Yardımcı olacak bilgiler:
 
-```bash
-uv run dbdvdl download URL --if-exists skip
-uv run dbdvdl download URL --if-exists fail
-uv run dbdvdl download URL --if-exists overwrite
-```
+- Çalıştırdığınız komut
+- Beklediğiniz sonuç ile gerçekte olan
+- İşletim sisteminiz ve Python sürümünüz (`dbdvdl doctor` çıktısı burada işe yarar)
+- Sorun tekrar üretmekte zorsa `--verbose` veya `--debug` çıktısı
 
-- `skip` varsayılandır; final çıktı dosyası zaten varsa indirme yapmadan
-  başarıyla biter.
-- `fail`, final çıktı dosyası zaten varsa o URL için hata verir.
-- `overwrite`, tamamlanmış geçici indirmeden sonra final çıktı dosyasını
-  değiştirir.
+Öneri ve özellik fikirleri de memnuniyetle karşılanır - [yakında](#yakında) listesinde olsun ya da olmasın.
 
-İndirmeler önce geçici bir staging klasörüne yazılır:
+## Katkıda bulunma
 
-```text
-<çıktı-klasörü>/tmp/.incomplete/<run-id>/...
-```
+Pull request'ler memnuniyetle karşılanır. Dal adlandırma, commit stili ve test paketini yerelde çalıştırma için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasına bakın.
 
-Yalnızca tamamen bitmiş indirme final
-`<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` konumuna taşınır. Ctrl+C'ye
-basarsanız veya indirme hata verirse aktif staging klasörü silinir ve kısmi
-medya sonraki çalıştırmada otomatik devam ettirilmez. Süreç zorla kapatılırsa
-veya bilgisayar temizlik çalışmadan kapanırsa, eski ve aktif olmayan staging
-klasörleri bir sonraki gerçek `download` komutu başladığında temizlenir.
+## Yasal uyarı
 
-Belirli bir URL ve dublaj dili için kullanılabilir kalite seçeneklerini görmek
-için `qualities` komutunu kullanabilirsiniz:
+Bu araç yalnızca **eğitim ve kişisel kullanım** için sağlanmaktadır. [YouTube Kullanım Şartları](https://www.youtube.com/static?template=terms)'na ve içerik üreticilerinin haklarına saygı gösterin. İzinsiz video indirmek ve yeniden paylaşmak telif haklarını ihlal edebilir.
 
-```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=EXAMPLE" --lang tr
-```
+## Lisans
 
-Kalite davranışı açık çözünürlüklerde bilinçli olarak katıdır:
-
-- `best`, yt-dlp'nin en iyi eşleşen akışını kullanır.
-- Video `medium`, `720p` hedefine en yakın mevcut yüksekliği seçer.
-- Video `low`, mevcut en düşük video yüksekliğini seçer.
-- `1080p` gibi tam video değerleri tam eşleşme ister; yoksa komut mevcut
-  yükseklikleri yazdırarak hata verir.
-- Audio `medium`, bitrate metadata'sı varsa seçilen dilde `128k` değerine en
-  yakın ses akışını seçer; metadata yoksa not düşerek `best` kullanır.
-- Audio `low`, bitrate metadata'sı varsa seçilen dildeki en düşük bitrate'i
-  seçer; metadata yoksa not düşerek yt-dlp'nin en kötü eşleşen audio selector'ını
-  kullanır.
-
-URL'yi, etkin dublaj dilini, etkin indirme modunu ve kaliteyi doğrulayıp
-mevcut çıktı davranışını ve planlanan çıktı yolunu görmek için `--dry-run`
-kullanabilirsiniz. Bu mod tahmini disk kullanımını da gösterir; indirme,
-birleştirme veya çıktı klasörü oluşturma işlemi yapmaz:
-
-```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --dry-run
-```
-
-Etkileşimli `download` çalıştırmalarında varsayılan olarak meta veri alma,
-kalite seçme, medyayı indirme ve medyayı birleştirme gibi ana adımlar için kısa
-durum satırları gösterilir. CLI çıktısını sade tutmak için ham yt-dlp ilerleme,
-bilgi, uyarı ve debug mesajları gizli kalır. Bunların yerine yt-dlp ilerleme,
-bilgi ve uyarılarını görmek için `download` veya `langs` komutlarında
-`--verbose` kullanabilirsiniz:
-
-```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --verbose
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --verbose
-```
-
-Daha ayrıntılı sorun giderme için `--debug` kullanabilirsiniz. Bu seçenek
-yt-dlp debug çıktısını açar ve URL bazlı indirme hatalarında traceback yazdırır:
-
-```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=EXAMPLE" --debug
-uv run dbdvdl download "https://www.youtube.com/watch?v=EXAMPLE" --debug
-```
-
-Video modunda araç şu işlemleri yapar:
-
-1. Videoda istenen dublaj dili mevcut mu kontrol eder.
-2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
-3. İstenen video kalitesini ve dublaj ses kalitesini seçer.
-4. Planlanan çıktı yolunu seçilen `--if-exists` davranışına göre kontrol eder.
-5. `ask_for_disk_usage: true` ise disk kullanımı onayı ister.
-6. Videoyu ve seçilen ses parçasını geçici staging klasörüne indirir.
-7. Bunları `.mkv` dosyasında birleştirir.
-8. Tamamlanan dosyayı `<çıktı-klasörü>/<dil>/<kanal>/<başlık>/` klasör
-   yapısına taşır.
-
-Ses modunda araç yalnızca seçilen dublajlı ses akışını indirir ve yt-dlp'nin
-seçtiği doğal ses uzantısıyla aynı klasör yapısına kaydeder. `--video-quality`
-yalnızca video modunda geçerlidir.
-
-`--dry-run` ile araç doğrulama, çıktı yolu önizlemesi, tahmini disk kullanımı
-önizlemesi ve mevcut çıktı önizlemesinden sonra durur.
-
-`ask_for_disk_usage: true` ayarlandığında gerçek `download` çalıştırmaları
-medya baytları yazılmadan önce onay ister:
-
-```text
-This download is estimated to use ~139 MB of disk space. Continue? [Y/n]
-```
-
-yt-dlp seçilen medya boyutunu tahmin edemezse onay mesajı disk kullanımının
-bilinmediğini söyler. Non-interactive ortamlarda bu onay için `--yes` veya
-`-y` gerekir; aksi halde komut indirme metadata'sı alınmadan çıkar.
-
-## Bağımlılıkları Güncelleme
-
-yt-dlp'yi uv yönetimli proje içinde güncellemek için:
-
-```bash
-uv lock --upgrade-package yt-dlp
-uv lock --upgrade-package yt-dlp-ejs
-uv sync
-```
-
-Bağımlılık sürümleri değiştiğinde güncellenen `uv.lock` dosyasını commit edin. `uv.lock` dosyasını elle düzenlemeyin.
-
-## Notlar
-
-- YouTube çıkarımı başarısız olursa veya beklenmedik davranırsa, yt-dlp ilerleme ve uyarılarını görmek için aynı `langs` veya `download` komutunu `--verbose` ile, debug logları ve traceback için `--debug` ile tekrar çalıştırın.
-- Çıktı klasörünü değiştirmek için `--output-dir` kullanabilirsiniz.
-
-## Yasal Uyarı
-
-- Bu araç yalnızca **kişisel ve eğitim amaçlı kullanım** için sağlanmaktadır.
-- YouTube'un [Kullanım Şartları](https://www.youtube.com/static?template=terms) ve içerik üreticilerin haklarına saygı gösterin.
-- İzin alınmadan video indirip yeniden paylaşmak telif haklarını ihlal edebilir.
-
-## Anahtar Kelimeler
-
-*YouTube video indirme, YouTube dublaj indirici, çok dilli ses, yt-dlp, ffmpeg, mkv, YouTube dublajlı video indirme, YouTube dublajlı video indir, Python YouTube downloader*
+Bu proje [MIT License](LICENSE) altında lisanslanmıştır.
