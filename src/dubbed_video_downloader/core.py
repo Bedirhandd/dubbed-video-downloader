@@ -22,13 +22,9 @@ from typing import Any
 import yt_dlp
 from yt_dlp.utils import YoutubeDLError
 
-from . import errors
-from . import languages
-from . import quality
-from .download_mode import DownloadMode
-from .download_mode import normalize_download_mode
-from .exists_behavior import FileExistsBehavior
-from .exists_behavior import normalize_exists_behavior
+from . import errors, languages, quality
+from .download_mode import DownloadMode, normalize_download_mode
+from .exists_behavior import FileExistsBehavior, normalize_exists_behavior
 
 DEFAULT_OUTPUT_DIR = Path("Videos")
 DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
@@ -469,46 +465,48 @@ def download(
 
     try:
         _cleanup_stale_incomplete_downloads(output_dir)
-        with _download_signal_handlers():
-            with _DownloadStagingRun(output_dir) as staging_run:
-                staged_output_path = _staged_output_path(
-                    output_path,
-                    output_dir=output_dir,
-                    staging_output_dir=staging_run.output_dir,
-                )
-                _report_download_stage(stage_callback, DownloadStage.DOWNLOADING_MEDIA)
-                try:
-                    with yt_dlp.YoutubeDL(
-                        _download_ydl_opts(
-                            lang=resolved_lang,
-                            download_mode=selected_download_mode,
-                            ffmpeg_path=ffmpeg_path,
-                            output_dir=staging_run.output_dir,
-                            merge_output_format=merge_output_format,
-                            format_selector=quality_selection.format_selector,
-                            verbose=verbose,
-                            debug=debug,
-                            retry_on_network_failure=retry_on_network_failure,
-                            exists_behavior=selected_exists_behavior,
-                            stage_callback=stage_callback,
-                            progress_callback=progress_callback,
-                        )
-                    ) as ydl:
-                        ydl.download([url])
-                except YoutubeDLError as exc:
-                    raise errors.DownloadError(
-                        f"Could not download media: {exc}"
-                    ) from exc
-                _report_download_stage(stage_callback, DownloadStage.FINALIZING_OUTPUT)
-                final_status = _finalize_staged_download(
-                    staged_output_path=staged_output_path,
-                    final_output_path=output_path,
-                    output_dir=output_dir,
-                    staging_output_dir=staging_run.output_dir,
-                    exists_behavior=selected_exists_behavior,
-                )
+        with (
+            _download_signal_handlers(),
+            _DownloadStagingRun(output_dir) as staging_run,
+        ):
+            staged_output_path = _staged_output_path(
+                output_path,
+                output_dir=output_dir,
+                staging_output_dir=staging_run.output_dir,
+            )
+            _report_download_stage(stage_callback, DownloadStage.DOWNLOADING_MEDIA)
+            try:
+                with yt_dlp.YoutubeDL(
+                    _download_ydl_opts(
+                        lang=resolved_lang,
+                        download_mode=selected_download_mode,
+                        ffmpeg_path=ffmpeg_path,
+                        output_dir=staging_run.output_dir,
+                        merge_output_format=merge_output_format,
+                        format_selector=quality_selection.format_selector,
+                        verbose=verbose,
+                        debug=debug,
+                        retry_on_network_failure=retry_on_network_failure,
+                        exists_behavior=selected_exists_behavior,
+                        stage_callback=stage_callback,
+                        progress_callback=progress_callback,
+                    )
+                ) as ydl:
+                    ydl.download([url])
+            except YoutubeDLError as exc:
+                raise errors.DownloadError(f"Could not download media: {exc}") from exc
+            _report_download_stage(stage_callback, DownloadStage.FINALIZING_OUTPUT)
+            final_status = _finalize_staged_download(
+                staged_output_path=staged_output_path,
+                final_output_path=output_path,
+                output_dir=output_dir,
+                staging_output_dir=staging_run.output_dir,
+                exists_behavior=selected_exists_behavior,
+            )
     except OSError as exc:
-        raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
+        raise errors.DownloadError(
+            f"Could not prepare output directory: {exc}"
+        ) from exc
     if final_status == DownloadStatus.SKIPPED:
         _report_download_stage(
             stage_callback,
@@ -787,7 +785,7 @@ def _ensure_safe_incomplete_downloads_dir(output_dir: str | Path) -> Path:
             if not component_dir.is_dir():
                 raise NotADirectoryError(
                     f"Staging path is not a directory: {component_dir}"
-                )
+                ) from None
         _raise_if_redirected_staging_path(component_dir)
 
     return _incomplete_downloads_dir(output_dir_path)
@@ -873,9 +871,7 @@ def _record_finalizing_copy_dir(
 
     raw_dirs = metadata.get(RUN_METADATA_FINALIZING_COPY_DIRS, [])
     if isinstance(raw_dirs, list):
-        finalizing_copy_dirs = [
-            path for path in raw_dirs if isinstance(path, str)
-        ]
+        finalizing_copy_dirs = [path for path in raw_dirs if isinstance(path, str)]
     else:
         finalizing_copy_dirs = []
 
@@ -947,8 +943,7 @@ def _has_unsafe_finalizing_copy_dir_mode(
 ) -> bool:
     return bool(
         os.name == "posix"
-        and finalizing_copy_dir_stat.st_mode
-        & (stat.S_IWGRP | stat.S_IWOTH)
+        and finalizing_copy_dir_stat.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
     )
 
 
@@ -963,9 +958,7 @@ def _is_safe_finalizing_copy_file_stat(
 ) -> bool:
     if not stat.S_ISREG(finalizing_copy_stat.st_mode):
         return False
-    if os.name == "posix" and finalizing_copy_stat.st_uid != os.getuid():
-        return False
-    return True
+    return not (os.name == "posix" and finalizing_copy_stat.st_uid != os.getuid())
 
 
 def _ensure_safe_finalizing_copy_dir(finalizing_copy_dir: Path) -> None:
@@ -1516,7 +1509,9 @@ def _finalize_staged_download(
     try:
         final_output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise errors.DownloadError(f"Could not prepare output directory: {exc}") from exc
+        raise errors.DownloadError(
+            f"Could not prepare output directory: {exc}"
+        ) from exc
 
     if exists_behavior != FileExistsBehavior.OVERWRITE:
         return _finalize_staged_download_without_overwriting(

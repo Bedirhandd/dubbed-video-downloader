@@ -4,16 +4,12 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import ANY, patch
+from typing import ClassVar
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
-from dubbed_video_downloader import cli
-from dubbed_video_downloader import config
-from dubbed_video_downloader import core
-from dubbed_video_downloader import errors
-from dubbed_video_downloader import languages
-from dubbed_video_downloader import quality
+from dubbed_video_downloader import cli, config, core, errors, languages, quality
 from dubbed_video_downloader.cli import app
 
 
@@ -81,10 +77,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.runner.invoke(app, ["init"], env={"HOME": tmpdir})
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -95,24 +88,23 @@ class CliTests(unittest.TestCase):
 
     def test_init_default_writes_config_without_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.shutil.which",
                     return_value=None,
-                ):
-                    result = self.runner.invoke(
-                        app,
-                        ["init", "--default"],
-                        env={"HOME": tmpdir},
-                    )
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["init", "--default"],
+                    env={"HOME": tmpdir},
+                )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -138,10 +130,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -162,10 +151,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -186,10 +172,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -200,24 +183,23 @@ class CliTests(unittest.TestCase):
 
     def test_config_init_default_writes_config_without_prompts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.shutil.which",
                     return_value=None,
-                ):
-                    result = self.runner.invoke(
-                        app,
-                        ["config", "init", "--default"],
-                        env={"HOME": tmpdir},
-                    )
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["config", "init", "--default"],
+                    env={"HOME": tmpdir},
+                )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -252,29 +234,28 @@ class CliTests(unittest.TestCase):
 
     def test_init_default_explicit_ffmpeg_path_skips_autodetect(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.shutil.which",
                     return_value="/usr/bin/ffmpeg",
-                ):
-                    result = self.runner.invoke(
-                        app,
-                        [
-                            "init",
-                            "--default",
-                            "--ffmpeg-path",
-                            "/opt/ffmpeg/bin/ffmpeg",
-                        ],
-                        env={"HOME": tmpdir},
-                    )
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "init",
+                        "--default",
+                        "--ffmpeg-path",
+                        "/opt/ffmpeg/bin/ffmpeg",
+                    ],
+                    env={"HOME": tmpdir},
+                )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -301,10 +282,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -315,40 +293,39 @@ class CliTests(unittest.TestCase):
 
     def test_init_default_multiple_explicit_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.shutil.which",
                     return_value=None,
-                ):
-                    result = self.runner.invoke(
-                        app,
-                        [
-                            "init",
-                            "--default",
-                            "--default-lang",
-                            "tr",
-                            "--default-download-mode",
-                            "audio",
-                            "--default-video-quality",
-                            "720p",
-                            "--default-audio-quality",
-                            "low",
-                            "--retry-on-network-failure",
-                            "0",
-                            "--default-exists-behavior",
-                            "fail",
-                            "--no-ask-for-disk-usage",
-                        ],
-                        env={"HOME": tmpdir},
-                    )
+                ),
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "init",
+                        "--default",
+                        "--default-lang",
+                        "tr",
+                        "--default-download-mode",
+                        "audio",
+                        "--default-video-quality",
+                        "720p",
+                        "--default-audio-quality",
+                        "low",
+                        "--retry-on-network-failure",
+                        "0",
+                        "--default-exists-behavior",
+                        "fail",
+                        "--no-ask-for-disk-usage",
+                    ],
+                    env={"HOME": tmpdir},
+                )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -373,24 +350,23 @@ class CliTests(unittest.TestCase):
                 ["init", "--default"],
                 env={"HOME": tmpdir},
             )
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.shutil.which",
                     return_value=None,
-                ):
-                    second = self.runner.invoke(
-                        app,
-                        ["init", "--default", "--force", "--default-lang", "tr"],
-                        env={"HOME": tmpdir},
-                    )
+                ),
+            ):
+                second = self.runner.invoke(
+                    app,
+                    ["init", "--default", "--force", "--default-lang", "tr"],
+                    env={"HOME": tmpdir},
+                )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(first.exit_code, 0, first.output)
@@ -413,10 +389,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -438,10 +411,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -496,10 +466,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -575,18 +542,20 @@ class CliTests(unittest.TestCase):
             )
 
     def test_interactive_init_colors_prompt_keys(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch(
                 "dubbed_video_downloader.cli._stdin_is_interactive",
                 return_value=True,
-            ):
-                result = self.runner.invoke(
-                    app,
-                    ["init"],
-                    input="\n\n\n\n\n\n\n\n\n",
-                    env={"HOME": tmpdir},
-                    color=True,
-                )
+            ),
+        ):
+            result = self.runner.invoke(
+                app,
+                ["init"],
+                input="\n\n\n\n\n\n\n\n\n",
+                env={"HOME": tmpdir},
+                color=True,
+            )
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("\x1b[36m\x1b[1mOutput directory", result.output)
@@ -598,10 +567,7 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.runner.invoke(app, ["config", "init"], env={"HOME": tmpdir})
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -633,10 +599,7 @@ class CliTests(unittest.TestCase):
                     env={"HOME": tmpdir},
                 )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -665,10 +628,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -685,10 +645,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -705,10 +662,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -725,10 +679,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -745,10 +696,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -771,10 +719,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -790,10 +735,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -810,10 +752,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -830,10 +769,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -850,10 +786,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -870,10 +803,7 @@ class CliTests(unittest.TestCase):
                 env={"HOME": tmpdir},
             )
             config_path = (
-                Path(tmpdir)
-                / ".config"
-                / "dubbed-video-downloader"
-                / "config.yaml"
+                Path(tmpdir) / ".config" / "dubbed-video-downloader" / "config.yaml"
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -885,9 +815,7 @@ class CliTests(unittest.TestCase):
     def test_config_show_displays_resolved_values(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1044,13 +972,15 @@ class CliTests(unittest.TestCase):
             self.assertIn("--yes", result.output)
 
     def test_download_requires_config_before_network_work(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("dubbed_video_downloader.cli.core.download") as download:
-                result = self.runner.invoke(
-                    app,
-                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
-                    env={"HOME": tmpdir},
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.cli.core.download") as download,
+        ):
+            result = self.runner.invoke(
+                app,
+                ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                env={"HOME": tmpdir},
+            )
 
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
@@ -1077,9 +1007,7 @@ class CliTests(unittest.TestCase):
     def test_download_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1096,36 +1024,38 @@ class CliTests(unittest.TestCase):
             override_ffmpeg = home / "bin" / "ffmpeg"
             output_path = override_output / "en" / "Title.mkv"
 
-            with patch(
-                "dubbed_video_downloader.cli._download_status_enabled",
-                return_value=False,
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._download_status_enabled",
+                    return_value=False,
+                ),
+                patch("dubbed_video_downloader.cli.core.download") as download,
             ):
-                with patch("dubbed_video_downloader.cli.core.download") as download:
-                    download.return_value = self._download_result_with_file(output_path)
-                    result = self.runner.invoke(
-                        app,
-                        [
-                            "download",
-                            "https://www.youtube.com/watch?v=EXAMPLE",
-                            "--lang",
-                            "en",
-                            "--mode",
-                            "video",
-                            "--video-quality",
-                            "720p",
-                            "--audio-quality",
-                            "low",
-                            "--output-dir",
-                            str(override_output),
-                            "--ffmpeg-path",
-                            str(override_ffmpeg),
-                            "--retry-on-network-failure",
-                            "6",
-                            "--if-exists",
-                            "overwrite",
-                        ],
-                        env={"HOME": tmpdir},
-                    )
+                download.return_value = self._download_result_with_file(output_path)
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--lang",
+                        "en",
+                        "--mode",
+                        "video",
+                        "--video-quality",
+                        "720p",
+                        "--audio-quality",
+                        "low",
+                        "--output-dir",
+                        str(override_output),
+                        "--ffmpeg-path",
+                        str(override_ffmpeg),
+                        "--retry-on-network-failure",
+                        "6",
+                        "--if-exists",
+                        "overwrite",
+                    ],
+                    env={"HOME": tmpdir},
+                )
 
         self.assertEqual(result.exit_code, 0, result.output)
         download.assert_called_once_with(
@@ -1147,7 +1077,7 @@ class CliTests(unittest.TestCase):
 
     def test_download_interactive_status_passes_stage_callback(self) -> None:
         class FakeDownloadStatusRenderer:
-            instances: list[FakeDownloadStatusRenderer] = []
+            instances: ClassVar[list[FakeDownloadStatusRenderer]] = []
 
             def __init__(self, console: object, *, enabled: bool) -> None:
                 self.enabled = enabled
@@ -1174,9 +1104,7 @@ class CliTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1217,7 +1145,9 @@ class CliTests(unittest.TestCase):
         self.assertTrue(setup_renderer.finish_called)
         callback = download.call_args.kwargs["stage_callback"]
         callback(core.DownloadStage.DOWNLOADING_MEDIA)
-        self.assertEqual(download_renderer.stages, [core.DownloadStage.DOWNLOADING_MEDIA])
+        self.assertEqual(
+            download_renderer.stages, [core.DownloadStage.DOWNLOADING_MEDIA]
+        )
         progress = core.DownloadProgress(
             speed_bytes_per_sec=4_500_000,
             eta_seconds=3897,
@@ -1284,7 +1214,9 @@ class CliTests(unittest.TestCase):
         )
 
         renderer.update(core.DownloadStage.DOWNLOADING_MEDIA)
-        with patch("dubbed_video_downloader.cli.time.monotonic", side_effect=[0.0, 0.0, 1.0]):
+        with patch(
+            "dubbed_video_downloader.cli.time.monotonic", side_effect=[0.0, 0.0, 1.0]
+        ):
             renderer.update_progress(progress)
             renderer.update_progress(progress)
 
@@ -1353,9 +1285,7 @@ class CliTests(unittest.TestCase):
     def test_download_verbose_passes_through_to_core_download(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1396,9 +1326,7 @@ class CliTests(unittest.TestCase):
     def test_download_debug_passes_through_to_core_download(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1438,9 +1366,7 @@ class CliTests(unittest.TestCase):
     def test_download_uses_config_default_exists_behavior(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1468,9 +1394,7 @@ class CliTests(unittest.TestCase):
     def test_download_reports_skipped_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1503,9 +1427,7 @@ class CliTests(unittest.TestCase):
     def test_download_prompts_for_estimated_disk_usage_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1534,20 +1456,22 @@ class CliTests(unittest.TestCase):
                     size_bytes=1_500_000,
                 )
 
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.core.download",
                     side_effect=fake_download,
-                ) as download:
-                    result = self.runner.invoke(
-                        app,
-                        ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
-                        input="y\n",
-                        env={"HOME": tmpdir},
-                    )
+                ) as download,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    input="y\n",
+                    env={"HOME": tmpdir},
+                )
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("~139 MB", result.output)
@@ -1560,9 +1484,7 @@ class CliTests(unittest.TestCase):
     def test_download_reports_missing_output_file_after_success(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1592,9 +1514,7 @@ class CliTests(unittest.TestCase):
     def test_download_decline_disk_usage_prompt_cancels_url(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1623,20 +1543,22 @@ class CliTests(unittest.TestCase):
                     output_path=output_path,
                 )
 
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=True,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=True,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.core.download",
                     side_effect=fake_download,
-                ) as download:
-                    result = self.runner.invoke(
-                        app,
-                        ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
-                        input="n\n",
-                        env={"HOME": tmpdir},
-                    )
+                ) as download,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    input="n\n",
+                    env={"HOME": tmpdir},
+                )
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("could not be estimated", result.output)
@@ -1649,9 +1571,7 @@ class CliTests(unittest.TestCase):
     def test_download_yes_bypasses_disk_usage_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1662,21 +1582,23 @@ class CliTests(unittest.TestCase):
             )
             output_path = home / "Downloads" / "from-config" / "en" / "Title.mkv"
 
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=False,
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=False,
+                ),
+                patch("dubbed_video_downloader.cli.core.download") as download,
             ):
-                with patch("dubbed_video_downloader.cli.core.download") as download:
-                    download.return_value = self._download_result_with_file(output_path)
-                    result = self.runner.invoke(
-                        app,
-                        [
-                            "download",
-                            "https://www.youtube.com/watch?v=EXAMPLE",
-                            "--yes",
-                        ],
-                        env={"HOME": tmpdir},
-                    )
+                download.return_value = self._download_result_with_file(output_path)
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--yes",
+                    ],
+                    env={"HOME": tmpdir},
+                )
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertNotIn("approval_callback", download.call_args.kwargs)
@@ -1686,9 +1608,7 @@ class CliTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1698,16 +1618,18 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=False,
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=False,
+                ),
+                patch("dubbed_video_downloader.cli.core.download") as download,
             ):
-                with patch("dubbed_video_downloader.cli.core.download") as download:
-                    result = self.runner.invoke(
-                        app,
-                        ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
-                        env={"HOME": tmpdir},
-                    )
+                result = self.runner.invoke(
+                    app,
+                    ["download", "https://www.youtube.com/watch?v=EXAMPLE"],
+                    env={"HOME": tmpdir},
+                )
 
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("--yes", result.output)
@@ -1743,9 +1665,7 @@ class CliTests(unittest.TestCase):
     def test_download_rejects_invalid_if_exists_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1771,17 +1691,19 @@ class CliTests(unittest.TestCase):
         download.assert_not_called()
 
     def test_download_dry_run_requires_config_before_network_work(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("dubbed_video_downloader.cli.core.plan_download") as plan:
-                result = self.runner.invoke(
-                    app,
-                    [
-                        "download",
-                        "https://www.youtube.com/watch?v=EXAMPLE",
-                        "--dry-run",
-                    ],
-                    env={"HOME": tmpdir},
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.cli.core.plan_download") as plan,
+        ):
+            result = self.runner.invoke(
+                app,
+                [
+                    "download",
+                    "https://www.youtube.com/watch?v=EXAMPLE",
+                    "--dry-run",
+                ],
+                env={"HOME": tmpdir},
+            )
 
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
@@ -1792,9 +1714,7 @@ class CliTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1804,11 +1724,12 @@ class CliTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch(
-                "dubbed_video_downloader.cli._stdin_is_interactive",
-                return_value=False,
-            ):
-                with patch(
+            with (
+                patch(
+                    "dubbed_video_downloader.cli._stdin_is_interactive",
+                    return_value=False,
+                ),
+                patch(
                     "dubbed_video_downloader.cli.core.plan_download",
                     return_value=core.DownloadPlan(
                         url="https://www.youtube.com/watch?v=EXAMPLE",
@@ -1820,16 +1741,17 @@ class CliTests(unittest.TestCase):
                         output_path=home / "Downloads" / "from-config" / "Title.mkv",
                         estimated_size_bytes=10_000_000,
                     ),
-                ) as plan:
-                    result = self.runner.invoke(
-                        app,
-                        [
-                            "download",
-                            "https://www.youtube.com/watch?v=EXAMPLE",
-                            "--dry-run",
-                        ],
-                        env={"HOME": tmpdir},
-                    )
+                ) as plan,
+            ):
+                result = self.runner.invoke(
+                    app,
+                    [
+                        "download",
+                        "https://www.youtube.com/watch?v=EXAMPLE",
+                        "--dry-run",
+                    ],
+                    env={"HOME": tmpdir},
+                )
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Estimated disk usage: ~10 MB", result.output)
@@ -1838,9 +1760,7 @@ class CliTests(unittest.TestCase):
     def test_download_rejects_negative_retry_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1868,9 +1788,7 @@ class CliTests(unittest.TestCase):
     def test_download_rejects_invalid_mode_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1899,9 +1817,7 @@ class CliTests(unittest.TestCase):
     def test_download_rejects_invalid_lang_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1932,9 +1848,7 @@ class CliTests(unittest.TestCase):
     def test_qualities_rejects_invalid_lang_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1967,9 +1881,7 @@ class CliTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -1989,7 +1901,11 @@ class CliTests(unittest.TestCase):
                         title="Title",
                         uploader="Channel",
                         available_langs=("tr",),
-                        output_path=home / "Downloads" / "from-config" / "tr" / "Title.mkv",
+                        output_path=home
+                        / "Downloads"
+                        / "from-config"
+                        / "tr"
+                        / "Title.mkv",
                     ),
                 ),
             ):
@@ -2014,9 +1930,7 @@ class CliTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2040,9 +1954,7 @@ class CliTests(unittest.TestCase):
     def test_langs_works_with_invalid_default_lang_in_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2071,9 +1983,7 @@ class CliTests(unittest.TestCase):
     ) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2102,9 +2012,7 @@ class CliTests(unittest.TestCase):
     def test_download_rejects_invalid_audio_quality_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2132,9 +2040,7 @@ class CliTests(unittest.TestCase):
     def test_download_rejects_invalid_video_quality_before_network_work(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2162,9 +2068,7 @@ class CliTests(unittest.TestCase):
     def test_download_dry_run_uses_config_and_allows_cli_overrides(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2238,9 +2142,7 @@ class CliTests(unittest.TestCase):
     def test_download_dry_run_uses_color_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2285,9 +2187,7 @@ class CliTests(unittest.TestCase):
     def test_download_dry_run_fails_when_existing_output_policy_is_fail(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2331,9 +2231,7 @@ class CliTests(unittest.TestCase):
     def test_download_dry_run_verbose_passes_through_to_core_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2384,9 +2282,7 @@ class CliTests(unittest.TestCase):
     def test_download_dry_run_reports_plan_failures(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2421,9 +2317,7 @@ class CliTests(unittest.TestCase):
     def test_download_dry_run_reports_traceback_with_debug(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2457,15 +2351,17 @@ class CliTests(unittest.TestCase):
         self.assertIn("Traceback", result.output)
 
     def test_langs_requires_config_before_network_work(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch(
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch(
                 "dubbed_video_downloader.cli.core.get_audio_language_inventory_for_url"
-            ) as langs:
-                result = self.runner.invoke(
-                    app,
-                    ["langs", "https://www.youtube.com/watch?v=EXAMPLE"],
-                    env={"HOME": tmpdir},
-                )
+            ) as langs,
+        ):
+            result = self.runner.invoke(
+                app,
+                ["langs", "https://www.youtube.com/watch?v=EXAMPLE"],
+                env={"HOME": tmpdir},
+            )
 
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
@@ -2483,9 +2379,7 @@ class CliTests(unittest.TestCase):
     def test_langs_passes_verbose_false_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2517,9 +2411,7 @@ class CliTests(unittest.TestCase):
     def test_langs_passes_verbose_true(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2556,9 +2448,7 @@ class CliTests(unittest.TestCase):
     def test_langs_passes_debug_true(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2592,9 +2482,7 @@ class CliTests(unittest.TestCase):
     def test_langs_reports_metadata_error_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2621,9 +2509,7 @@ class CliTests(unittest.TestCase):
     def test_langs_reports_metadata_error_traceback_with_debug(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2652,13 +2538,15 @@ class CliTests(unittest.TestCase):
         self.assertIn("Traceback", result.output)
 
     def test_qualities_requires_config_before_network_work(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("dubbed_video_downloader.cli.core.get_quality_report") as report:
-                result = self.runner.invoke(
-                    app,
-                    ["qualities", "https://www.youtube.com/watch?v=EXAMPLE"],
-                    env={"HOME": tmpdir},
-                )
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch("dubbed_video_downloader.cli.core.get_quality_report") as report,
+        ):
+            result = self.runner.invoke(
+                app,
+                ["qualities", "https://www.youtube.com/watch?v=EXAMPLE"],
+                env={"HOME": tmpdir},
+            )
 
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("dbdvdl init", result.output)
@@ -2667,9 +2555,7 @@ class CliTests(unittest.TestCase):
     def test_qualities_reports_domain_error_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2696,9 +2582,7 @@ class CliTests(unittest.TestCase):
     def test_qualities_reports_domain_error_traceback_with_debug(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"
@@ -2729,9 +2613,7 @@ class CliTests(unittest.TestCase):
     def test_qualities_uses_config_and_allows_lang_override(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             home = Path(tmpdir)
-            config_path = (
-                home / ".config" / "dubbed-video-downloader" / "config.yaml"
-            )
+            config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 "output_dir: ~/Downloads/from-config\n"

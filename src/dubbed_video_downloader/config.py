@@ -8,12 +8,10 @@ from typing import Any
 
 import yaml
 
-from . import languages
-from . import quality
+from . import languages, quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode as _normalize_download_mode
-from .errors import ConfigError
-from .errors import InvalidLanguageCodeError
+from .errors import ConfigError, InvalidLanguageCodeError
 from .exists_behavior import FileExistsBehavior
 from .exists_behavior import normalize_exists_behavior as _normalize_exists_behavior
 
@@ -71,7 +69,9 @@ def load_config(path: Path | None = None) -> AppConfig:
     return config_from_mapping(raw_config, source=config_path)
 
 
-def config_from_mapping(raw_config: dict[str, Any], source: Path | None = None) -> AppConfig:
+def config_from_mapping(
+    raw_config: dict[str, Any], source: Path | None = None
+) -> AppConfig:
     location = str(source) if source else "config"
     missing_keys = [
         key

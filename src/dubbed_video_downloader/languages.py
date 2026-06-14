@@ -143,8 +143,7 @@ def resolve_language_for_video(
         )
     else:
         raise errors.LanguageNotFoundError(
-            _language_error_prefix(title)
-            + "No multi-language audio tracks found."
+            _language_error_prefix(title) + "No multi-language audio tracks found."
         )
 
     requested_key = _metadata_lang_key(requested)
@@ -171,8 +170,7 @@ def resolve_language_for_video(
 
     available_display = ", ".join(display_language_tags(inventory.langs))
     raise errors.LanguageNotFoundError(
-        _language_error_prefix(title)
-        + f"Requested dub language not found.\n"
+        _language_error_prefix(title) + f"Requested dub language not found.\n"
         f"Requested: {requested}\n"
         f"Available: {available_display}"
     )
