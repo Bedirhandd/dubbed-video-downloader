@@ -159,14 +159,15 @@ def resolve_language_for_video(
     if exact_matches:
         return exact_matches[0]
 
-    raw_by_standard = _raw_tags_by_standard(inventory.langs)
-    resolved_standard = langcodes.closest_supported_match(
-        requested,
-        sorted(raw_by_standard),
-        max_distance=MAX_VARIANT_DISTANCE,
-    )
-    if resolved_standard is not None:
-        return _select_raw_tag(raw_by_standard[resolved_standard], requested_key)
+    if not _request_requires_exact_match(requested):
+        raw_by_standard = _raw_tags_by_standard(inventory.langs)
+        resolved_standard = langcodes.closest_supported_match(
+            requested,
+            sorted(raw_by_standard),
+            max_distance=MAX_VARIANT_DISTANCE,
+        )
+        if resolved_standard is not None:
+            return _select_raw_tag(raw_by_standard[resolved_standard], requested_key)
 
     available_display = ", ".join(display_language_tags(inventory.langs))
     raise errors.LanguageNotFoundError(
@@ -175,6 +176,11 @@ def resolve_language_for_video(
         f"Requested: {requested}\n"
         f"Available: {available_display}"
     )
+
+
+def _request_requires_exact_match(requested: str) -> bool:
+    language = langcodes.Language.get(requested)
+    return language.territory is not None or language.script is not None
 
 
 def _metadata_lang_key(tag: str) -> str:

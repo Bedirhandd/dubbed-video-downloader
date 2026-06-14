@@ -111,6 +111,88 @@ class LanguageTests(unittest.TestCase):
             "en",
         )
 
+    def test_resolve_language_for_video_rejects_cross_regional_match(self) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({"en-GB"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        with self.assertRaises(errors.LanguageNotFoundError):
+            languages.resolve_language_for_video("en-AU", inventory)
+
+    def test_resolve_language_for_video_rejects_regional_request_with_base_only(
+        self,
+    ) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({"en"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        with self.assertRaises(errors.LanguageNotFoundError):
+            languages.resolve_language_for_video("en-AU", inventory)
+
+    def test_resolve_language_for_video_rejects_cross_portuguese_regional_match(
+        self,
+    ) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({"pt-PT"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        with self.assertRaises(errors.LanguageNotFoundError):
+            languages.resolve_language_for_video("pt-BR", inventory)
+
+    def test_resolve_language_for_video_accepts_exact_regional_match(self) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({"en-AU"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        self.assertEqual(
+            languages.resolve_language_for_video("en-AU", inventory),
+            "en-AU",
+        )
+
+    def test_resolve_language_for_video_accepts_padded_regional_match(self) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({" en-gb "}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        self.assertEqual(
+            languages.resolve_language_for_video("en-GB", inventory),
+            " en-gb ",
+        )
+
+    def test_resolve_language_for_video_rejects_cross_script_match(self) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({"zh-Hant"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        with self.assertRaises(errors.LanguageNotFoundError):
+            languages.resolve_language_for_video("zh-Hans", inventory)
+
+    def test_resolve_language_for_video_matches_base_language_to_script_variant(
+        self,
+    ) -> None:
+        inventory = languages.AudioLanguageInventory(
+            langs=frozenset({"zh-Hans"}),
+            skipped_invalid_count=0,
+            skipped_invalid_tags=(),
+        )
+
+        self.assertEqual(
+            languages.resolve_language_for_video("zh", inventory),
+            "zh-Hans",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
