@@ -11,7 +11,7 @@ import yaml
 from . import languages, quality
 from .download_mode import DownloadMode
 from .download_mode import normalize_download_mode as _normalize_download_mode
-from .errors import ConfigError, InvalidLanguageCodeError
+from .errors import ConfigError, InvalidLanguageCodeError, QualityError
 from .exists_behavior import FileExistsBehavior
 from .exists_behavior import normalize_exists_behavior as _normalize_exists_behavior
 
@@ -235,14 +235,14 @@ def normalize_download_mode(value: Any) -> DownloadMode:
 def normalize_video_quality(value: Any) -> quality.VideoQuality:
     try:
         return quality.normalize_video_quality(value, key="default_video_quality")
-    except quality.QualityError as exc:
+    except QualityError as exc:
         raise ConfigError(str(exc)) from exc
 
 
 def normalize_audio_quality(value: Any) -> quality.AudioQuality:
     try:
         return quality.normalize_audio_quality(value, key="default_audio_quality")
-    except quality.QualityError as exc:
+    except QualityError as exc:
         raise ConfigError(str(exc)) from exc
 
 

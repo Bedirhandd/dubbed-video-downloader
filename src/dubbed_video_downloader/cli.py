@@ -4,6 +4,7 @@ import shutil
 import sys
 import time
 import traceback
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
@@ -36,6 +37,154 @@ Examples:
 
 DOWNLOAD_STATUS_SPINNER = "bouncingBar"
 DOWNLOAD_PROGRESS_UPDATE_INTERVAL_SECONDS = 0.25
+
+
+@dataclass(frozen=True)
+class _DownloadInvocation:
+    url: str
+    lang: str
+    download_mode: DownloadMode | str
+    ffmpeg_path: str | Path | None
+    output_dir: Path
+    video_quality: quality.VideoQuality | str
+    audio_quality: quality.AudioQuality | str
+    verbose: bool
+    debug: bool
+    retry_on_network_failure: int
+    exists_behavior: FileExistsBehavior | str
+
+
+def _invoke_download(
+    invocation: _DownloadInvocation,
+    *,
+    stage_callback: core.DownloadStageCallback | None = None,
+    progress_callback: core.DownloadProgressCallback | None = None,
+    approval_callback: core.DownloadApprovalCallback | None = None,
+) -> core.DownloadResult:
+    if stage_callback is not None:
+        if progress_callback is not None:
+            if approval_callback is not None:
+                return core.download(
+                    url=invocation.url,
+                    lang=invocation.lang,
+                    download_mode=invocation.download_mode,
+                    ffmpeg_path=invocation.ffmpeg_path,
+                    output_dir=invocation.output_dir,
+                    video_quality=invocation.video_quality,
+                    audio_quality=invocation.audio_quality,
+                    verbose=invocation.verbose,
+                    debug=invocation.debug,
+                    retry_on_network_failure=invocation.retry_on_network_failure,
+                    exists_behavior=invocation.exists_behavior,
+                    stage_callback=stage_callback,
+                    progress_callback=progress_callback,
+                    approval_callback=approval_callback,
+                )
+            return core.download(
+                url=invocation.url,
+                lang=invocation.lang,
+                download_mode=invocation.download_mode,
+                ffmpeg_path=invocation.ffmpeg_path,
+                output_dir=invocation.output_dir,
+                video_quality=invocation.video_quality,
+                audio_quality=invocation.audio_quality,
+                verbose=invocation.verbose,
+                debug=invocation.debug,
+                retry_on_network_failure=invocation.retry_on_network_failure,
+                exists_behavior=invocation.exists_behavior,
+                stage_callback=stage_callback,
+                progress_callback=progress_callback,
+            )
+        if approval_callback is not None:
+            return core.download(
+                url=invocation.url,
+                lang=invocation.lang,
+                download_mode=invocation.download_mode,
+                ffmpeg_path=invocation.ffmpeg_path,
+                output_dir=invocation.output_dir,
+                video_quality=invocation.video_quality,
+                audio_quality=invocation.audio_quality,
+                verbose=invocation.verbose,
+                debug=invocation.debug,
+                retry_on_network_failure=invocation.retry_on_network_failure,
+                exists_behavior=invocation.exists_behavior,
+                stage_callback=stage_callback,
+                approval_callback=approval_callback,
+            )
+        return core.download(
+            url=invocation.url,
+            lang=invocation.lang,
+            download_mode=invocation.download_mode,
+            ffmpeg_path=invocation.ffmpeg_path,
+            output_dir=invocation.output_dir,
+            video_quality=invocation.video_quality,
+            audio_quality=invocation.audio_quality,
+            verbose=invocation.verbose,
+            debug=invocation.debug,
+            retry_on_network_failure=invocation.retry_on_network_failure,
+            exists_behavior=invocation.exists_behavior,
+            stage_callback=stage_callback,
+        )
+    if progress_callback is not None:
+        if approval_callback is not None:
+            return core.download(
+                url=invocation.url,
+                lang=invocation.lang,
+                download_mode=invocation.download_mode,
+                ffmpeg_path=invocation.ffmpeg_path,
+                output_dir=invocation.output_dir,
+                video_quality=invocation.video_quality,
+                audio_quality=invocation.audio_quality,
+                verbose=invocation.verbose,
+                debug=invocation.debug,
+                retry_on_network_failure=invocation.retry_on_network_failure,
+                exists_behavior=invocation.exists_behavior,
+                progress_callback=progress_callback,
+                approval_callback=approval_callback,
+            )
+        return core.download(
+            url=invocation.url,
+            lang=invocation.lang,
+            download_mode=invocation.download_mode,
+            ffmpeg_path=invocation.ffmpeg_path,
+            output_dir=invocation.output_dir,
+            video_quality=invocation.video_quality,
+            audio_quality=invocation.audio_quality,
+            verbose=invocation.verbose,
+            debug=invocation.debug,
+            retry_on_network_failure=invocation.retry_on_network_failure,
+            exists_behavior=invocation.exists_behavior,
+            progress_callback=progress_callback,
+        )
+    if approval_callback is not None:
+        return core.download(
+            url=invocation.url,
+            lang=invocation.lang,
+            download_mode=invocation.download_mode,
+            ffmpeg_path=invocation.ffmpeg_path,
+            output_dir=invocation.output_dir,
+            video_quality=invocation.video_quality,
+            audio_quality=invocation.audio_quality,
+            verbose=invocation.verbose,
+            debug=invocation.debug,
+            retry_on_network_failure=invocation.retry_on_network_failure,
+            exists_behavior=invocation.exists_behavior,
+            approval_callback=approval_callback,
+        )
+    return core.download(
+        url=invocation.url,
+        lang=invocation.lang,
+        download_mode=invocation.download_mode,
+        ffmpeg_path=invocation.ffmpeg_path,
+        output_dir=invocation.output_dir,
+        video_quality=invocation.video_quality,
+        audio_quality=invocation.audio_quality,
+        verbose=invocation.verbose,
+        debug=invocation.debug,
+        retry_on_network_failure=invocation.retry_on_network_failure,
+        exists_behavior=invocation.exists_behavior,
+    )
+
 
 DOWNLOAD_STAGE_TEXT = {
     core.DownloadStage.CHECKING_CONFIG: "Checking configuration...",
@@ -81,7 +230,7 @@ def _version_callback(value: bool) -> None:
 def _load_config_or_exit() -> app_config.AppConfig:
     try:
         return app_config.load_config()
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -89,7 +238,7 @@ def _load_config_or_exit() -> app_config.AppConfig:
 def _normalize_output_dir_or_exit(value: str) -> Path:
     try:
         return app_config.normalize_output_dir(value)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -97,7 +246,7 @@ def _normalize_output_dir_or_exit(value: str) -> Path:
 def _normalize_ffmpeg_path_or_exit(value: str) -> str:
     try:
         return app_config.normalize_ffmpeg_path(value)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -105,7 +254,7 @@ def _normalize_ffmpeg_path_or_exit(value: str) -> str:
 def _normalize_default_lang_or_exit(value: str) -> str:
     try:
         return app_config.normalize_default_lang(value)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -127,7 +276,7 @@ def _effective_lang_or_exit(*, lang: str | None, default_lang: str) -> str:
 def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
     try:
         return app_config.normalize_download_mode(value)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -135,7 +284,7 @@ def _normalize_download_mode_or_exit(value: DownloadMode | str) -> DownloadMode:
 def _normalize_video_quality_or_exit(value: str) -> quality.VideoQuality:
     try:
         return quality.normalize_video_quality(value)
-    except quality.QualityError as exc:
+    except errors.QualityError as exc:
         typer.secho(f"Input error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -143,7 +292,7 @@ def _normalize_video_quality_or_exit(value: str) -> quality.VideoQuality:
 def _normalize_audio_quality_or_exit(value: str) -> quality.AudioQuality:
     try:
         return quality.normalize_audio_quality(value)
-    except quality.QualityError as exc:
+    except errors.QualityError as exc:
         typer.secho(f"Input error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -151,7 +300,7 @@ def _normalize_audio_quality_or_exit(value: str) -> quality.AudioQuality:
 def _normalize_retry_on_network_failure_or_exit(value: int) -> int:
     try:
         return app_config.normalize_retry_on_network_failure(value)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -161,7 +310,7 @@ def _normalize_exists_behavior_or_exit(
 ) -> FileExistsBehavior:
     try:
         return app_config.normalize_exists_behavior(value)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -231,10 +380,12 @@ def _prompt_retry_on_network_failure(
             "non-negative integer; 0 disables retries.",
             app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
         )
-        return typer.prompt(
-            "Retry on network failure",
-            default=app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
-            type=int,
+        return int(
+            typer.prompt(
+                "Retry on network failure",
+                default=app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE,
+                type=int,
+            )
         )
     return app_config.DEFAULT_RETRY_ON_NETWORK_FAILURE
 
@@ -488,7 +639,7 @@ def _write_config_or_exit(
             ask_for_disk_usage=ask_for_disk_usage,
             overwrite=force,
         )
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -1021,7 +1172,7 @@ def config_remove_command(
 
     try:
         removed_path = app_config.remove_config_dir(config_dir)
-    except app_config.ConfigError as exc:
+    except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
@@ -1276,36 +1427,42 @@ def download_command(
                     )
                 typer.secho("Dry run OK", fg=typer.colors.GREEN, bold=True)
             else:
-                download_kwargs = {
-                    "url": url,
-                    "lang": effective_lang,
-                    "download_mode": effective_download_mode,
-                    "ffmpeg_path": ffmpeg_location,
-                    "output_dir": effective_output_dir,
-                    "video_quality": effective_video_quality,
-                    "audio_quality": effective_audio_quality,
-                    "verbose": verbose,
-                    "debug": debug,
-                    "retry_on_network_failure": effective_retry_on_network_failure,
-                    "exists_behavior": effective_exists_behavior,
-                }
                 with _DownloadStatusRenderer(
                     status_console,
                     enabled=status_enabled,
                 ) as download_status:
-                    if download_status.enabled:
-                        download_kwargs["stage_callback"] = download_status.update
-                        download_kwargs["progress_callback"] = (
-                            download_status.update_progress
-                        )
+                    download_common = _DownloadInvocation(
+                        url=url,
+                        lang=effective_lang,
+                        download_mode=effective_download_mode,
+                        ffmpeg_path=ffmpeg_location,
+                        output_dir=effective_output_dir,
+                        video_quality=effective_video_quality,
+                        audio_quality=effective_audio_quality,
+                        verbose=verbose,
+                        debug=debug,
+                        retry_on_network_failure=effective_retry_on_network_failure,
+                        exists_behavior=effective_exists_behavior,
+                    )
+                    approval_callback: core.DownloadApprovalCallback | None = None
                     if effective_ask_for_disk_usage and not yes:
 
                         def approval_callback(plan: core.DownloadPlan) -> bool:
                             download_status.finish()
                             return _confirm_disk_usage(plan)
 
-                        download_kwargs["approval_callback"] = approval_callback
-                    download_result = core.download(**download_kwargs)
+                    download_result = _invoke_download(
+                        download_common,
+                        stage_callback=(
+                            download_status.update if download_status.enabled else None
+                        ),
+                        progress_callback=(
+                            download_status.update_progress
+                            if download_status.enabled
+                            else None
+                        ),
+                        approval_callback=approval_callback,
+                    )
                 if isinstance(download_result, core.DownloadResult):
                     _print_skipped_invalid_tracks_warning(
                         download_result.skipped_invalid_count

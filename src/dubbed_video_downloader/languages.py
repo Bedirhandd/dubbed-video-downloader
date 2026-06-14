@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import langcodes
 from langcodes.tag_parser import LanguageTagError
 
 from . import errors
+from .yt_dlp_types import InfoDict
 
 MAX_VARIANT_DISTANCE = 10
 UNDEFINED_LANGUAGE = "und"
@@ -80,13 +80,14 @@ def display_language_tags(tags: frozenset[str]) -> tuple[str, ...]:
     return tuple(sorted({format_language_for_display(tag) for tag in tags}))
 
 
-def collect_available_audio_langs(info: dict[str, Any]) -> AudioLanguageInventory:
+def collect_available_audio_langs(info: InfoDict) -> AudioLanguageInventory:
     """Collect valid audio language tags from video metadata."""
     langs: set[str] = set()
     skipped_invalid_count = 0
     skipped_invalid_tags: list[str] = []
 
-    for format_info in info.get("formats", []):
+    formats = info.get("formats") or []
+    for format_info in formats:
         if not isinstance(format_info, dict):
             continue
         if format_info.get("vcodec") != "none":

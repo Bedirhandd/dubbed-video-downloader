@@ -7,6 +7,7 @@ from typing import Any
 
 from .download_mode import DownloadMode, normalize_download_mode
 from .errors import QualityError
+from .yt_dlp_types import InfoDict
 
 MIN_VIDEO_HEIGHT = 144
 MAX_VIDEO_HEIGHT = 8640
@@ -50,7 +51,7 @@ class VideoQuality:
     def label(self) -> str:
         if self.kind == VideoQualityKind.EXACT:
             return f"{self.height}p"
-        return self.kind.value
+        return str(self.kind.value)
 
     def __str__(self) -> str:
         return self.label
@@ -62,7 +63,7 @@ class AudioQuality:
 
     @property
     def label(self) -> str:
-        return self.kind.value
+        return str(self.kind.value)
 
     def __str__(self) -> str:
         return self.label
@@ -147,7 +148,7 @@ def normalize_audio_quality(
 
 def resolve_quality_selection(
     *,
-    info: dict[str, Any],
+    info: InfoDict,
     lang: str,
     download_mode: DownloadMode | str,
     video_quality: VideoQuality | str = DEFAULT_VIDEO_QUALITY,
@@ -186,7 +187,7 @@ def resolve_quality_selection(
     )
 
 
-def get_available_video_heights(info: dict[str, Any]) -> tuple[int, ...]:
+def get_available_video_heights(info: InfoDict) -> tuple[int, ...]:
     heights = {
         height
         for format_info in _format_items(info)
@@ -198,7 +199,7 @@ def get_available_video_heights(info: dict[str, Any]) -> tuple[int, ...]:
 
 
 def get_audio_quality_candidates(
-    info: dict[str, Any],
+    info: InfoDict,
     lang: str,
 ) -> tuple[AudioQualityCandidate, ...]:
     candidates: list[AudioQualityCandidate] = []
@@ -248,7 +249,7 @@ def format_audio_quality_labels(
 
 
 def _resolve_video_selector(
-    info: dict[str, Any],
+    info: InfoDict,
     video_quality: VideoQuality,
 ) -> tuple[str, str, tuple[str, ...]]:
     if video_quality.kind == VideoQualityKind.BEST:
@@ -279,8 +280,14 @@ def _resolve_video_selector(
     return _video_height_selector(video_quality.height), video_quality.label, ()
 
 
+def _required_bitrate_kbps(candidate: AudioQualityCandidate) -> float:
+    if candidate.bitrate_kbps is None:
+        raise RuntimeError("audio quality candidate is missing bitrate metadata")
+    return candidate.bitrate_kbps
+
+
 def _resolve_audio_selector(
-    info: dict[str, Any],
+    info: InfoDict,
     lang: str,
     audio_quality: AudioQuality,
 ) -> tuple[str, str, tuple[str, ...]]:
@@ -318,14 +325,14 @@ def _resolve_audio_selector(
         selected = min(
             candidates_with_bitrate,
             key=lambda candidate: (
-                abs(candidate.bitrate_kbps - MEDIUM_AUDIO_TARGET_KBPS),
-                candidate.bitrate_kbps,
+                abs(_required_bitrate_kbps(candidate) - MEDIUM_AUDIO_TARGET_KBPS),
+                _required_bitrate_kbps(candidate),
             ),
         )
     else:
         selected = min(
             candidates_with_bitrate,
-            key=lambda candidate: candidate.bitrate_kbps,
+            key=_required_bitrate_kbps,
         )
 
     return (
@@ -363,7 +370,7 @@ def _closest_height(heights: tuple[int, ...], target: int) -> int:
     return min(heights, key=lambda height: (abs(height - target), height))
 
 
-def _format_items(info: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+def _format_items(info: InfoDict) -> tuple[dict[str, Any], ...]:
     formats = info.get("formats", [])
     if not isinstance(formats, list):
         return ()

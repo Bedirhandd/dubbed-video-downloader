@@ -13,11 +13,11 @@ import stat
 import sys
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, cast
 
 import yt_dlp
 from yt_dlp.utils import YoutubeDLError
@@ -25,6 +25,7 @@ from yt_dlp.utils import YoutubeDLError
 from . import errors, languages, quality
 from .download_mode import DownloadMode, normalize_download_mode
 from .exists_behavior import FileExistsBehavior, normalize_exists_behavior
+from .yt_dlp_types import InfoDict, YdlParams
 
 DEFAULT_OUTPUT_DIR = Path("Videos")
 DEFAULT_MERGE_OUTPUT_FORMAT = "mkv"
@@ -67,6 +68,22 @@ LINUX_RENAMEAT2_SYSCALL_NUMBERS = {
     "armv6l": 382,
     "riscv64": 276,
 }
+
+
+class _MsvcrtModule(Protocol):
+    LK_LOCK: int
+    LK_NBLCK: int
+    LK_UNLCK: int
+
+    def locking(self, fd: int, mode: int, nbytes: int) -> None: ...
+
+
+class _WindowsCtypesModule(Protocol):
+    FormatError: Callable[[int], str]
+
+    def WinDLL(self, name: str, *, use_last_error: bool = ...) -> Any: ...
+    def set_last_error(self, code: int) -> None: ...
+    def get_last_error(self) -> int: ...
 
 
 class _UnsafeStagingPathError(OSError):
@@ -151,7 +168,7 @@ class QualityReport:
     skipped_invalid_count: int = 0
 
 
-def ydl_base_opts() -> dict[str, Any]:
+def ydl_base_opts() -> YdlParams:
     """Options needed for YouTube multi-language audio extraction."""
     return {
         "extractor_args": {
@@ -160,7 +177,7 @@ def ydl_base_opts() -> dict[str, Any]:
             },
         },
         "js_runtimes": {
-            "node": {},
+            "node": cast(dict[str, str], {}),
         },
     }
 
@@ -170,7 +187,7 @@ def get_video_info(
     verbose: bool = False,
     debug: bool = False,
     retry_on_network_failure: int = DEFAULT_RETRY_ON_NETWORK_FAILURE,
-) -> dict[str, Any]:
+) -> InfoDict:
     """Fetch video metadata without downloading the video."""
     try:
         with yt_dlp.YoutubeDL(
@@ -188,13 +205,13 @@ def get_video_info(
     return info
 
 
-def get_available_audio_langs(info: dict[str, Any]) -> set[str]:
+def get_available_audio_langs(info: InfoDict) -> set[str]:
     """Return the set of available audio languages for this video."""
     return set(collect_audio_language_inventory(info).langs)
 
 
 def collect_audio_language_inventory(
-    info: dict[str, Any],
+    info: InfoDict,
 ) -> languages.AudioLanguageInventory:
     """Return validated audio language metadata for this video."""
     return languages.collect_available_audio_langs(info)
@@ -235,7 +252,7 @@ def get_available_audio_langs_for_url(
 
 
 def _resolve_video_language(
-    info: dict[str, Any],
+    info: InfoDict,
     canonical_lang: str,
 ) -> tuple[languages.AudioLanguageInventory, str]:
     inventory = collect_audio_language_inventory(info)
@@ -278,7 +295,7 @@ def get_quality_report(
     )
 
 
-def ensure_lang(info: dict[str, Any], target: str) -> str:
+def ensure_lang(info: InfoDict, target: str) -> str:
     """Raise an error if the requested dub language is not available."""
     _, resolved_lang = _resolve_video_language(info, target)
     return resolved_lang
@@ -322,7 +339,7 @@ def plan_download(
         video_quality=video_quality,
         audio_quality=audio_quality,
     )
-    selected_info: list[dict[str, Any]] = []
+    selected_info: list[InfoDict] = []
     output_path = _planned_output_path(
         info=info,
         lang=resolved_lang,
@@ -403,7 +420,7 @@ def download(
         audio_quality=audio_quality,
     )
     _report_download_stage(stage_callback, DownloadStage.PLANNING_OUTPUT)
-    selected_info: list[dict[str, Any]] = []
+    selected_info: list[InfoDict] = []
     output_path = _planned_output_path(
         info=info,
         lang=resolved_lang,
@@ -540,9 +557,9 @@ def _download_ydl_opts(
     exists_behavior: FileExistsBehavior | str | None = None,
     stage_callback: DownloadStageCallback | None = None,
     progress_callback: DownloadProgressCallback | None = None,
-) -> dict[str, Any]:
+) -> YdlParams:
     selected_download_mode = normalize_download_mode(download_mode)
-    ydl_opts: dict[str, Any] = {
+    ydl_opts: YdlParams = {
         **ydl_base_opts(),
         **_network_retry_ydl_opts(retry_on_network_failure),
         **_yt_dlp_output_opts(verbose=verbose, debug=debug),
@@ -572,7 +589,7 @@ def _download_ydl_opts(
     return ydl_opts
 
 
-def _parse_download_progress(progress: dict[str, Any]) -> DownloadProgress | None:
+def _parse_download_progress(progress: Mapping[str, Any]) -> DownloadProgress | None:
     if progress.get("status") != "downloading":
         return None
 
@@ -594,8 +611,8 @@ def _parse_download_progress(progress: dict[str, Any]) -> DownloadProgress | Non
 def _make_progress_hook(
     stage_callback: DownloadStageCallback | None,
     progress_callback: DownloadProgressCallback | None = None,
-) -> Callable[[dict[str, Any]], None]:
-    def progress_hook(progress: dict[str, Any]) -> None:
+) -> Callable[[Mapping[str, Any]], None]:
+    def progress_hook(progress: Mapping[str, Any]) -> None:
         if progress.get("status") != "downloading":
             return
         if stage_callback is not None:
@@ -611,8 +628,8 @@ def _make_progress_hook(
 def _make_postprocessor_hook(
     stage_callback: DownloadStageCallback,
     download_mode: DownloadMode,
-) -> Callable[[dict[str, Any]], None]:
-    def postprocessor_hook(progress: dict[str, Any]) -> None:
+) -> Callable[[Mapping[str, Any]], None]:
+    def postprocessor_hook(progress: Mapping[str, Any]) -> None:
         if download_mode == DownloadMode.VIDEO and progress.get("status") in {
             "started",
             "processing",
@@ -679,7 +696,9 @@ class _StagingLock:
 
     @staticmethod
     def _acquire_windows(lock_file: Any, *, blocking: bool) -> None:
-        import msvcrt
+        import importlib
+
+        msvcrt = cast(_MsvcrtModule, importlib.import_module("msvcrt"))
 
         lock_file.seek(0)
         lock_file.write(b"\0")
@@ -690,7 +709,9 @@ class _StagingLock:
 
     @staticmethod
     def _release_windows(lock_file: Any) -> None:
-        import msvcrt
+        import importlib
+
+        msvcrt = cast(_MsvcrtModule, importlib.import_module("msvcrt"))
 
         lock_file.seek(0)
         msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
@@ -1406,7 +1427,8 @@ def _publish_file_no_clobber_windows(
 ) -> None:
     from ctypes import wintypes
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    win_ctypes = cast(_WindowsCtypesModule, ctypes)
+    kernel32 = win_ctypes.WinDLL("kernel32", use_last_error=True)
     move_file_ex = kernel32.MoveFileExW
     move_file_ex.argtypes = [
         wintypes.LPCWSTR,
@@ -1415,7 +1437,7 @@ def _publish_file_no_clobber_windows(
     ]
     move_file_ex.restype = wintypes.BOOL
 
-    ctypes.set_last_error(0)
+    win_ctypes.set_last_error(0)
     result = move_file_ex(
         str(source_path),
         str(destination_path),
@@ -1424,7 +1446,7 @@ def _publish_file_no_clobber_windows(
     if result:
         return
 
-    error_code = ctypes.get_last_error()
+    error_code = win_ctypes.get_last_error()
     _raise_windows_no_clobber_publish_error(error_code, destination_path)
 
 
@@ -1487,7 +1509,7 @@ def _windows_error_message(error_code: int) -> str:
     format_error = getattr(ctypes, "FormatError", None)
     if format_error is None:
         return f"Windows error {error_code}"
-    return format_error(error_code)
+    return str(format_error(error_code))
 
 
 def _finalize_staged_download(
@@ -1698,7 +1720,7 @@ def _download_signal_handlers() -> Any:
 
 def _planned_output_path(
     *,
-    info: dict[str, Any],
+    info: InfoDict,
     lang: str,
     download_mode: DownloadMode | str,
     ffmpeg_path: str | Path | None,
@@ -1708,7 +1730,7 @@ def _planned_output_path(
     verbose: bool,
     debug: bool,
     retry_on_network_failure: int,
-    selected_info_callback: Callable[[dict[str, Any]], None] | None = None,
+    selected_info_callback: Callable[[InfoDict], None] | None = None,
 ) -> Path:
     planned_info = _copy_info_for_planning(info)
     ydl_opts = _download_ydl_opts(
@@ -1738,7 +1760,7 @@ def _planned_output_path(
 
 
 def _estimated_download_size_bytes(
-    selected_info: dict[str, Any] | None,
+    selected_info: InfoDict | None,
 ) -> int | None:
     if selected_info is None:
         return None
@@ -1762,7 +1784,7 @@ def _requested_formats_size_bytes(formats: list[Any]) -> int | None:
     return total or None
 
 
-def _format_size_bytes(format_info: dict[str, Any]) -> int | None:
+def _format_size_bytes(format_info: Mapping[str, Any]) -> int | None:
     return _positive_size_bytes(format_info.get("filesize")) or _positive_size_bytes(
         format_info.get("filesize_approx")
     )
@@ -1807,7 +1829,7 @@ def _handle_existing_output(
     return False
 
 
-def _copy_info_for_planning(info: dict[str, Any]) -> dict[str, Any]:
+def _copy_info_for_planning(info: InfoDict) -> InfoDict:
     planned_info = dict(info)
     formats = info.get("formats")
     if isinstance(formats, list):
@@ -1815,7 +1837,7 @@ def _copy_info_for_planning(info: dict[str, Any]) -> dict[str, Any]:
             dict(format_info) if isinstance(format_info, dict) else format_info
             for format_info in formats
         ]
-    return planned_info
+    return cast(InfoDict, planned_info)
 
 
 def _optional_string(value: Any) -> str | None:
@@ -1826,7 +1848,7 @@ def _yt_dlp_output_opts(
     *,
     verbose: bool,
     debug: bool,
-) -> dict[str, Any]:
+) -> YdlParams:
     if debug:
         return {
             "quiet": False,
@@ -1847,18 +1869,21 @@ def _yt_dlp_output_opts(
     }
 
 
-def _network_retry_ydl_opts(retry_on_network_failure: int) -> dict[str, Any]:
+def _network_retry_ydl_opts(retry_on_network_failure: int) -> YdlParams:
     retry_count = _validate_retry_on_network_failure(retry_on_network_failure)
-    return {
-        "retries": retry_count,
-        "fragment_retries": retry_count,
-        "extractor_retries": retry_count,
-        "retry_sleep_functions": {
-            "http": _retry_sleep_seconds,
-            "fragment": _retry_sleep_seconds,
-            "extractor": _retry_sleep_seconds,
+    return cast(
+        YdlParams,
+        {
+            "retries": retry_count,
+            "fragment_retries": retry_count,
+            "extractor_retries": retry_count,
+            "retry_sleep_functions": {
+                "http": _retry_sleep_seconds,
+                "fragment": _retry_sleep_seconds,
+                "extractor": _retry_sleep_seconds,
+            },
         },
-    }
+    )
 
 
 def _validate_retry_on_network_failure(value: int) -> int:
@@ -1871,4 +1896,4 @@ def _validate_retry_on_network_failure(value: int) -> int:
 
 def _retry_sleep_seconds(attempt: int) -> float:
     base_delay = min(2**attempt, MAX_RETRY_SLEEP_SECONDS)
-    return base_delay + random.random()
+    return float(base_delay + random.random())
