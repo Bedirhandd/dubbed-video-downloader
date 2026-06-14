@@ -1,35 +1,35 @@
 from __future__ import annotations
 
-import unittest
+import pytest
 
 from dubbed_video_downloader import config, errors, quality
 
 
-class ErrorTests(unittest.TestCase):
-    def test_expected_errors_share_application_base_class(self) -> None:
-        for error_type in (
-            errors.ConfigError,
-            errors.QualityError,
-            errors.MetadataExtractionError,
-            errors.InvalidLanguageCodeError,
-            errors.LanguageNotFoundError,
-            errors.DownloadError,
-        ):
-            with self.subTest(error_type=error_type):
-                self.assertTrue(
-                    issubclass(error_type, errors.DubbedVideoDownloaderError)
-                )
-
-    def test_module_error_exports_are_canonical(self) -> None:
-        self.assertIs(config.ConfigError, errors.ConfigError)
-        self.assertIs(quality.QualityError, errors.QualityError)
-
-    def test_legacy_language_error_name_is_removed(self) -> None:
-        self.assertFalse(hasattr(errors, "LanguageUnavailableError"))
-
-    def test_quality_error_uses_application_hierarchy(self) -> None:
-        self.assertFalse(issubclass(errors.QualityError, ValueError))
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        errors.ConfigError,
+        errors.QualityError,
+        errors.MetadataExtractionError,
+        errors.InvalidLanguageCodeError,
+        errors.LanguageNotFoundError,
+        errors.DownloadError,
+    ],
+)
+def test_expected_errors_share_application_base_class(
+    error_type: type[Exception],
+) -> None:
+    assert issubclass(error_type, errors.DubbedVideoDownloaderError)
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_module_error_exports_are_canonical() -> None:
+    assert config.ConfigError is errors.ConfigError
+    assert quality.QualityError is errors.QualityError
+
+
+def test_legacy_language_error_name_is_removed() -> None:
+    assert not hasattr(errors, "LanguageUnavailableError")
+
+
+def test_quality_error_uses_application_hierarchy() -> None:
+    assert not issubclass(errors.QualityError, ValueError)

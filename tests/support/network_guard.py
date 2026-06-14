@@ -1,4 +1,4 @@
-"""Block network access during the unittest suite unless explicitly opted out."""
+"""Block network access during the test suite unless explicitly opted out."""
 
 from __future__ import annotations
 

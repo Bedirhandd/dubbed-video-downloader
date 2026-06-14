@@ -1,25 +1,20 @@
 from __future__ import annotations
 
 import socket
-import unittest
+
+import pytest
 
 from tests.support import network_guard
 
 
-class NetworkGuardTests(unittest.TestCase):
-    def test_tcp_connect_is_blocked(self) -> None:
-        with (
-            self.assertRaises(RuntimeError) as context,
-            socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
-        ):
-            sock.connect(("127.0.0.1", 9))
-
-        self.assertIn("Network access is blocked during tests", str(context.exception))
-
-    def test_install_network_guard_is_idempotent(self) -> None:
-        network_guard.install_network_guard()
-        network_guard.install_network_guard()
+def test_tcp_connect_is_blocked() -> None:
+    with (
+        pytest.raises(RuntimeError, match="Network access is blocked during tests"),
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock,
+    ):
+        sock.connect(("127.0.0.1", 9))
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_install_network_guard_is_idempotent() -> None:
+    network_guard.install_network_guard()
+    network_guard.install_network_guard()

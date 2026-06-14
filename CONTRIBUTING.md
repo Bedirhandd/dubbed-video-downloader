@@ -40,7 +40,7 @@ uv sync --group dev
 uv run ruff check src tests
 uv run ruff format --check src tests
 uv run mypy
-uv run coverage run -m unittest discover -s tests -v
+uv run pytest --cov=dubbed_video_downloader --cov-report=term -v
 uv run coverage report --fail-under=79
 ```
 
@@ -54,7 +54,7 @@ uv run pre-commit install
 uv run pre-commit run --all-files
 ```
 
-Platform-specific tests may call `skipTest` on unusual filesystem layouts; skips are expected and do not fail CI.
+Platform-specific tests may use `@pytest.mark.skip` or `pytest.skip()` on unusual filesystem layouts; skips are expected and do not fail CI.
 
 The coverage gate in CI uses `--fail-under=79`, which must stay in sync with `fail_under` in `pyproject.toml`.
 
