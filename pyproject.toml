@@ -25,6 +25,8 @@ dev = [
     "coverage[toml]>=7.6.0",
     "mypy==2.1.0",
     "pre-commit>=4.0.0",
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
     "ruff==0.15.17",
     "types-pyyaml>=6.0.12.20260518",
     "types-yt-dlp>=2026.3.17.20260605",
@@ -86,3 +88,8 @@ namespace_packages = false
 mypy_path = ["src"]
 packages = ["dubbed_video_downloader"]
 exclude = ["src/dubbed_video_downloader/__main__.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["-ra", "--strict-markers"]
