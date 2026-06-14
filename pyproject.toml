@@ -20,8 +20,32 @@ dbdvdl = "dubbed_video_downloader.cli:app"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "coverage[toml]>=7.6.0",
+]
+
 [tool.uv]
 package = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dubbed_video_downloader"]
+
+[tool.coverage.run]
+branch = true
+source_pkgs = ["dubbed_video_downloader"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
+fail_under = 79
+
+[tool.coverage.xml]
+output = "coverage.xml"

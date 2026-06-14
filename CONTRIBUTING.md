@@ -27,6 +27,18 @@ If you do not have write access to this repository:
 
 Before opening a pull request, make sure your branch is up to date with the target branch and include a short note about what changed and how you checked it.
 
+## Testing
+
+The automated test suite is fully offline. Install dev dependencies and run tests with coverage:
+
+```bash
+uv sync --group dev
+uv run coverage run -m unittest discover -s tests -v
+uv run coverage report
+```
+
+Platform-specific tests may call `skipTest` on unusual filesystem layouts; skips are expected and do not fail CI.
+
 Examples:
 
 ```text

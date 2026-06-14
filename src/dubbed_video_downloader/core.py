@@ -45,6 +45,12 @@ RUN_METADATA_VERSION = 1
 RUN_METADATA_FINALIZING_COPY_DIRS = "finalizing_copy_dirs"
 FINALIZING_COPY_DIR_NAME = ".dubbed-video-downloader-finalizing"
 FINALIZING_COPY_DIR_MODE = 0o700
+_CLEANUP_FINALIZING_COPY_SUPPORTS_DIR_FD = (
+    os.open in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.unlink in os.supports_dir_fd
+    and hasattr(os, "fchmod")
+)
 FALLBACK_FINALIZE_COPY_MARKER = ".finalizing-copy"
 AT_FDCWD = -100
 LINUX_RENAME_NOREPLACE = 1
@@ -1107,12 +1113,7 @@ def _cleanup_finalizing_copy(
     finalizing_copy_dir: Path,
     expected_name: str,
 ) -> bool:
-    if (
-        os.open in os.supports_dir_fd
-        and os.stat in os.supports_dir_fd
-        and os.unlink in os.supports_dir_fd
-        and hasattr(os, "fchmod")
-    ):
+    if _CLEANUP_FINALIZING_COPY_SUPPORTS_DIR_FD:
         return _cleanup_finalizing_copy_with_dir_fd(
             finalizing_copy_dir,
             expected_name,
