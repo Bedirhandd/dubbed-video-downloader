@@ -202,6 +202,11 @@ def get_video_info(
         raise errors.MetadataExtractionError(
             f"Could not extract video metadata: {exc}"
         ) from exc
+    if not isinstance(info, dict):
+        raise errors.MetadataExtractionError(
+            "Could not extract video metadata: "
+            f"unexpected metadata shape ({type(info).__name__})"
+        )
     return info
 
 

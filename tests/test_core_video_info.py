@@ -83,3 +83,15 @@ def test_get_video_info_wraps_ytdlp_metadata_failures() -> None:
     assert context.value.__cause__ is cause
     assert "Could not extract video metadata" in str(context.value)
     assert "metadata failed" in str(context.value)
+
+
+@pytest.mark.parametrize("invalid_info", [None, [], "metadata", 42])
+def test_get_video_info_rejects_unexpected_metadata_shape(invalid_info: object) -> None:
+    with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
+        ydl = youtube_dl.return_value.__enter__.return_value
+        ydl.extract_info.return_value = invalid_info
+        with pytest.raises(errors.MetadataExtractionError) as context:
+            core.get_video_info("https://www.youtube.com/watch?v=EXAMPLE")
+    assert context.value.__cause__ is None
+    assert "Could not extract video metadata" in str(context.value)
+    assert "unexpected metadata shape" in str(context.value)
