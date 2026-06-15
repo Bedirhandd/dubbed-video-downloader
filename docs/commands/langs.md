@@ -12,7 +12,7 @@ uv run dbdvdl langs [OPTIONS] URL
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `URL` | Yes | YouTube video URL to inspect. |
+| `URL` | Yes | YouTube video URL to inspect. Must use `http` or `https` and include a host. |
 
 ## Options
 
