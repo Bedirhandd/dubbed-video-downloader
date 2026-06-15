@@ -162,6 +162,31 @@ def test_langs_reports_metadata_error_without_traceback(
     assert "Traceback" not in result.output
 
 
+def test_langs_reports_unexpected_metadata_shape_error(
+    tmp_path: Path, cli_runner: CliRunner
+) -> None:
+    tmpdir = tmp_path
+    home = Path(tmpdir)
+    config_path = home / ".config" / "dubbed-video-downloader" / "config.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        "output_dir: ~/Downloads/from-config\nffmpeg_path: ffmpeg\ndefault_lang: en\n",
+        encoding="utf-8",
+    )
+    with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
+        ydl = youtube_dl.return_value.__enter__.return_value
+        ydl.extract_info.return_value = None
+        result = cli_runner.invoke(
+            app,
+            ["langs", "https://www.youtube.com/watch?v=EXAMPLE"],
+            env={"HOME": str(tmpdir)},
+        )
+    assert result.exit_code == 1, result.output
+    assert "Error:" in result.output
+    assert "unexpected metadata shape" in result.output
+    assert "Traceback" not in result.output
+
+
 def test_langs_requires_config_before_network_work(
     tmp_path: Path, cli_runner: CliRunner
 ) -> None:
