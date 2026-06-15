@@ -364,7 +364,7 @@ def test_resolve_quality_selection_stable_for_normal_metadata() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv+bestaudio[format_id="tr-high"]'
     assert selection.selected_audio_label == "best"
     assert selection.notes == ()
 
@@ -378,7 +378,7 @@ def test_resolve_quality_selection_video_best() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "best"
     assert selection.selected_audio_label == "best"
     assert selection.video_quality is not None
@@ -394,7 +394,7 @@ def test_resolve_quality_selection_video_medium_picks_closest_height() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv[height=720]+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv[height=720]+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "720p"
 
 
@@ -407,7 +407,7 @@ def test_resolve_quality_selection_video_low_picks_smallest_height() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv[height=480]+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv[height=480]+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "480p"
 
 
@@ -420,7 +420,7 @@ def test_resolve_quality_selection_video_exact_height() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv[height=720]+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv[height=720]+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "720p"
 
 
@@ -460,7 +460,7 @@ def test_resolve_quality_selection_audio_best() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bestaudio[language="tr"]'
+    assert selection.format_selector == 'bestaudio[format_id="tr-high"]'
     assert selection.video_quality is None
     assert selection.selected_video_label is None
 
@@ -548,7 +548,7 @@ def test_resolve_quality_selection_audio_best_uses_metadata_language_casing() ->
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bestaudio[language="en-us"]'
+    assert selection.format_selector == 'bestaudio[format_id="en-us-audio"]'
 
 
 def test_resolve_quality_selection_audio_best_falls_back_across_language_casings() -> (
@@ -580,9 +580,40 @@ def test_resolve_quality_selection_audio_best_falls_back_across_language_casings
         audio_quality="best",
     )
 
-    assert selection.format_selector == (
-        '(bestaudio[language="en-US"]/bestaudio[language="en-us"])'
+    assert selection.format_selector == 'bestaudio[format_id="en-us-high"]'
+
+
+def test_resolve_quality_selection_audio_best_prefers_highest_bitrate_across_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-US-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 64,
+            },
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 160,
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
     )
+
+    assert selection.format_selector == 'bestaudio[format_id="en-us-high"]'
+    assert selection.selected_audio_label == "best"
 
 
 def test_resolve_quality_selection_audio_low_uses_format_id_without_language_filter() -> (

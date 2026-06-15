@@ -291,6 +291,33 @@ def _required_bitrate_kbps(candidate: AudioQualityCandidate) -> float:
     return candidate.bitrate_kbps
 
 
+def _best_audio_candidate_key(
+    candidate: AudioQualityCandidate,
+) -> tuple[float, str, str]:
+    return (
+        _required_bitrate_kbps(candidate),
+        candidate.format_id or "",
+        candidate.language,
+    )
+
+
+def _select_audio_candidate(
+    candidates_with_bitrate: list[AudioQualityCandidate],
+    audio_quality: AudioQuality,
+) -> AudioQualityCandidate:
+    if audio_quality.kind == AudioQualityKind.BEST:
+        return max(candidates_with_bitrate, key=_best_audio_candidate_key)
+    if audio_quality.kind == AudioQualityKind.MEDIUM:
+        return min(
+            candidates_with_bitrate,
+            key=lambda candidate: (
+                abs(_required_bitrate_kbps(candidate) - MEDIUM_AUDIO_TARGET_KBPS),
+                _required_bitrate_kbps(candidate),
+            ),
+        )
+    return min(candidates_with_bitrate, key=_required_bitrate_kbps)
+
+
 def _resolve_audio_selector(
     info: InfoDict,
     lang: str,
@@ -299,13 +326,6 @@ def _resolve_audio_selector(
     candidates = get_audio_quality_candidates(info, lang)
     if not candidates:
         raise QualityError(f"No audio streams found for language `{lang}`.")
-
-    if audio_quality.kind == AudioQualityKind.BEST:
-        return (
-            _prefixed_audio_language_selector("bestaudio", candidates, lang),
-            audio_quality.label,
-            (),
-        )
 
     candidates_with_bitrate = [
         candidate for candidate in candidates if candidate.bitrate_kbps is not None
@@ -320,27 +340,27 @@ def _resolve_audio_selector(
                     "metadata is unavailable.",
                 ),
             )
+        if audio_quality.kind == AudioQualityKind.LOW:
+            return (
+                _prefixed_audio_language_selector("worstaudio", candidates, lang),
+                audio_quality.label,
+                (
+                    "Audio quality low is using yt-dlp's worst matching audio because "
+                    "bitrate metadata is unavailable.",
+                ),
+            )
         return (
-            _prefixed_audio_language_selector("worstaudio", candidates, lang),
+            _prefixed_audio_language_selector("bestaudio", candidates, lang),
             audio_quality.label,
-            (
-                "Audio quality low is using yt-dlp's worst matching audio because "
-                "bitrate metadata is unavailable.",
-            ),
+            (),
         )
 
-    if audio_quality.kind == AudioQualityKind.MEDIUM:
-        selected = min(
-            candidates_with_bitrate,
-            key=lambda candidate: (
-                abs(_required_bitrate_kbps(candidate) - MEDIUM_AUDIO_TARGET_KBPS),
-                _required_bitrate_kbps(candidate),
-            ),
-        )
-    else:
-        selected = min(
-            candidates_with_bitrate,
-            key=_required_bitrate_kbps,
+    selected = _select_audio_candidate(candidates_with_bitrate, audio_quality)
+    if audio_quality.kind == AudioQualityKind.BEST:
+        return (
+            _audio_candidate_selector(selected, audio_quality),
+            audio_quality.label,
+            (),
         )
 
     return (
