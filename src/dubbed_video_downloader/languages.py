@@ -147,12 +147,12 @@ def resolve_language_for_video(
             _language_error_prefix(title) + "No multi-language audio tracks found."
         )
 
-    requested_key = _metadata_lang_key(requested)
+    requested_key = metadata_lang_key(requested)
     exact_matches = sorted(
         (
             available
             for available in inventory.langs
-            if _metadata_lang_key(available) == requested_key
+            if metadata_lang_key(available) == requested_key
         ),
         key=_raw_tag_sort_key,
     )
@@ -182,7 +182,8 @@ def _request_requires_exact_match(requested: str) -> bool:
     return language.territory is not None or language.script is not None
 
 
-def _metadata_lang_key(tag: str) -> str:
+def metadata_lang_key(tag: str) -> str:
+    """Return a case-insensitive comparison key for raw metadata language tags."""
     return tag.strip().casefold()
 
 
@@ -210,9 +211,7 @@ def _raw_tags_by_standard(langs: frozenset[str]) -> dict[str, tuple[str, ...]]:
 
 
 def _select_raw_tag(raw_tags: tuple[str, ...], requested_key: str) -> str:
-    exact_matches = [
-        tag for tag in raw_tags if _metadata_lang_key(tag) == requested_key
-    ]
+    exact_matches = [tag for tag in raw_tags if metadata_lang_key(tag) == requested_key]
     if exact_matches:
         return sorted(exact_matches, key=_raw_tag_sort_key)[0]
     return raw_tags[0]

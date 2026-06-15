@@ -102,7 +102,9 @@ Download at the highest available bitrate for the selected language:
 uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality best
 ```
 
-In video mode, this selects `bestaudio[language="<lang>"]`. In audio mode, it selects the same filter as the sole stream.
+When every candidate for the language reports bitrate metadata, the system picks the highest-bitrate audio candidate and builds a targeted yt-dlp selector (typically `bestaudio[format_id="…"]`). When any candidate lacks bitrate metadata, `best` falls back to a language-based yt-dlp selector so unknown streams stay in contention; if multiple raw metadata language casings match, the fallback uses one regex union filter rather than a `/` precedence chain. When no candidate reports bitrate metadata, it uses the same language-based fallback.
+
+In video mode, the audio selector is combined with the video selector using `+`.
 
 ## Audio Quality: Medium
 
@@ -215,10 +217,10 @@ The `qualities` command shows audio bitrate information per language. When no bi
 Audio qualities: 128k, 256k, unknown bitrate (2 streams)
 ```
 
-This means 2 audio streams were found for the language, but their bitrate metadata is missing. The quality system handles this gracefully:
-- `best` always works (uses yt-dlp's `bestaudio`)
-- `medium` falls back to `best` with a note
-- `low` falls back to `worstaudio` with a note
+This means some audio streams for the language are missing bitrate metadata. The quality system handles this gracefully:
+- `best` uses yt-dlp's `bestaudio[language="<lang>"]` when any stream lacks bitrate metadata, or when no stream reports bitrate metadata
+- `medium` falls back to `best` with a note when no stream reports bitrate metadata
+- `low` falls back to `worstaudio` with a note when no stream reports bitrate metadata
 
 ## Video Quality Validation Errors
 

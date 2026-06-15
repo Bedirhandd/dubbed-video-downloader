@@ -705,10 +705,7 @@ def test_download_video_and_audio_quality_build_safe_selector(tmp_path: Path) ->
             audio_quality="low",
         )
     opts = youtube_dl.call_args.args[0]
-    assert (
-        opts["format"]
-        == 'bv[height=720]+bestaudio[language="tr"][format_id="tr-audio-low"]'
-    )
+    assert opts["format"] == 'bv[height=720]+bestaudio[format_id="tr-audio-low"]'
     ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
 

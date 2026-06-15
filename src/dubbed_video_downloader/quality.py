@@ -7,6 +7,7 @@ from typing import Any
 
 from .download_mode import DownloadMode, normalize_download_mode
 from .errors import QualityError
+from .languages import metadata_lang_key
 from .yt_dlp_types import InfoDict
 
 MIN_VIDEO_HEIGHT = 144
@@ -72,6 +73,7 @@ class AudioQuality:
 @dataclass(frozen=True)
 class AudioQualityCandidate:
     format_id: str | None
+    language: str
     bitrate_kbps: float | None
     bitrate_field: str | None
     ext: str | None
@@ -209,6 +211,8 @@ def get_audio_quality_candidates(
 
         bitrate, bitrate_field = _audio_bitrate(format_info)
         format_id = format_info.get("format_id")
+        raw_language = format_info.get("language")
+        language = raw_language if isinstance(raw_language, str) else ""
         ext = format_info.get("ext")
         acodec = format_info.get("acodec")
         candidates.append(
@@ -216,6 +220,7 @@ def get_audio_quality_candidates(
                 format_id=(
                     format_id if isinstance(format_id, str) and format_id else None
                 ),
+                language=language,
                 bitrate_kbps=bitrate,
                 bitrate_field=bitrate_field,
                 ext=ext if isinstance(ext, str) and ext else None,
@@ -286,6 +291,33 @@ def _required_bitrate_kbps(candidate: AudioQualityCandidate) -> float:
     return candidate.bitrate_kbps
 
 
+def _best_audio_candidate_key(
+    candidate: AudioQualityCandidate,
+) -> tuple[float, str, str]:
+    return (
+        _required_bitrate_kbps(candidate),
+        candidate.format_id or "",
+        candidate.language,
+    )
+
+
+def _select_audio_candidate(
+    candidates_with_bitrate: list[AudioQualityCandidate],
+    audio_quality: AudioQuality,
+) -> AudioQualityCandidate:
+    if audio_quality.kind == AudioQualityKind.BEST:
+        return max(candidates_with_bitrate, key=_best_audio_candidate_key)
+    if audio_quality.kind == AudioQualityKind.MEDIUM:
+        return min(
+            candidates_with_bitrate,
+            key=lambda candidate: (
+                abs(_required_bitrate_kbps(candidate) - MEDIUM_AUDIO_TARGET_KBPS),
+                _required_bitrate_kbps(candidate),
+            ),
+        )
+    return min(candidates_with_bitrate, key=_required_bitrate_kbps)
+
+
 def _resolve_audio_selector(
     info: InfoDict,
     lang: str,
@@ -295,62 +327,63 @@ def _resolve_audio_selector(
     if not candidates:
         raise QualityError(f"No audio streams found for language `{lang}`.")
 
-    language_filter = _selector_filter("language", lang)
-    if audio_quality.kind == AudioQualityKind.BEST:
-        return f"bestaudio{language_filter}", audio_quality.label, ()
-
     candidates_with_bitrate = [
         candidate for candidate in candidates if candidate.bitrate_kbps is not None
     ]
     if not candidates_with_bitrate:
         if audio_quality.kind == AudioQualityKind.MEDIUM:
             return (
-                f"bestaudio{language_filter}",
+                _prefixed_audio_language_selector("bestaudio", candidates, lang),
                 "best",
                 (
                     "Audio quality medium fell back to best because bitrate "
                     "metadata is unavailable.",
                 ),
             )
+        if audio_quality.kind == AudioQualityKind.LOW:
+            return (
+                _prefixed_audio_language_selector("worstaudio", candidates, lang),
+                audio_quality.label,
+                (
+                    "Audio quality low is using yt-dlp's worst matching audio because "
+                    "bitrate metadata is unavailable.",
+                ),
+            )
         return (
-            f"worstaudio{language_filter}",
+            _prefixed_audio_language_selector("bestaudio", candidates, lang),
             audio_quality.label,
-            (
-                "Audio quality low is using yt-dlp's worst matching audio because "
-                "bitrate metadata is unavailable.",
-            ),
+            (),
         )
 
-    if audio_quality.kind == AudioQualityKind.MEDIUM:
-        selected = min(
-            candidates_with_bitrate,
-            key=lambda candidate: (
-                abs(_required_bitrate_kbps(candidate) - MEDIUM_AUDIO_TARGET_KBPS),
-                _required_bitrate_kbps(candidate),
-            ),
-        )
-    else:
-        selected = min(
-            candidates_with_bitrate,
-            key=_required_bitrate_kbps,
+    if audio_quality.kind == AudioQualityKind.BEST:
+        if len(candidates_with_bitrate) < len(candidates):
+            return (
+                _prefixed_audio_language_selector("bestaudio", candidates, lang),
+                audio_quality.label,
+                (),
+            )
+        selected = _select_audio_candidate(candidates_with_bitrate, audio_quality)
+        return (
+            _audio_candidate_selector(selected, audio_quality),
+            audio_quality.label,
+            (),
         )
 
+    selected = _select_audio_candidate(candidates_with_bitrate, audio_quality)
     return (
-        _audio_candidate_selector(lang, selected, audio_quality),
+        _audio_candidate_selector(selected, audio_quality),
         _format_bitrate(selected.bitrate_kbps),
         (),
     )
 
 
 def _audio_candidate_selector(
-    lang: str,
     candidate: AudioQualityCandidate,
     audio_quality: AudioQuality,
 ) -> str:
-    language_filter = _selector_filter("language", lang)
     if candidate.format_id:
-        format_id_filter = _selector_filter("format_id", candidate.format_id)
-        return f"bestaudio{language_filter}{format_id_filter}"
+        return f"bestaudio{_selector_filter('format_id', candidate.format_id)}"
+    language_filter = _selector_filter("language", candidate.language)
     if candidate.bitrate_kbps is not None and candidate.bitrate_field:
         return (
             f"bestaudio{language_filter}"
@@ -360,6 +393,44 @@ def _audio_candidate_selector(
         "worstaudio" if audio_quality.kind == AudioQualityKind.LOW else "bestaudio"
     )
     return f"{fallback}{language_filter}"
+
+
+def _distinct_raw_language_tags(
+    candidates: tuple[AudioQualityCandidate, ...],
+    resolved_lang: str,
+) -> tuple[str, ...]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate.language in seen:
+            continue
+        seen.add(candidate.language)
+        unique.append(candidate.language)
+    unique.sort(key=lambda tag: (tag != resolved_lang, tag))
+    return tuple(unique)
+
+
+def _prefixed_audio_language_selector(
+    prefix: str,
+    candidates: tuple[AudioQualityCandidate, ...],
+    resolved_lang: str,
+) -> str:
+    tags = _distinct_raw_language_tags(candidates, resolved_lang)
+    if not tags:
+        return f"{prefix}{_selector_filter('language', resolved_lang)}"
+    if len(tags) == 1:
+        return f"{prefix}{_selector_filter('language', tags[0])}"
+    return f"{prefix}{_language_union_filter(tags)}"
+
+
+def _language_union_filter(tags: tuple[str, ...]) -> str:
+    pattern = f"^(?:{'|'.join(re.escape(tag) for tag in tags)})$"
+    return f"[language~={_quote_regex_selector_string(pattern)}]"
+
+
+def _quote_regex_selector_string(pattern: str) -> str:
+    escaped = pattern.replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _video_height_selector(height: int) -> str:
@@ -390,7 +461,8 @@ def _is_audio_format(format_info: dict[str, Any], lang: str) -> bool:
     return (
         format_info.get("vcodec") == "none"
         and format_info.get("acodec") not in (None, "none")
-        and (format_info.get("language") or "").strip() == lang.strip()
+        and metadata_lang_key(format_info.get("language") or "")
+        == metadata_lang_key(lang)
     )
 
 

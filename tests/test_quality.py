@@ -228,6 +228,57 @@ def test_get_audio_quality_candidates_matches_padded_language() -> None:
     assert candidates[0].format_id == "en-audio"
 
 
+def test_get_audio_quality_candidates_matches_metadata_language_case_insensitively() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 160,
+            },
+            {
+                "format_id": "en-us-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 64,
+            },
+        ]
+    }
+
+    candidates = quality.get_audio_quality_candidates(info, "en-US")
+
+    assert {candidate.format_id for candidate in candidates} == {
+        "en-us-high",
+        "en-us-low",
+    }
+
+
+def test_get_audio_quality_candidates_matches_resolved_lang_against_different_casing() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 128,
+            }
+        ]
+    }
+
+    candidates = quality.get_audio_quality_candidates(info, "en-us")
+
+    assert len(candidates) == 1
+    assert candidates[0].format_id == "en-us-audio"
+
+
 def test_get_audio_quality_candidates_treats_empty_format_id_as_none() -> None:
     info = {
         "formats": [
@@ -257,6 +308,7 @@ def test_format_audio_quality_labels_single_unknown() -> None:
     candidates = (
         quality.AudioQualityCandidate(
             format_id="a",
+            language="tr",
             bitrate_kbps=None,
             bitrate_field=None,
             ext=None,
@@ -271,6 +323,7 @@ def test_format_audio_quality_labels_multiple_unknown() -> None:
     candidates = tuple(
         quality.AudioQualityCandidate(
             format_id=f"a-{index}",
+            language="tr",
             bitrate_kbps=None,
             bitrate_field=None,
             ext=None,
@@ -288,6 +341,7 @@ def test_format_audio_quality_labels_all_unknown() -> None:
     candidates = tuple(
         quality.AudioQualityCandidate(
             format_id="a",
+            language="tr",
             bitrate_kbps=None,
             bitrate_field=None,
             ext=None,
@@ -301,6 +355,20 @@ def test_format_audio_quality_labels_all_unknown() -> None:
     )
 
 
+def test_resolve_quality_selection_stable_for_normal_metadata() -> None:
+    selection = quality.resolve_quality_selection(
+        info=VIDEO_AUDIO_INFO,
+        lang="tr",
+        download_mode=DownloadMode.VIDEO,
+        video_quality="best",
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bv+bestaudio[format_id="tr-high"]'
+    assert selection.selected_audio_label == "best"
+    assert selection.notes == ()
+
+
 def test_resolve_quality_selection_video_best() -> None:
     selection = quality.resolve_quality_selection(
         info=VIDEO_AUDIO_INFO,
@@ -310,7 +378,7 @@ def test_resolve_quality_selection_video_best() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "best"
     assert selection.selected_audio_label == "best"
     assert selection.video_quality is not None
@@ -326,7 +394,7 @@ def test_resolve_quality_selection_video_medium_picks_closest_height() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv[height=720]+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv[height=720]+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "720p"
 
 
@@ -339,7 +407,7 @@ def test_resolve_quality_selection_video_low_picks_smallest_height() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv[height=480]+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv[height=480]+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "480p"
 
 
@@ -352,7 +420,7 @@ def test_resolve_quality_selection_video_exact_height() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bv[height=720]+bestaudio[language="tr"]'
+    assert selection.format_selector == 'bv[height=720]+bestaudio[format_id="tr-high"]'
     assert selection.selected_video_label == "720p"
 
 
@@ -392,9 +460,56 @@ def test_resolve_quality_selection_audio_best() -> None:
         audio_quality="best",
     )
 
-    assert selection.format_selector == 'bestaudio[language="tr"]'
+    assert selection.format_selector == 'bestaudio[format_id="tr-high"]'
     assert selection.video_quality is None
     assert selection.selected_video_label is None
+
+
+def test_resolve_quality_selection_audio_best_falls_back_when_some_streams_lack_bitrate() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "tr-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "tr",
+                "abr": 64,
+            },
+            {
+                "format_id": "tr-unknown",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "tr",
+                "ext": "webm",
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="tr",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[language="tr"]'
+    assert selection.selected_audio_label == "best"
+
+
+def test_resolve_quality_selection_audio_best_still_targets_highest_when_all_have_bitrate() -> (
+    None
+):
+    selection = quality.resolve_quality_selection(
+        info=VIDEO_AUDIO_INFO,
+        lang="tr",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[format_id="tr-high"]'
+    assert selection.selected_audio_label == "best"
 
 
 def test_resolve_quality_selection_audio_medium_selects_closest_bitrate() -> None:
@@ -405,7 +520,7 @@ def test_resolve_quality_selection_audio_medium_selects_closest_bitrate() -> Non
         audio_quality="medium",
     )
 
-    assert selection.format_selector == ('bestaudio[language="tr"][format_id="tr-mid"]')
+    assert selection.format_selector == 'bestaudio[format_id="tr-mid"]'
     assert selection.selected_audio_label == "128k"
 
 
@@ -417,7 +532,7 @@ def test_resolve_quality_selection_audio_low_selects_lowest_bitrate() -> None:
         audio_quality="low",
     )
 
-    assert selection.format_selector == ('bestaudio[language="tr"][format_id="tr-low"]')
+    assert selection.format_selector == 'bestaudio[format_id="tr-low"]'
     assert selection.selected_audio_label == "64k"
 
 
@@ -460,9 +575,130 @@ def test_resolve_quality_selection_audio_missing_language() -> None:
         )
 
 
+def test_resolve_quality_selection_audio_best_uses_metadata_language_casing() -> None:
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 128,
+            }
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[format_id="en-us-audio"]'
+
+
+def test_resolve_quality_selection_audio_best_falls_back_across_language_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 160,
+            },
+            {
+                "format_id": "en-us-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 64,
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[format_id="en-us-high"]'
+
+
+def test_resolve_quality_selection_audio_best_prefers_highest_bitrate_across_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-US-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 64,
+            },
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 160,
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[format_id="en-us-high"]'
+    assert selection.selected_audio_label == "best"
+
+
+def test_resolve_quality_selection_audio_low_uses_format_id_without_language_filter() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 64,
+            },
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 160,
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="low",
+    )
+
+    assert selection.format_selector == 'bestaudio[format_id="en-us-low"]'
+
+
 def test_audio_candidate_selector_uses_bitrate_field_when_format_id_missing() -> None:
     candidate = quality.AudioQualityCandidate(
         format_id=None,
+        language="tr",
         bitrate_kbps=128.0,
         bitrate_field="tbr",
         ext="m4a",
@@ -470,7 +706,6 @@ def test_audio_candidate_selector_uses_bitrate_field_when_format_id_missing() ->
     )
 
     selector = quality._audio_candidate_selector(
-        "tr",
         candidate,
         quality.AudioQuality(quality.AudioQualityKind.MEDIUM),
     )
@@ -481,6 +716,7 @@ def test_audio_candidate_selector_uses_bitrate_field_when_format_id_missing() ->
 def test_audio_candidate_selector_falls_back_to_worstaudio_for_low() -> None:
     candidate = quality.AudioQualityCandidate(
         format_id=None,
+        language="tr",
         bitrate_kbps=None,
         bitrate_field=None,
         ext="webm",
@@ -488,7 +724,6 @@ def test_audio_candidate_selector_falls_back_to_worstaudio_for_low() -> None:
     )
 
     selector = quality._audio_candidate_selector(
-        "tr",
         candidate,
         quality.AudioQuality(quality.AudioQualityKind.LOW),
     )
@@ -499,6 +734,7 @@ def test_audio_candidate_selector_falls_back_to_worstaudio_for_low() -> None:
 def test_audio_candidate_selector_falls_back_to_bestaudio_for_medium() -> None:
     candidate = quality.AudioQualityCandidate(
         format_id=None,
+        language="tr",
         bitrate_kbps=None,
         bitrate_field=None,
         ext="webm",
@@ -506,7 +742,6 @@ def test_audio_candidate_selector_falls_back_to_bestaudio_for_medium() -> None:
     )
 
     selector = quality._audio_candidate_selector(
-        "tr",
         candidate,
         quality.AudioQuality(quality.AudioQualityKind.MEDIUM),
     )
@@ -518,3 +753,141 @@ def test_selector_filter_quotes_special_characters() -> None:
     assert quality._selector_filter("language", "en-US") == '[language="en-US"]'
     assert quality._selector_filter("language", 'en"US') == '[language="en\\"US"]'
     assert quality._selector_filter("language", r"en\US") == '[language="en\\\\US"]'
+
+
+def test_language_union_filter_builds_regex_for_multiple_raw_tags() -> None:
+    assert quality._language_union_filter(("en-US", "en-us")) == (
+        '[language~="^(?:en\\-US|en\\-us)$"]'
+    )
+
+
+def test_prefixed_audio_language_selector_uses_union_regex_for_multiple_tags() -> None:
+    candidates = (
+        quality.AudioQualityCandidate(
+            format_id="en-US-audio",
+            language="en-US",
+            bitrate_kbps=None,
+            bitrate_field=None,
+            ext="webm",
+            acodec="opus",
+        ),
+        quality.AudioQualityCandidate(
+            format_id="en-us-audio",
+            language="en-us",
+            bitrate_kbps=None,
+            bitrate_field=None,
+            ext="m4a",
+            acodec="mp4a",
+        ),
+    )
+
+    selector = quality._prefixed_audio_language_selector(
+        "bestaudio",
+        candidates,
+        "en-US",
+    )
+
+    assert selector == 'bestaudio[language~="^(?:en\\-US|en\\-us)$"]'
+    assert "/" not in selector
+
+
+def test_resolve_quality_selection_audio_best_falls_back_with_union_regex_across_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-US-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 64,
+            },
+            {
+                "format_id": "en-us-unknown",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "ext": "webm",
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[language~="^(?:en\\-US|en\\-us)$"]'
+    assert "/" not in selection.format_selector
+
+
+def test_resolve_quality_selection_audio_low_falls_back_with_union_regex_across_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-US-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "ext": "webm",
+            },
+            {
+                "format_id": "en-us-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "ext": "m4a",
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="low",
+    )
+
+    assert selection.format_selector == 'worstaudio[language~="^(?:en\\-US|en\\-us)$"]'
+    assert "/" not in selection.format_selector
+
+
+def test_language_union_regex_selector_ranks_all_raw_tags_with_ytdlp() -> None:
+    from yt_dlp import YoutubeDL
+
+    formats = [
+        {
+            "format_id": "en-US-low",
+            "vcodec": "none",
+            "acodec": "opus",
+            "language": "en-US",
+            "abr": 64,
+            "tbr": 64,
+        },
+        {
+            "format_id": "en-us-high",
+            "vcodec": "none",
+            "acodec": "opus",
+            "language": "en-us",
+            "abr": 160,
+            "tbr": 160,
+        },
+    ]
+    union_filter = quality._language_union_filter(("en-US", "en-us"))
+    ydl = YoutubeDL({"quiet": True})
+    ctx = {
+        "formats": formats,
+        "has_merged_format": False,
+        "incomplete_formats": True,
+    }
+
+    best_selected = list(ydl.build_format_selector(f"bestaudio{union_filter}")(ctx))
+    worst_selected = list(ydl.build_format_selector(f"worstaudio{union_filter}")(ctx))
+
+    assert best_selected[0]["format_id"] == "en-us-high"
+    assert worst_selected[0]["format_id"] == "en-US-low"
