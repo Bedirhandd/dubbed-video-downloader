@@ -318,7 +318,7 @@ uv run dbdvdl config show
 uv run dbdvdl doctor
 ```
 
-`doctor` also checks that the output directory is writable and FFmpeg/Node.js are accessible.
+`doctor` also checks config file permissions (POSIX warning only), that the output directory is writable, and that FFmpeg/Node.js are accessible.
 
 ## Next Steps
 

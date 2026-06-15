@@ -20,7 +20,7 @@ This prompts you to configure:
 - **Default exists behavior** -- `skip`, `fail`, or `overwrite` when output already exists
 - **Ask for disk usage** -- whether to confirm downloads after showing estimated size
 
-The config is written to `~/.config/dubbed-video-downloader/config.yaml`.
+The config is written to `~/.config/dubbed-video-downloader/config.yaml`. On POSIX systems, the directory is created as `0700` and the file as `0600` so only your user account can read it.
 
 To create a config with all defaults without being prompted:
 
@@ -46,13 +46,14 @@ This checks:
 
 - **Python** -- version must be 3.10+
 - **Config** -- file exists and is valid at `~/.config/dubbed-video-downloader/config.yaml`
+- **Config permissions** -- on POSIX, warns if the config directory or file is not owner-only (`0700` / `0600`)
 - **Output directory** -- exists or can be created, is writable
 - **FFmpeg** -- executable is found and functional
 - **Node.js** -- executable is found and functional
 - **yt-dlp** -- package is installed
 - **yt-dlp-ejs** -- package is installed
 
-All checks should report `OK`. If any check reports `FAIL`, fix the issue before proceeding.
+All checks should report `OK`. If any check reports `FAIL`, fix the issue before proceeding. A `Config permissions` warning in the detail line does not count as a failure.
 
 ## First Download
 

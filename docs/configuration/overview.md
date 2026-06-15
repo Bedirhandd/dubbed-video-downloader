@@ -28,6 +28,21 @@ ask_for_disk_usage: false
 
 All keys are written in the order shown above. Unknown keys in the file are silently ignored, allowing forward compatibility.
 
+## File Permissions
+
+On POSIX systems (Linux, macOS, and similar), `dbdvdl init` and `dbdvdl config init` create the config directory and file with owner-only permissions:
+
+| Path | Mode | Meaning |
+| --- | --- | --- |
+| `~/.config/dubbed-video-downloader/` | `0700` | Only the owning user can access the directory |
+| `config.yaml` | `0600` | Only the owning user can read or write the file |
+
+These permissions apply when the config is first created or overwritten with `--force`. They reduce the chance that other local users on a shared machine can read your output paths and defaults.
+
+`load_config()` does not reject configs with looser permissions. If an older or manually edited config is world-readable, `dbdvdl doctor` reports a `Config permissions` warning with recommended `chmod` commands. That check does not fail the command.
+
+On Windows, POSIX mode bits are not enforced; `doctor` reports `Config permissions` as not applicable on that platform.
+
 ## CLI Override Behavior
 
 All config keys can be overridden at the command line via the corresponding CLI option on individual commands. The override precedence is:

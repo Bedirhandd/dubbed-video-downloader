@@ -41,6 +41,7 @@ Handles config file I/O, validation, and normalization. Responsibilities:
 
 - **Config path:** `Path.home() / ".config" / "dubbed-video-downloader" / "config.yaml"`
 - **File operations:** `load_config()`, `write_config()`, `remove_config_dir()`
+- **POSIX permissions:** `write_config()` creates the config directory as `0700` and `config.yaml` as `0600`; `config_permissions_warning()` supports doctor warnings for existing loose permissions
 - **Parsing:** YAML via `PyYAML`, with `config.yaml` serialization in stable key order
 - **Validation:** Required keys check, type validation, path expansion (`~` and env vars), language code validation
 - **Normalization:** `normalize_output_dir()`, `normalize_ffmpeg_path()`, `normalize_default_lang()`, `normalize_download_mode()`, `normalize_video_quality()`, `normalize_audio_quality()`, `normalize_retry_on_network_failure()`, `normalize_exists_behavior()`, `normalize_ask_for_disk_usage()`
@@ -77,6 +78,7 @@ Key data types: `VideoQuality`, `AudioQuality`, `AudioQualityCandidate`, `Qualit
 Runs a series of system checks for the `doctor` command. Checks:
 - Python version >= 3.10
 - Config file exists and is valid
+- Config file permissions are owner-only on POSIX (warning only; does not fail the command)
 - Output directory exists or can be created, is writable
 - FFmpeg is found and executable
 - Node.js is found and executable

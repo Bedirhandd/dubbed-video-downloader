@@ -116,3 +116,9 @@ uv run dbdvdl init --output-dir ~/Videos --default-lang tr --default-download-mo
 # Overwrite an existing config
 uv run dbdvdl init --force --default-lang de
 ```
+
+## File Permissions
+
+On POSIX systems, a successful `init` creates `~/.config/dubbed-video-downloader/` with mode `0700` and `config.yaml` with mode `0600`. Overwriting with `--force` applies the same permissions again.
+
+Valid configs with looser permissions continue to load. Use `dbdvdl doctor` to check whether the config directory and file are owner-only.

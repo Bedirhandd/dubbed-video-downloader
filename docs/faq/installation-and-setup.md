@@ -18,3 +18,7 @@ uv run dbdvdl init               # create a fresh config
 ## Can I use a config file from a different location?
 
 No. The config is always read from `~/.config/dubbed-video-downloader/config.yaml`. There is no `--config` flag to specify an alternative path.
+
+## Why does `doctor` warn about config permissions?
+
+On POSIX systems, `dbdvdl init` creates the config directory as `0700` and `config.yaml` as `0600`. If an older or manually edited config is world-readable, `doctor` reports a `Config permissions` warning with recommended `chmod` commands. The check still reports `OK` and does not block downloads. See [Configuration Overview](../configuration/overview.md#file-permissions) and [doctor](../commands/doctor.md).
