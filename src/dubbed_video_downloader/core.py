@@ -520,6 +520,8 @@ def download(
                 staging_output_dir=staging_run.output_dir,
                 exists_behavior=selected_exists_behavior,
             )
+    except _UnsafeStagingPathError as exc:
+        raise errors.DownloadError(str(exc)) from exc
     except OSError as exc:
         raise errors.DownloadError(
             f"Could not prepare output directory: {exc}"

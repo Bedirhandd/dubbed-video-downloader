@@ -422,9 +422,9 @@ def test_download_rejects_symlinked_incomplete_root_before_downloading(
             lang="tr",
             output_dir=output_dir,
         )
-    assert isinstance(context.value.__cause__, OSError)
-    assert "Could not prepare output directory" in str(context.value)
+    assert isinstance(context.value.__cause__, core._UnsafeStagingPathError)
     assert "Refusing to use" in str(context.value)
+    assert "Could not prepare output directory" not in str(context.value)
     youtube_dl.assert_not_called()
 
 
@@ -461,9 +461,9 @@ def test_download_rejects_symlinked_tmp_parent_before_downloading(
             lang="tr",
             output_dir=output_dir,
         )
-    assert isinstance(context.value.__cause__, OSError)
-    assert "Could not prepare output directory" in str(context.value)
+    assert isinstance(context.value.__cause__, core._UnsafeStagingPathError)
     assert "Refusing to use" in str(context.value)
+    assert "Could not prepare output directory" not in str(context.value)
     youtube_dl.assert_not_called()
 
 
