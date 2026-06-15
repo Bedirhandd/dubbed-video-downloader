@@ -46,6 +46,108 @@ def test_download_approval_callback_runs_before_media_download(tmp_path: Path) -
     ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
 
 
+def test_download_skip_if_output_appears_during_approval(tmp_path: Path) -> None:
+    info = {
+        "title": "A Title",
+        "formats": [{"vcodec": "none", "acodec": "mp4a.40.2", "language": "tr"}],
+    }
+    output_path = tmp_path / "tr" / "A_Title" / "A_Title.mkv"
+
+    def approve(plan: core.DownloadPlan) -> bool:
+        assert plan.output_path == output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("created during approval", encoding="utf-8")
+        return True
+
+    with (
+        patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+        patch(
+            "dubbed_video_downloader.core._planned_output_path",
+            return_value=output_path,
+        ),
+        patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+    ):
+        result = core.download(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="tr",
+            output_dir=tmp_path,
+            exists_behavior=core.FileExistsBehavior.SKIP,
+            approval_callback=approve,
+        )
+
+    assert result.status == core.DownloadStatus.SKIPPED
+    assert result.output_path == output_path
+    youtube_dl.assert_not_called()
+
+
+def test_download_fail_if_output_appears_during_approval(tmp_path: Path) -> None:
+    info = {
+        "title": "A Title",
+        "formats": [{"vcodec": "none", "acodec": "mp4a.40.2", "language": "tr"}],
+    }
+    output_path = tmp_path / "tr" / "A_Title" / "A_Title.mkv"
+
+    def approve(plan: core.DownloadPlan) -> bool:
+        assert plan.output_path == output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("created during approval", encoding="utf-8")
+        return True
+
+    with (
+        patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+        patch(
+            "dubbed_video_downloader.core._planned_output_path",
+            return_value=output_path,
+        ),
+        patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+        pytest.raises(errors.DownloadError, match="Output already exists"),
+    ):
+        core.download(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="tr",
+            output_dir=tmp_path,
+            exists_behavior=core.FileExistsBehavior.FAIL,
+            approval_callback=approve,
+        )
+
+    youtube_dl.assert_not_called()
+
+
+def test_download_overwrite_if_output_appears_during_approval(tmp_path: Path) -> None:
+    info = {
+        "title": "A Title",
+        "formats": [{"vcodec": "none", "acodec": "mp4a.40.2", "language": "tr"}],
+    }
+    output_path = tmp_path / "tr" / "A_Title" / "A_Title.mkv"
+
+    def approve(plan: core.DownloadPlan) -> bool:
+        assert plan.output_path == output_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("created during approval", encoding="utf-8")
+        return True
+
+    with (
+        patch("dubbed_video_downloader.core.get_video_info", return_value=info),
+        patch(
+            "dubbed_video_downloader.core._planned_output_path",
+            return_value=output_path,
+        ),
+        patch_successful_staged_finalization(),
+        patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl,
+    ):
+        ydl = youtube_dl.return_value.__enter__.return_value
+        result = core.download(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="tr",
+            output_dir=tmp_path,
+            exists_behavior=core.FileExistsBehavior.OVERWRITE,
+            approval_callback=approve,
+        )
+
+    assert result.status == core.DownloadStatus.DOWNLOADED
+    ydl.download.assert_called_once_with(["https://www.youtube.com/watch?v=EXAMPLE"])
+
+
 def test_download_audio_mode_does_not_report_merging_from_postprocessor_hook(
     tmp_path: Path,
 ) -> None:

@@ -482,6 +482,17 @@ def download(
             quality_notes=quality_selection.notes,
             skipped_invalid_count=inventory.skipped_invalid_count,
         )
+    if _handle_existing_output(output_path, selected_exists_behavior):
+        _report_download_stage(
+            stage_callback,
+            DownloadStage.SKIPPING_EXISTING_OUTPUT,
+        )
+        return DownloadResult(
+            status=DownloadStatus.SKIPPED,
+            output_path=output_path,
+            quality_notes=quality_selection.notes,
+            skipped_invalid_count=inventory.skipped_invalid_count,
+        )
 
     _report_download_stage(stage_callback, DownloadStage.PREPARING_OUTPUT_DIR)
 
