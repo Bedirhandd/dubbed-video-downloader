@@ -7,6 +7,7 @@ from typing import Any
 
 from .download_mode import DownloadMode, normalize_download_mode
 from .errors import QualityError
+from .languages import metadata_lang_key
 from .yt_dlp_types import InfoDict
 
 MIN_VIDEO_HEIGHT = 144
@@ -390,7 +391,8 @@ def _is_audio_format(format_info: dict[str, Any], lang: str) -> bool:
     return (
         format_info.get("vcodec") == "none"
         and format_info.get("acodec") not in (None, "none")
-        and (format_info.get("language") or "").strip() == lang.strip()
+        and metadata_lang_key(format_info.get("language") or "")
+        == metadata_lang_key(lang)
     )
 
 

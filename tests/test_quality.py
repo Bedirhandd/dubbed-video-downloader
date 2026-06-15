@@ -228,6 +228,57 @@ def test_get_audio_quality_candidates_matches_padded_language() -> None:
     assert candidates[0].format_id == "en-audio"
 
 
+def test_get_audio_quality_candidates_matches_metadata_language_case_insensitively() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 160,
+            },
+            {
+                "format_id": "en-us-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "abr": 64,
+            },
+        ]
+    }
+
+    candidates = quality.get_audio_quality_candidates(info, "en-US")
+
+    assert {candidate.format_id for candidate in candidates} == {
+        "en-us-high",
+        "en-us-low",
+    }
+
+
+def test_get_audio_quality_candidates_matches_resolved_lang_against_different_casing() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-us-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 128,
+            }
+        ]
+    }
+
+    candidates = quality.get_audio_quality_candidates(info, "en-us")
+
+    assert len(candidates) == 1
+    assert candidates[0].format_id == "en-us-audio"
+
+
 def test_get_audio_quality_candidates_treats_empty_format_id_as_none() -> None:
     info = {
         "formats": [
@@ -299,6 +350,20 @@ def test_format_audio_quality_labels_all_unknown() -> None:
     assert quality.format_audio_quality_labels(candidates) == (
         "unknown bitrate (3 streams)",
     )
+
+
+def test_resolve_quality_selection_stable_for_normal_metadata() -> None:
+    selection = quality.resolve_quality_selection(
+        info=VIDEO_AUDIO_INFO,
+        lang="tr",
+        download_mode=DownloadMode.VIDEO,
+        video_quality="best",
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bv+bestaudio[language="tr"]'
+    assert selection.selected_audio_label == "best"
+    assert selection.notes == ()
 
 
 def test_resolve_quality_selection_video_best() -> None:

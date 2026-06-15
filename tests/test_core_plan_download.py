@@ -499,6 +499,60 @@ def test_plan_download_resolves_language_variants(tmp_path: Path) -> None:
     assert "en-US" in str(plan.output_path)
 
 
+def test_plan_download_includes_mixed_case_audio_streams_for_resolved_language(
+    tmp_path: Path,
+) -> None:
+    info = {
+        "id": "EXAMPLE",
+        "extractor": "youtube",
+        "title": "A Title",
+        "uploader": "Example Channel",
+        "formats": [
+            {
+                "format_id": "video",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "ext": "webm",
+                "url": "https://example.test/video.webm",
+                "height": 720,
+                "tbr": 500,
+            },
+            {
+                "format_id": "en-us-high",
+                "vcodec": "none",
+                "acodec": "mp4a.40.2",
+                "language": "en-US",
+                "ext": "m4a",
+                "url": "https://example.test/en-us-high.m4a",
+                "abr": 160,
+            },
+            {
+                "format_id": "en-us-low",
+                "vcodec": "none",
+                "acodec": "mp4a.40.2",
+                "language": "en-us",
+                "ext": "m4a",
+                "url": "https://example.test/en-us-low.m4a",
+                "abr": 64,
+            },
+        ],
+    }
+    output_dir = tmp_path / "planned-output"
+    with patch("dubbed_video_downloader.core.get_video_info", return_value=info):
+        plan = core.plan_download(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="en",
+            output_dir=output_dir,
+        )
+        report = core.get_quality_report(
+            url="https://www.youtube.com/watch?v=EXAMPLE",
+            lang="en",
+        )
+
+    assert plan.resolved_lang == "en-US"
+    assert report.audio_qualities == ("64k", "160k")
+
+
 def test_plan_download_returns_output_preview_without_creating_directories(
     tmp_path: Path,
 ) -> None:
