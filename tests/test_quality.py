@@ -465,6 +465,53 @@ def test_resolve_quality_selection_audio_best() -> None:
     assert selection.selected_video_label is None
 
 
+def test_resolve_quality_selection_audio_best_falls_back_when_some_streams_lack_bitrate() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "tr-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "tr",
+                "abr": 64,
+            },
+            {
+                "format_id": "tr-unknown",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "tr",
+                "ext": "webm",
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="tr",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[language="tr"]'
+    assert selection.selected_audio_label == "best"
+
+
+def test_resolve_quality_selection_audio_best_still_targets_highest_when_all_have_bitrate() -> (
+    None
+):
+    selection = quality.resolve_quality_selection(
+        info=VIDEO_AUDIO_INFO,
+        lang="tr",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[format_id="tr-high"]'
+    assert selection.selected_audio_label == "best"
+
+
 def test_resolve_quality_selection_audio_medium_selects_closest_bitrate() -> None:
     selection = quality.resolve_quality_selection(
         info=VIDEO_AUDIO_INFO,

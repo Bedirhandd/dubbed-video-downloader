@@ -355,14 +355,21 @@ def _resolve_audio_selector(
             (),
         )
 
-    selected = _select_audio_candidate(candidates_with_bitrate, audio_quality)
     if audio_quality.kind == AudioQualityKind.BEST:
+        if len(candidates_with_bitrate) < len(candidates):
+            return (
+                _prefixed_audio_language_selector("bestaudio", candidates, lang),
+                audio_quality.label,
+                (),
+            )
+        selected = _select_audio_candidate(candidates_with_bitrate, audio_quality)
         return (
             _audio_candidate_selector(selected, audio_quality),
             audio_quality.label,
             (),
         )
 
+    selected = _select_audio_candidate(candidates_with_bitrate, audio_quality)
     return (
         _audio_candidate_selector(selected, audio_quality),
         _format_bitrate(selected.bitrate_kbps),
