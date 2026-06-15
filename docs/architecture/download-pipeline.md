@@ -38,7 +38,8 @@ User runs: dbdvdl download URL --lang ja --video-quality 1080p
    │   └── FAIL: raise DownloadError if output exists
    │
    ├── Optional: approval_callback (disk usage confirmation)
-   │   └── If cancelled: return DownloadResult(status=CANCELLED)
+   │   ├── If cancelled: return DownloadResult(status=CANCELLED)
+   │   └── Re-check exists_behavior after approval closes the confirmation race window
    │
    ├── Report stage: PREPARING_OUTPUT_DIR
    │   ├── Cleanup stale incomplete downloads
