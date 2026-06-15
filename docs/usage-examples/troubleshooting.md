@@ -17,6 +17,7 @@ System check
 
 Python          OK     3.10.12
 Config          OK     /home/user/.config/dubbed-video-downloader/config.yaml
+Config permissions OK    owner-only permissions
 Output directory OK    /home/user/Downloads/dbdvdl-output exists and is writable
 FFmpeg          OK     7.0.2-3ubuntu1 (/usr/bin/ffmpeg)
 Node            OK     v22.14.0 (/usr/bin/node)
@@ -24,9 +25,32 @@ yt-dlp          OK     2026.3.17
 yt-dlp-ejs      OK     0.8.0
 ```
 
-The `doctor` command exits with code `1` if any check fails, `0` if all pass.
+The `doctor` command exits with code `1` if any check fails, `0` if all pass. The `Config permissions` check can show a warning in its detail while still reporting `OK`.
 
 ## Doctor Check Failures and Fixes
+
+### Config Permissions Warning (Not a Failure)
+
+```
+Config permissions OK    permissions are not owner-only; recommended chmod 600 config.yaml and chmod 700 /home/user/.config/dubbed-video-downloader
+```
+
+**Cause:** The config file or directory is readable by other users on a POSIX system. This often happens with configs created before owner-only modes were enforced, or after manual edits.
+
+**Fix:** Apply the suggested `chmod` commands, or recreate the config:
+
+```bash
+chmod 700 ~/.config/dubbed-video-downloader
+chmod 600 ~/.config/dubbed-video-downloader/config.yaml
+```
+
+Alternatively:
+
+```bash
+uv run dbdvdl init --force --default
+```
+
+Downloads continue to work while the warning is present; tightening permissions is recommended on shared or multi-user systems.
 
 ### Python Version Too Old
 

@@ -53,6 +53,8 @@ Transient network failures during metadata extraction and media download are aut
 
 The `doctor` command runs a comprehensive environment check available as `dbdvdl doctor`. Each check is independent -- a failure in one does not prevent others from running. The command exits with code 1 if any check fails.
 
+The `Config permissions` check is an exception to hard failures: on POSIX systems it warns when the config directory or file is readable by other users, but it always reports `OK` when the config loaded successfully. See [doctor](../commands/doctor.md) for the full check list and example output.
+
 ## Multiple URL Downloads
 
 The `download` command accepts multiple URLs:

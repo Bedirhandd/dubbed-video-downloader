@@ -26,6 +26,12 @@ uv run dbdvdl init
 uv run dbdvdl init --default
 ```
 
+## File Permissions
+
+On POSIX systems, `dbdvdl init` writes the config directory as `0700` and `config.yaml` as `0600`. Re-running `init --force` reapplies those modes.
+
+Configs created before this behavior was added, or edited outside the tool, may still load with looser permissions. Run `dbdvdl doctor` to see a `Config permissions` warning and the suggested `chmod` commands. The app does not auto-fix existing permissions during load.
+
 ## Config Validation
 
 When loading the config, the following checks are performed:
