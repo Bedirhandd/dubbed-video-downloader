@@ -1,5 +1,11 @@
 # YouTube Dubbed Video Downloader
 
+[![License: MIT](https://img.shields.io/github/license/Bedirhandd/dubbed-video-downloader)](LICENSE)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-linux-lightgrey)](#quick-start)
+
 Download YouTube videos or audio with the **dub language you actually want** - Japanese, French, Portuguese, and more.
 
 AI has made it easier than ever for creators to publish the same video with dubbed audio in multiple languages. Channels that once shipped in one language now often offer German, Hindi, Korean, and more on a single upload.
@@ -8,7 +14,7 @@ On YouTube, switching to another dub is a few clicks away. Off YouTube, getting 
 
 So how do you download a video with the French dub, or save just the Japanese audio? This CLI is built for that: find the dubbed track, pick the quality, and save the result in a predictable place.
 
-> Türkçe dokümantasyon için [README-TR.md](README-TR.md) dosyasına bakın.
+> Türkçe özet için [README-TR.md](README-TR.md) dosyasına bakın.
 
 ## Why this exists
 
@@ -19,13 +25,9 @@ This tool wraps [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://
 - **Video or audio** - merge dubbed audio into `.mkv`, or save the audio stream on its own.
 - **Sensible defaults** - a short setup step stores your preferences; override anything per run when you need to.
 
-Behind the scenes, downloads are staged in a temporary folder and only moved into place when complete. Interrupted runs clean up after themselves. You can preview a download with `--dry-run` before anything hits disk.
-
 ## Quick start
 
-**Requirements:** [uv](https://docs.astral.sh/uv/), Python 3.10+, [Node.js](https://nodejs.org/) (for YouTube's JS solver), and **FFmpeg** on your `PATH`.
-
-**Platform:** This project is currently developed and tested on Linux. Windows and macOS are not supported yet and will likely not work as expected.
+**Platform:** Linux only for now. Windows and macOS are not supported yet.
 
 ```bash
 git clone https://github.com/Bedirhandd/dubbed-video-downloader.git
@@ -33,63 +35,24 @@ cd dubbed-video-downloader
 uv sync
 uv run dbdvdl init
 uv run dbdvdl doctor
-```
-
-`doctor` checks Python, your config, FFmpeg, Node.js, and the pinned yt-dlp packages - a quick way to confirm everything is ready.
-
-**First download:**
-
-```bash
-# See which dub languages a video offers
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
-
-# Download with your default language (set during init)
 uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
-
-# Or pick a language and quality explicitly
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko --video-quality 1080p
 ```
 
-Run `uv run dbdvdl --help` for the full command list.
+Prerequisites, a first-download walkthrough, and troubleshooting tips are in [Getting Started](docs/getting-started/quickstart.md).
 
-## Commands
+## Documentation
 
+Full documentation is in the [docs/](docs/index.md) folder:
 
-| Command         | What it does                                                              |
-| --------------- | ------------------------------------------------------------------------- |
-| `init`          | Create `~/.config/dubbed-video-downloader/config.yaml` with your defaults |
-| `doctor`        | Verify Python, config, FFmpeg, Node.js, and dependencies                  |
-| `langs URL`     | List dubbed audio languages available for a video                         |
-| `qualities URL` | Show video and audio quality options for a language                       |
-| `download URL…` | Download one or more videos                                               |
-| `config show`   | Print your current configuration                                          |
-| `config remove` | Remove the config file                                                    |
-
-
-Useful flags on `download`: `--lang`, `--mode video|audio`, `--video-quality`, `--audio-quality`, `--dry-run`, `--if-exists skip|fail|overwrite`, `--verbose`, `--debug`.
-
-## Where files go
-
-Video downloads are saved as `.mkv`:
-
-```text
-~/Downloads/dbdvdl-output/es/<channel>/<title>/<title>.mkv
-```
-
-Audio-only downloads use the same folder layout and keep the native extension (`.webm`, `.m4a`, etc.).
-
-During a download, partial files stay in `<output-dir>/tmp/.incomplete/` until the job finishes successfully.
-
-## Configuration
-
-`dbdvdl init` writes a YAML config to `~/.config/dubbed-video-downloader/config.yaml`. You can set defaults for output folder, dub language, download mode, quality presets, network retries, and how to handle files that already exist.
-
-```bash
-uv run dbdvdl init --default-lang de
-uv run dbdvdl config show
-```
-
-CLI flags override config values for a single run. For the full list of keys and behavior, run `uv run dbdvdl init --help` or inspect an initialized config with `config show`.
+| Section | What you'll find |
+| --- | --- |
+| [Getting Started](docs/getting-started/installation.md) | [Installation](docs/getting-started/installation.md), [dependencies](docs/getting-started/dependencies.md), [quickstart](docs/getting-started/quickstart.md) |
+| [Commands](docs/commands/overview.md) | [init](docs/commands/init.md), [doctor](docs/commands/doctor.md), [langs](docs/commands/langs.md), [qualities](docs/commands/qualities.md), [download](docs/commands/download.md), [config](docs/commands/config.md) |
+| [Configuration](docs/configuration/overview.md) | [Config keys](docs/configuration/config-keys.md), [management](docs/configuration/management.md) |
+| [Usage examples](docs/usage-examples/index.md) | Practical recipes for downloads, languages, quality, scripting, and [troubleshooting](docs/usage-examples/troubleshooting.md) |
+| [Features](docs/features/language-resolution.md) | [Language resolution](docs/features/language-resolution.md), [quality](docs/features/quality-selection.md), [download modes](docs/features/download-modes.md), [output layout](docs/features/output-layout.md), [staged downloads](docs/features/staged-downloads.md) |
+| [FAQ](docs/faq/general.md) | [Setup](docs/faq/installation-and-setup.md), [languages](docs/faq/language-and-dubs.md), [downloads](docs/faq/quality-and-downloads.md), [troubleshooting](docs/faq/troubleshooting.md) |
+| [Architecture](docs/architecture/overview.md) | For contributors: [modules](docs/architecture/modules.md), [download pipeline](docs/architecture/download-pipeline.md), [testing](docs/architecture/testing.md) |
 
 ## Coming soon
 
@@ -100,20 +63,11 @@ CLI flags override config values for a single run. For the full list of keys and
 
 ## Report an issue
 
-Found a bug, crash, or behavior that does not match the docs? [Open an issue](https://github.com/Bedirhandd/dubbed-video-downloader/issues) on GitHub.
-
-Helpful details to include:
-
-- The command you ran
-- What you expected vs. what actually happened
-- Your OS and Python version (`dbdvdl doctor` output is useful here)
-- Verbose or debug output if the failure is hard to reproduce (`--verbose` or `--debug`)
-
-Suggestions and feature ideas are welcome too - whether or not they appear on the [coming soon](#coming-soon) list.
+Found a bug or unexpected behavior? [Open an issue](https://github.com/Bedirhandd/dubbed-video-downloader/issues) on GitHub. The [troubleshooting guide](docs/usage-examples/troubleshooting.md) and [FAQ](docs/faq/troubleshooting.md) may help first.
 
 ## Contributing
 
-Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit style, and how to run the test suite locally.
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [development FAQ](docs/faq/usage-and-development.md).
 
 ## Legal disclaimer
 
