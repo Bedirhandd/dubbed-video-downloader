@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -272,3 +273,33 @@ def test_relative_output_dir_fails() -> None:
 def test_relative_ffmpeg_path_fails() -> None:
     with pytest.raises(config.ConfigError, match="ffmpeg"):
         config.normalize_ffmpeg_path("bin/ffmpeg")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
+def test_write_config_applies_restrictive_permissions(tmp_path: Path) -> None:
+    config_path = tmp_path / "dubbed-video-downloader" / "config.yaml"
+
+    written_path = config.write_config(
+        output_dir="/tmp/dbdvdl-output",
+        ffmpeg_path="ffmpeg",
+        default_lang="en",
+        path=config_path,
+    )
+
+    assert written_path == config_path
+    assert config_path.stat().st_mode & 0o777 == config.CONFIG_FILE_MODE
+    assert config_path.parent.stat().st_mode & 0o777 == config.CONFIG_DIR_MODE
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
+def test_load_config_accepts_loose_permissions(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "output_dir: /tmp/dbdvdl-output\nffmpeg_path: ffmpeg\ndefault_lang: en\n",
+        encoding="utf-8",
+    )
+    os.chmod(config_path, 0o644)
+
+    loaded_config = config.load_config(config_path)
+
+    assert loaded_config.default_lang == "en"

@@ -329,6 +329,33 @@ def test_config_check_invalid_config(tmp_path: Path) -> None:
     assert app_config is None
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
+def test_config_permissions_check_restrictive(tmp_path: Path) -> None:
+    config_dir = tmp_path / "config-dir"
+    config_dir.mkdir(mode=0o700)
+    config_path = config_dir / "config.yaml"
+    config_path.write_text(expected_config_yaml(), encoding="utf-8")
+    os.chmod(config_path, 0o600)
+
+    result = doctor._config_permissions_check(config_path)
+
+    assert result.ok is True
+    assert result.detail == "owner-only permissions"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission modes")
+def test_config_permissions_check_warns_on_loose_permissions(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(expected_config_yaml(), encoding="utf-8")
+    os.chmod(config_path, 0o644)
+
+    result = doctor._config_permissions_check(config_path)
+
+    assert result.ok is True
+    assert "permissions are not owner-only" in result.detail
+    assert "chmod 600" in result.detail
+
+
 def test_package_check_installed() -> None:
     with patch(
         "dubbed_video_downloader.doctor.version",
@@ -377,6 +404,7 @@ def test_run_checks_order_and_blocked_dependencies(tmp_path: Path) -> None:
     assert [result.name for result in results] == [
         "Python",
         "Config",
+        "Config permissions",
         "Output directory",
         "FFmpeg",
         "Node",
@@ -385,9 +413,12 @@ def test_run_checks_order_and_blocked_dependencies(tmp_path: Path) -> None:
     ]
     assert results[1].ok is False
     assert results[2] == doctor.CheckResult(
+        "Config permissions", False, "config unavailable"
+    )
+    assert results[3] == doctor.CheckResult(
         "Output directory", False, "config unavailable"
     )
-    assert results[3] == doctor.CheckResult("FFmpeg", False, "config unavailable")
+    assert results[4] == doctor.CheckResult("FFmpeg", False, "config unavailable")
 
 
 def test_run_checks_with_valid_config(tmp_path: Path) -> None:
@@ -418,7 +449,7 @@ def test_run_checks_with_valid_config(tmp_path: Path) -> None:
         results = doctor.run_checks(config_path)
 
     assert all(result.ok for result in results)
-    assert results[2].detail == f"{output_dir} can be created"
+    assert results[3].detail == f"{output_dir} can be created"
 
 
 def test_doctor_command_reports_success(cli_runner: CliRunner) -> None:
