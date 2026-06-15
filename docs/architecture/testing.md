@@ -39,7 +39,11 @@ The CI pipeline (`.github/workflows/ci.yml`) runs on push to `main` and `feat/cl
    - `ruff format --check`
    - `mypy` with strict mode
 
-2. **Test job matrix (Python 3.10, 3.11, 3.12):**
+2. **Audit job:**
+   - `uv audit --frozen --preview-features audit` against `uv.lock` (runtime and dev dependencies)
+   - Negative self-check using `tests/fixtures/vulnerability-audit-negative/` to verify the scanner fails on known CVEs
+
+3. **Test job matrix (Python 3.10, 3.11, 3.12):**
    - `pytest` with coverage collection
    - Coverage report, XML export, and threshold enforcement (--fail-under=79)
    - Coverage artifacts uploaded with 7-day retention

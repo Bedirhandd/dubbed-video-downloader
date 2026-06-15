@@ -40,6 +40,7 @@ uv sync --group dev
 uv run ruff check src tests
 uv run ruff format --check src tests
 uv run mypy
+uv audit --frozen --preview-features audit
 uv run pytest --cov=dubbed_video_downloader --cov-report=term -v
 uv run coverage report --fail-under=79
 ```

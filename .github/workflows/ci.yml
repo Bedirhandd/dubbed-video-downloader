@@ -39,6 +39,42 @@ jobs:
       - name: Run mypy
         run: uv run mypy
 
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Verify audit detects known vulnerabilities
+        run: |
+          set +e
+          output="$(uv audit --frozen --preview-features audit --project tests/fixtures/vulnerability-audit-negative 2>&1)"
+          exit_code=$?
+          set -e
+          if [[ $exit_code -eq 0 ]]; then
+            echo "Expected vulnerability audit to fail for negative fixture"
+            exit 1
+          fi
+          if ! grep -qE 'Found [1-9][0-9]* known vulnerabilities' <<<"$output"; then
+            echo "Expected audit output to report known vulnerabilities, but got:"
+            echo "$output"
+            exit 1
+          fi
+          if ! grep -q 'urllib3 1.26.4' <<<"$output"; then
+            echo "Expected audit output to identify urllib3 1.26.4, but got:"
+            echo "$output"
+            exit 1
+          fi
+
+      - name: Audit project dependencies
+        run: uv audit --frozen --preview-features audit
+
   test:
     runs-on: ubuntu-latest
     strategy:
