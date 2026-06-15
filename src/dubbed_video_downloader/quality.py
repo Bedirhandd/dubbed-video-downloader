@@ -420,8 +420,17 @@ def _prefixed_audio_language_selector(
         return f"{prefix}{_selector_filter('language', resolved_lang)}"
     if len(tags) == 1:
         return f"{prefix}{_selector_filter('language', tags[0])}"
-    parts = [f"{prefix}{_selector_filter('language', tag)}" for tag in tags]
-    return f"({'/'.join(parts)})"
+    return f"{prefix}{_language_union_filter(tags)}"
+
+
+def _language_union_filter(tags: tuple[str, ...]) -> str:
+    pattern = f"^(?:{'|'.join(re.escape(tag) for tag in tags)})$"
+    return f"[language~={_quote_regex_selector_string(pattern)}]"
+
+
+def _quote_regex_selector_string(pattern: str) -> str:
+    escaped = pattern.replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def _video_height_selector(height: int) -> str:

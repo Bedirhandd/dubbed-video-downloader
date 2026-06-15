@@ -102,7 +102,7 @@ Download at the highest available bitrate for the selected language:
 uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality best
 ```
 
-When every candidate for the language reports bitrate metadata, the system picks the highest-bitrate audio candidate and builds a targeted yt-dlp selector (typically `bestaudio[format_id="…"]`). When any candidate lacks bitrate metadata, `best` falls back to yt-dlp's `bestaudio[language="<lang>"]` filter so unknown streams stay in contention. When no candidate reports bitrate metadata, it uses the same language-based fallback.
+When every candidate for the language reports bitrate metadata, the system picks the highest-bitrate audio candidate and builds a targeted yt-dlp selector (typically `bestaudio[format_id="…"]`). When any candidate lacks bitrate metadata, `best` falls back to a language-based yt-dlp selector so unknown streams stay in contention; if multiple raw metadata language casings match, the fallback uses one regex union filter rather than a `/` precedence chain. When no candidate reports bitrate metadata, it uses the same language-based fallback.
 
 In video mode, the audio selector is combined with the video selector using `+`.
 

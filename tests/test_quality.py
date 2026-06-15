@@ -753,3 +753,141 @@ def test_selector_filter_quotes_special_characters() -> None:
     assert quality._selector_filter("language", "en-US") == '[language="en-US"]'
     assert quality._selector_filter("language", 'en"US') == '[language="en\\"US"]'
     assert quality._selector_filter("language", r"en\US") == '[language="en\\\\US"]'
+
+
+def test_language_union_filter_builds_regex_for_multiple_raw_tags() -> None:
+    assert quality._language_union_filter(("en-US", "en-us")) == (
+        '[language~="^(?:en\\-US|en\\-us)$"]'
+    )
+
+
+def test_prefixed_audio_language_selector_uses_union_regex_for_multiple_tags() -> None:
+    candidates = (
+        quality.AudioQualityCandidate(
+            format_id="en-US-audio",
+            language="en-US",
+            bitrate_kbps=None,
+            bitrate_field=None,
+            ext="webm",
+            acodec="opus",
+        ),
+        quality.AudioQualityCandidate(
+            format_id="en-us-audio",
+            language="en-us",
+            bitrate_kbps=None,
+            bitrate_field=None,
+            ext="m4a",
+            acodec="mp4a",
+        ),
+    )
+
+    selector = quality._prefixed_audio_language_selector(
+        "bestaudio",
+        candidates,
+        "en-US",
+    )
+
+    assert selector == 'bestaudio[language~="^(?:en\\-US|en\\-us)$"]'
+    assert "/" not in selector
+
+
+def test_resolve_quality_selection_audio_best_falls_back_with_union_regex_across_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-US-low",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "abr": 64,
+            },
+            {
+                "format_id": "en-us-unknown",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "ext": "webm",
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="best",
+    )
+
+    assert selection.format_selector == 'bestaudio[language~="^(?:en\\-US|en\\-us)$"]'
+    assert "/" not in selection.format_selector
+
+
+def test_resolve_quality_selection_audio_low_falls_back_with_union_regex_across_casings() -> (
+    None
+):
+    info = {
+        "formats": [
+            {
+                "format_id": "en-US-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-US",
+                "ext": "webm",
+            },
+            {
+                "format_id": "en-us-audio",
+                "vcodec": "none",
+                "acodec": "opus",
+                "language": "en-us",
+                "ext": "m4a",
+            },
+        ]
+    }
+
+    selection = quality.resolve_quality_selection(
+        info=info,
+        lang="en-US",
+        download_mode=DownloadMode.AUDIO,
+        audio_quality="low",
+    )
+
+    assert selection.format_selector == 'worstaudio[language~="^(?:en\\-US|en\\-us)$"]'
+    assert "/" not in selection.format_selector
+
+
+def test_language_union_regex_selector_ranks_all_raw_tags_with_ytdlp() -> None:
+    from yt_dlp import YoutubeDL
+
+    formats = [
+        {
+            "format_id": "en-US-low",
+            "vcodec": "none",
+            "acodec": "opus",
+            "language": "en-US",
+            "abr": 64,
+            "tbr": 64,
+        },
+        {
+            "format_id": "en-us-high",
+            "vcodec": "none",
+            "acodec": "opus",
+            "language": "en-us",
+            "abr": 160,
+            "tbr": 160,
+        },
+    ]
+    union_filter = quality._language_union_filter(("en-US", "en-us"))
+    ydl = YoutubeDL({"quiet": True})
+    ctx = {
+        "formats": formats,
+        "has_merged_format": False,
+        "incomplete_formats": True,
+    }
+
+    best_selected = list(ydl.build_format_selector(f"bestaudio{union_filter}")(ctx))
+    worst_selected = list(ydl.build_format_selector(f"worstaudio{union_filter}")(ctx))
+
+    assert best_selected[0]["format_id"] == "en-us-high"
+    assert worst_selected[0]["format_id"] == "en-US-low"

@@ -67,7 +67,7 @@ Video and audio quality definitions and yt-dlp format selector construction. Res
 - **Normalization:** `normalize_video_quality()`, `normalize_audio_quality()` -- parse user input into typed quality objects
 - **Format selector construction:** Builds yt-dlp format selection strings
   - Video: `bv` (best), `bv[height=N]` (exact/medium/low)
-  - Audio: targeted by `format_id` or bitrate field when every candidate reports bitrate metadata for `best`, `medium`, and `low`; falls back to `bestaudio[language="LANG"]` or `worstaudio[language="LANG"]` when bitrate metadata is missing from any candidate (`best`) or from all candidates (`medium`/`low`)
+  - Audio: targeted by `format_id` or bitrate field when every candidate reports bitrate metadata for `best`, `medium`, and `low`; falls back to `bestaudio[language="LANG"]` or `worstaudio[language="LANG"]` when bitrate metadata is missing from any candidate (`best`) or from all candidates (`medium`/`low`); when multiple raw language casings match, fallbacks use one regex union language filter instead of a `/` precedence chain
 - **Quality reporting:** `get_available_video_heights()`, `get_audio_quality_candidates()`, `format_video_quality_labels()`, `format_audio_quality_labels()`
 - **Selection:** `resolve_quality_selection()` -- combines video and audio selectors with `+` for video mode, returns `QualitySelection` with selected labels and informational notes
 
