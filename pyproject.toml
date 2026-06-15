@@ -35,6 +35,10 @@ dev = [
 [tool.uv]
 package = true
 
+[tool.uv.audit]
+ignore = []
+ignore-until-fixed = []
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/dubbed_video_downloader"]
 

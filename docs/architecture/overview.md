@@ -45,7 +45,7 @@ dubbed-video-downloader/
 ├── pyproject.toml               # Project metadata, dependencies, tool config (ruff, mypy, pytest, coverage)
 ├── .pre-commit-config.yaml      # Pre-commit hooks (ruff, mypy)
 ├── .github/
-│   ├── workflows/ci.yml         # CI pipeline (lint + test matrix: 3.10, 3.11, 3.12)
+│   ├── workflows/ci.yml         # CI pipeline (lint + audit + test matrix: 3.10, 3.11, 3.12)
 │   └── dependabot.yml           # Automated dependency updates (github-actions, uv)
 ├── README.md
 ├── README-TR.md
