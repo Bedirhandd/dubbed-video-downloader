@@ -12,7 +12,7 @@ uv run dbdvdl download [OPTIONS] URL...
 
 | Name | Required | Description |
 | --- | --- | --- |
-| `URL...` | Yes (at least one) | One or more YouTube video URLs to download. Multiple URLs are downloaded sequentially. |
+| `URL...` | Yes (at least one) | One or more YouTube video URLs to download. Each URL must use `http` or `https` and include a host. Multiple URLs are downloaded sequentially. |
 
 ## Options
 

@@ -7,6 +7,7 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlparse
 
 import typer
 from rich.console import Console
@@ -233,6 +234,22 @@ def _load_config_or_exit() -> app_config.AppConfig:
     except errors.ConfigError as exc:
         typer.secho(f"Config error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
+
+
+def _validate_cli_url_or_exit(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        typer.secho(
+            "Input error: URL must use http or https and include a host.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+
+def _validate_cli_urls_or_exit(urls: list[str]) -> None:
+    for url in urls:
+        _validate_cli_url_or_exit(url)
 
 
 def _normalize_output_dir_or_exit(value: str) -> Path:
@@ -1322,6 +1339,7 @@ def download_command(
     ] = False,
 ) -> None:
     """Download URL(s) with a dub language."""
+    _validate_cli_urls_or_exit(urls)
     status_console = Console(stderr=True)
     status_enabled = _download_status_enabled(
         status_console,
@@ -1527,6 +1545,7 @@ def langs_command(
     ] = None,
 ) -> None:
     """Show audio language codes for a URL."""
+    _validate_cli_url_or_exit(url)
     loaded_config = _load_config_or_exit()
     effective_retry_on_network_failure = (
         _normalize_retry_on_network_failure_or_exit(retry_on_network_failure)
@@ -1602,6 +1621,7 @@ def qualities_command(
     ] = None,
 ) -> None:
     """Show available video qualities and dubbed audio quality candidates."""
+    _validate_cli_url_or_exit(url)
     loaded_config = _load_config_or_exit()
     effective_lang = _effective_lang_or_exit(
         lang=lang,

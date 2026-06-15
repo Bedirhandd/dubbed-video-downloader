@@ -188,7 +188,7 @@ Error: Could not extract video metadata: ...
 
 **Common causes:**
 
-1. **Invalid URL:** Make sure the URL is a valid YouTube video URL (`https://www.youtube.com/watch?v=...`)
+1. **Invalid URL:** Make sure the URL is a valid YouTube video URL (`https://www.youtube.com/watch?v=...`) using `http` or `https` with a host. Non-HTTP(S) schemes such as `file://` are rejected by the CLI before yt-dlp runs.
 2. **Network issues:** Check your internet connection
 3. **YouTube changes:** YouTube may have updated its page structure
 
