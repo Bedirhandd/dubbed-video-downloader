@@ -20,22 +20,32 @@ class CheckResult:
 
 def run_checks(config_path: Path | None = None) -> list[CheckResult]:
     """Return environment checks needed by the downloader."""
-    config_result, app_config = _config_check(config_path)
-    return [
+    path = config_path or config.get_config_path()
+    config_result, app_config = _config_check(path)
+    results = [
         _python_check(),
         config_result,
-        (
-            _output_dir_check(app_config.output_dir)
-            if app_config
-            else _blocked_check("Output directory")
-        ),
-        _ffmpeg_check(app_config.ffmpeg_path)
-        if app_config
-        else _blocked_check("FFmpeg"),
-        _node_check(),
-        _package_check("yt-dlp"),
-        _package_check("yt-dlp-ejs"),
     ]
+    if app_config is not None:
+        results.append(_config_permissions_check(path))
+        results.append(_output_dir_check(app_config.output_dir))
+        results.append(_ffmpeg_check(app_config.ffmpeg_path))
+    else:
+        results.extend(
+            [
+                _blocked_check("Config permissions"),
+                _blocked_check("Output directory"),
+                _blocked_check("FFmpeg"),
+            ]
+        )
+    results.extend(
+        [
+            _node_check(),
+            _package_check("yt-dlp"),
+            _package_check("yt-dlp-ejs"),
+        ]
+    )
+    return results
 
 
 def _python_check() -> CheckResult:
@@ -64,6 +74,19 @@ def _config_check(
     except errors.ConfigError as exc:
         return CheckResult("Config", False, str(exc)), None
     return CheckResult("Config", True, str(path)), app_config
+
+
+def _config_permissions_check(config_path: Path) -> CheckResult:
+    if os.name != "posix":
+        return CheckResult(
+            "Config permissions",
+            True,
+            "not applicable on this platform",
+        )
+    warning = config.config_permissions_warning(config_path)
+    if warning is None:
+        return CheckResult("Config permissions", True, "owner-only permissions")
+    return CheckResult("Config permissions", True, warning)
 
 
 def _output_dir_check(output_dir: Path) -> CheckResult:

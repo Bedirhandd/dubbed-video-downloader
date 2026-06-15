@@ -17,6 +17,8 @@ from .exists_behavior import normalize_exists_behavior as _normalize_exists_beha
 
 CONFIG_DIR_NAME = "dubbed-video-downloader"
 CONFIG_FILE_NAME = "config.yaml"
+CONFIG_DIR_MODE = 0o700
+CONFIG_FILE_MODE = 0o600
 DEFAULT_OUTPUT_DIR = "~/Downloads/dbdvdl-output"
 DEFAULT_FFMPEG_PATH = "ffmpeg"
 DEFAULT_LANG = "en"
@@ -47,6 +49,35 @@ def get_config_path() -> Path:
 
 def get_config_dir() -> Path:
     return Path.home() / ".config" / CONFIG_DIR_NAME
+
+
+def apply_restrictive_config_permissions(config_path: Path) -> None:
+    if os.name != "posix":
+        return
+    os.chmod(config_path.parent, CONFIG_DIR_MODE)
+    os.chmod(config_path, CONFIG_FILE_MODE)
+
+
+def config_permissions_are_restrictive(config_path: Path) -> bool:
+    if os.name != "posix":
+        return True
+    if not config_path.exists():
+        return True
+    file_mode = config_path.stat().st_mode & 0o777
+    dir_mode = config_path.parent.stat().st_mode & 0o777
+    return file_mode == CONFIG_FILE_MODE and dir_mode == CONFIG_DIR_MODE
+
+
+def config_permissions_warning(config_path: Path) -> str | None:
+    if os.name != "posix" or not config_path.exists():
+        return None
+    if config_permissions_are_restrictive(config_path):
+        return None
+    return (
+        "permissions are not owner-only; recommended "
+        f"chmod {CONFIG_FILE_MODE:o} {config_path.name} and "
+        f"chmod {CONFIG_DIR_MODE:o} {config_path.parent}"
+    )
 
 
 def load_config(path: Path | None = None) -> AppConfig:
@@ -163,7 +194,10 @@ def write_config(
     )
     normalized_ask_for_disk_usage = normalize_ask_for_disk_usage(ask_for_disk_usage)
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
+    if os.name == "posix":
+        config_path.parent.mkdir(parents=True, exist_ok=True, mode=CONFIG_DIR_MODE)
+    else:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
     rendered = yaml.safe_dump(
         {
             "output_dir": output_dir,
@@ -179,6 +213,7 @@ def write_config(
         sort_keys=False,
     )
     config_path.write_text(rendered, encoding="utf-8")
+    apply_restrictive_config_permissions(config_path)
     return config_path
 
 
