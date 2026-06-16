@@ -96,4 +96,7 @@ exclude = ["src/dubbed_video_downloader/__main__.py"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = ["-ra", "--strict-markers"]
+addopts = ["-ra", "--strict-markers", "--ignore=tests/live"]
+markers = [
+    "live: local-only integration tests requiring a real YouTube URL and network access",
+]

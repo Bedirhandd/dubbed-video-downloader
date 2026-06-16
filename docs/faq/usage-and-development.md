@@ -52,10 +52,20 @@ uv sync --group dev
 uv run pytest -v
 ```
 
-Tests are fully offline by default. To allow network access during testing:
+Tests are fully offline by default. Live integration tests are excluded unless you
+run them explicitly with `./scripts/test-live.sh` and a real YouTube URL (see
+[CONTRIBUTING.md](https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/CONTRIBUTING.md)).
+
+To allow network access during testing:
 
 ```bash
 DBDVDL_TESTS_ALLOW_NETWORK=1 uv run pytest -v
+```
+
+For the full local live integration suite:
+
+```bash
+DBDVDL_LIVE_TEST_URL='https://www.youtube.com/watch?v=VIDEO_ID' ./scripts/test-live.sh
 ```
 
 ### How do I run the linter?
