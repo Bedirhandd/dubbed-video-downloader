@@ -73,7 +73,7 @@ def live_config_path(
 
 
 @pytest.fixture(scope="session")
-def live_cli_env(live_home: Path) -> dict[str, str]:
+def live_cli_env(live_home: Path, live_config_path: Path) -> dict[str, str]:
     return {"HOME": str(live_home)}
 
 
