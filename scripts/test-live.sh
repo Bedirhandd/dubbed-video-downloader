@@ -20,4 +20,7 @@ fi
 
 export DBDVDL_TESTS_ALLOW_NETWORK=1
 
+# Optional: set DBDVDL_LIVE_MATRIX=1 to also run the long audio/video quality
+# matrix (12 real downloads). See CONTRIBUTING.md.
+
 exec uv run pytest tests/live -m live -v "$@"

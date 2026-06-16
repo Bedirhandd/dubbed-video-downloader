@@ -5,6 +5,7 @@
 - **Offline by default:** `tests/support/network_guard.py` monkey-patches `socket.socket.connect`, `connect_ex`, and `create_connection` to block all TCP connections during test execution
 - **Opt-out for debugging:** Set `DBDVDL_TESTS_ALLOW_NETWORK=1` to disable the guard
 - **Live integration (local only):** `tests/live/` contains `@pytest.mark.live` tests that require `DBDVDL_LIVE_TEST_URL` and real YouTube access; run them with `./scripts/test-live.sh`
+- **Live quality matrix (opt-in):** `@pytest.mark.live_matrix` tests in `tests/live/test_live_matrix.py` run only when `DBDVDL_LIVE_MATRIX=1`; each download uses an isolated temp dir that is removed after the test
 - **Default pytest selection:** `--ignore=tests/live` excludes live tests from the offline gate and CI
 - **Session-scoped guard:** Installed once per test session via `conftest.py` autouse fixture
 - **Typer CLI testing:** Uses `typer.testing.CliRunner` for testing CLI commands with stdin/stdout capture
@@ -33,6 +34,7 @@
 | `test_network_guard.py` | Network guard installation and behavior |
 | `tests/live/test_live_metadata.py` | Live metadata, langs, qualities, dry-run (local only) |
 | `tests/live/test_live_download.py` | Live audio/video download and error paths (local only) |
+| `tests/live/test_live_matrix.py` | Opt-in live quality matrix across audio/video presets (local only) |
 
 ## CI Pipeline
 

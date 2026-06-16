@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -85,3 +87,12 @@ def cli_runner() -> CliRunner:
 @pytest.fixture(scope="session")
 def live_doctor_checks(live_config_path: Path) -> list[doctor.CheckResult]:
     return doctor.run_checks(live_config_path)
+
+
+@pytest.fixture
+def matrix_output_dir(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    path = tmp_path_factory.mktemp("live-matrix")
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)

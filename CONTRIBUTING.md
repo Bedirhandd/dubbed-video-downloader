@@ -72,8 +72,16 @@ DBDVDL_LIVE_TEST_URL='https://www.youtube.com/watch?v=VIDEO_ID' ./scripts/test-l
 Optional overrides:
 
 - `DBDVDL_LIVE_TEST_LANG` — force a specific dub language from the video
+- `DBDVDL_LIVE_MATRIX=1` — also run the long audio/video quality matrix (12 real
+  downloads across low/medium/best presets; not required for pull requests)
 - additional pytest args are forwarded to the live command, for example
   `./scripts/test-live.sh -k metadata`
+
+To run only the quality matrix:
+
+```bash
+DBDVDL_LIVE_MATRIX=1 DBDVDL_LIVE_TEST_URL='https://www.youtube.com/watch?v=VIDEO_ID' ./scripts/test-live.sh -k matrix
+```
 
 Include the live-test result in your pull request description under “how it was
 tested”. Mention the video ID or URL you used locally.

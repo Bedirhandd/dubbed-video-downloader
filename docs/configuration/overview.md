@@ -62,3 +62,4 @@ The project does not use environment variables for operational configuration. Th
 | `DBDVDL_TESTS_ALLOW_NETWORK` | Set to `1` to allow network access during test runs. By default, tests are fully offline. |
 | `DBDVDL_LIVE_TEST_URL` | Required for local live integration tests. Provide a public YouTube URL with multiple dubbed audio options. |
 | `DBDVDL_LIVE_TEST_LANG` | Optional override for the dub language used by live integration tests. |
+| `DBDVDL_LIVE_MATRIX` | Set to `1` to opt in to the long audio/video quality matrix live tests. |

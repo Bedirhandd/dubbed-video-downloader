@@ -12,9 +12,13 @@ from dubbed_video_downloader import core, errors, languages
 
 LIVE_TEST_URL_ENV = "DBDVDL_LIVE_TEST_URL"
 LIVE_TEST_LANG_ENV = "DBDVDL_LIVE_TEST_LANG"
+LIVE_MATRIX_ENV = "DBDVDL_LIVE_MATRIX"
 NETWORK_ALLOW_ENV = "DBDVDL_TESTS_ALLOW_NETWORK"
 
 MIN_DUBBED_LANG_COUNT = 2
+
+VIDEO_MATRIX_QUALITIES = ("low", "medium", "best")
+AUDIO_MATRIX_QUALITIES = ("low", "medium", "best")
 
 UNAVAILABLE_LANGUAGE_CANDIDATES = ("haw", "sw", "zu", "cy", "gd")
 
@@ -36,6 +40,24 @@ def optional_live_test_lang_override() -> str | None:
 
 def enable_live_network() -> None:
     os.environ[NETWORK_ALLOW_ENV] = "1"
+
+
+def _env_flag_enabled(name: str) -> bool:
+    return os.environ.get(name, "").strip() in {
+        "1",
+        "true",
+        "True",
+        "yes",
+        "YES",
+    }
+
+
+def require_live_matrix_enabled() -> None:
+    if not _env_flag_enabled(LIVE_MATRIX_ENV):
+        pytest.skip(
+            f"Set {LIVE_MATRIX_ENV}=1 to run the long audio/video quality matrix "
+            "(see CONTRIBUTING.md)."
+        )
 
 
 def require_runtime_prerequisites() -> None:

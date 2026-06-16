@@ -99,4 +99,5 @@ pythonpath = ["src"]
 addopts = ["-ra", "--strict-markers", "--ignore=tests/live"]
 markers = [
     "live: local-only integration tests requiring a real YouTube URL and network access",
+    "live_matrix: long-running audio/video quality matrix; opt-in via DBDVDL_LIVE_MATRIX=1",
 ]
