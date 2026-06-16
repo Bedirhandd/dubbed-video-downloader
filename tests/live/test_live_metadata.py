@@ -53,15 +53,16 @@ def test_live_plan_download(
     live_test_lang: str,
     live_output_dir: Path,
 ) -> None:
+    plan_output_dir = live_output_dir / "plan-check"
     plan = core.plan_download(
         url=live_test_url,
         lang=live_test_lang,
-        output_dir=live_output_dir,
+        output_dir=plan_output_dir,
         video_quality="low",
         audio_quality="low",
     )
     assert plan.resolved_lang
-    assert plan.output_path.parent.as_posix().startswith(live_output_dir.as_posix())
+    assert plan.output_path.parent.as_posix().startswith(plan_output_dir.as_posix())
     assert live_test_lang in plan.output_path.as_posix()
     assert not plan.output_exists
 

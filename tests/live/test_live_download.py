@@ -58,6 +58,22 @@ def test_live_download_video(
     )
 
 
+def test_live_plan_download_detects_existing_output(
+    live_test_url: str,
+    live_test_lang: str,
+    live_output_dir: Path,
+) -> None:
+    plan = core.plan_download(
+        url=live_test_url,
+        lang=live_test_lang,
+        output_dir=live_output_dir,
+        video_quality="low",
+        audio_quality="low",
+    )
+    assert plan.output_exists is True
+    assert plan.output_path.is_file()
+
+
 def test_live_cli_download_audio(
     live_test_url: str,
     live_test_lang: str,
