@@ -252,6 +252,13 @@ def _validate_cli_urls_or_exit(urls: list[str]) -> None:
         _validate_cli_url_or_exit(url)
 
 
+def _validate_ffmpeg_executable_or_exit(ffmpeg_path: str) -> None:
+    _, error = doctor.resolve_executable(ffmpeg_path)
+    if error:
+        typer.secho(f"Input error: {error}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
 def _normalize_output_dir_or_exit(value: str) -> Path:
     try:
         return app_config.normalize_output_dir(value)
@@ -1363,6 +1370,7 @@ def download_command(
             if ffmpeg_path is not None
             else loaded_config.ffmpeg_path
         )
+        _validate_ffmpeg_executable_or_exit(effective_ffmpeg_path)
         ffmpeg_location = app_config.ffmpeg_location_for_yt_dlp(effective_ffmpeg_path)
         effective_lang = _effective_lang_or_exit(
             lang=lang,

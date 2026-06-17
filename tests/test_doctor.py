@@ -60,7 +60,7 @@ def test_resolve_executable_absolute_path(
         path.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
         path.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
-    resolved_path, error = doctor._resolve_executable(str(path))
+    resolved_path, error = doctor.resolve_executable(str(path))
 
     if expected_error is None:
         assert resolved_path == expected_path.format(path=path)
@@ -72,7 +72,7 @@ def test_resolve_executable_absolute_path(
 
 def test_resolve_executable_relative_name_not_on_path() -> None:
     with patch("dubbed_video_downloader.doctor.shutil.which", return_value=None):
-        resolved_path, error = doctor._resolve_executable("missing-tool")
+        resolved_path, error = doctor.resolve_executable("missing-tool")
 
     assert resolved_path == ""
     assert error == "missing-tool was not found on PATH"
@@ -83,7 +83,7 @@ def test_resolve_executable_relative_name_found_on_path() -> None:
         "dubbed_video_downloader.doctor.shutil.which",
         return_value="/usr/bin/ffmpeg",
     ):
-        resolved_path, error = doctor._resolve_executable("ffmpeg")
+        resolved_path, error = doctor.resolve_executable("ffmpeg")
 
     assert resolved_path == "/usr/bin/ffmpeg"
     assert error is None
@@ -91,7 +91,7 @@ def test_resolve_executable_relative_name_found_on_path() -> None:
 
 def test_command_check_reports_resolve_error() -> None:
     with patch(
-        "dubbed_video_downloader.doctor._resolve_executable",
+        "dubbed_video_downloader.doctor.resolve_executable",
         return_value=("", "ffmpeg was not found on PATH"),
     ):
         result = doctor._command_check("FFmpeg", "ffmpeg", ["-version"])
@@ -107,7 +107,7 @@ def test_command_check_successful_node_command() -> None:
     executable = "/usr/bin/node"
     with (
         patch(
-            "dubbed_video_downloader.doctor._resolve_executable",
+            "dubbed_video_downloader.doctor.resolve_executable",
             return_value=(executable, None),
         ),
         patch(
@@ -125,7 +125,7 @@ def test_command_check_successful_ffmpeg_uses_third_token() -> None:
     executable = "/usr/bin/ffmpeg"
     with (
         patch(
-            "dubbed_video_downloader.doctor._resolve_executable",
+            "dubbed_video_downloader.doctor.resolve_executable",
             return_value=(executable, None),
         ),
         patch(
@@ -145,7 +145,7 @@ def test_command_check_nonzero_exit_uses_first_stderr_line() -> None:
     executable = "/usr/bin/ffmpeg"
     with (
         patch(
-            "dubbed_video_downloader.doctor._resolve_executable",
+            "dubbed_video_downloader.doctor.resolve_executable",
             return_value=(executable, None),
         ),
         patch(
@@ -163,7 +163,7 @@ def test_command_check_nonzero_exit_without_output() -> None:
     executable = "/usr/bin/ffmpeg"
     with (
         patch(
-            "dubbed_video_downloader.doctor._resolve_executable",
+            "dubbed_video_downloader.doctor.resolve_executable",
             return_value=(executable, None),
         ),
         patch(
@@ -181,7 +181,7 @@ def test_command_check_timeout() -> None:
     executable = "/usr/bin/node"
     with (
         patch(
-            "dubbed_video_downloader.doctor._resolve_executable",
+            "dubbed_video_downloader.doctor.resolve_executable",
             return_value=(executable, None),
         ),
         patch(
@@ -199,7 +199,7 @@ def test_command_check_os_error() -> None:
     executable = "/usr/bin/node"
     with (
         patch(
-            "dubbed_video_downloader.doctor._resolve_executable",
+            "dubbed_video_downloader.doctor.resolve_executable",
             return_value=(executable, None),
         ),
         patch(

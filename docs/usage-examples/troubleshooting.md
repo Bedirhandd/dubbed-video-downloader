@@ -116,6 +116,14 @@ uv run dbdvdl init --force --output-dir ~/Videos/dubbed
 FFmpeg          FAIL    ffmpeg was not found on PATH
 ```
 
+During `download`, the same resolution failure may appear earlier as:
+
+```
+Input error: ffmpeg was not found on PATH
+```
+
+Absolute paths that are missing or not executable fail with similar `Input error:` messages before yt-dlp runs.
+
 **Cause:** FFmpeg is not installed or not on your PATH.
 
 **Fix (Ubuntu/Debian):**

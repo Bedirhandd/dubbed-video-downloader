@@ -46,7 +46,7 @@ uv run dbdvdl download [OPTIONS] URL...
 | --- | --- |
 | Type | `str` |
 | Default | Config default (`ffmpeg_path`) |
-| Description | Path to the FFmpeg executable. Use `ffmpeg` to rely on the system PATH. Override this if FFmpeg is installed at a custom location. |
+| Description | Path to the FFmpeg executable. Use `ffmpeg` to rely on the system PATH. Override this if FFmpeg is installed at a custom location. Before metadata or download work starts, `download` rejects missing or non-executable paths using the same resolution messages as `dbdvdl doctor` (for example, `ffmpeg was not found on PATH` or `{path} does not exist`). |
 
 ### `--video-quality`
 

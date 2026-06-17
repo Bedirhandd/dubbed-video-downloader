@@ -135,7 +135,7 @@ def _package_check(package_name: str) -> CheckResult:
 
 
 def _command_check(name: str, executable: str, args: list[str]) -> CheckResult:
-    path, error = _resolve_executable(executable)
+    path, error = resolve_executable(executable)
     if error:
         return CheckResult(name, False, error)
 
@@ -164,7 +164,8 @@ def _command_check(name: str, executable: str, args: list[str]) -> CheckResult:
     return CheckResult(name, True, _format_command_detail(name, first_line, path))
 
 
-def _resolve_executable(executable: str) -> tuple[str, str | None]:
+def resolve_executable(executable: str) -> tuple[str, str | None]:
+    """Resolve an executable path or bare command name on PATH."""
     path = Path(executable)
     if path.is_absolute():
         if not path.exists():
