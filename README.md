@@ -24,6 +24,7 @@ This tool wraps [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://
 - **Organized output** - files land under `language / channel / title`, not a random filename in your Downloads folder.
 - **Video or audio** - merge dubbed audio into `.mkv`, or save the audio stream on its own.
 - **Sensible defaults** - a short setup step stores your preferences; override anything per run when you need to.
+- **Crash-safe staging** - downloads go to a temporary staging area first; interrupted runs are cleaned automatically, and finalization is atomic so half-written files never land in your library.
 
 ## Quick start
 

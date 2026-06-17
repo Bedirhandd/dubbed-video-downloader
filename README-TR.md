@@ -18,6 +18,7 @@ Bu araç [yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.o
 - **Düzenli çıktı** - dosyalar `dil / kanal / başlık` altına gider; İndirilenler klasöründe rastgele bir dosya adıyla kalmaz.
 - **Video veya ses** - dublajlı sesi `.mkv` içinde birleştirir ya da yalnızca ses akışını kaydeder.
 - **Mantıklı varsayılanlar** - kısa bir kurulum adımı tercihlerinizi saklar; gerektiğinde her çalıştırmada geçersiz kılabilirsiniz.
+- **Çökme güvenli staging** - indirmeler önce geçici bir staging alanına gider; yarım kalan çalışmalar otomatik temizlenir ve sonlandırma atomiktir; yarım yazılmış dosyalar kütüphanenize karışmaz.
 
 ## Hızlı başlangıç
 
