@@ -5,7 +5,7 @@
 **Usage:**
 
 ```
-uv run dbdvdl doctor
+dbdvdl doctor
 ```
 
 ## Options

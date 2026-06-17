@@ -60,7 +60,7 @@ The `Config permissions` check is an exception to hard failures: on POSIX system
 The `download` command accepts multiple URLs:
 
 ```bash
-uv run dbdvdl download "URL1" "URL2" "URL3" --lang ja
+dbdvdl download "URL1" "URL2" "URL3" --lang ja
 ```
 
 Each URL is processed independently. If one URL fails, processing continues with the next. The exit code is 1 if any URL failed.

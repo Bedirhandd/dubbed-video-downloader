@@ -5,8 +5,8 @@
 **Usage:**
 
 ```
-uv run dbdvdl init [OPTIONS]
-uv run dbdvdl config init [OPTIONS]   # identical behavior
+dbdvdl init [OPTIONS]
+dbdvdl config init [OPTIONS]   # identical behavior
 ```
 
 Both `dbdvdl init` and `dbdvdl config init` are the same command. Either can be used.
@@ -105,16 +105,16 @@ Both `dbdvdl init` and `dbdvdl config init` are the same command. Either can be 
 
 ```bash
 # Interactive setup (prompts for each value)
-uv run dbdvdl init
+dbdvdl init
 
 # Use all defaults without prompts
-uv run dbdvdl init --default
+dbdvdl init --default
 
 # Set specific values non-interactively
-uv run dbdvdl init --output-dir ~/Videos --default-lang tr --default-download-mode audio
+dbdvdl init --output-dir ~/Videos --default-lang tr --default-download-mode audio
 
 # Overwrite an existing config
-uv run dbdvdl init --force --default-lang de
+dbdvdl init --force --default-lang de
 ```
 
 ## File Permissions

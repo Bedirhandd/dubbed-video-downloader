@@ -1,6 +1,6 @@
 # Commands Overview
 
-This document covers the command hierarchy and global options available in `dbdvdl`. All commands are run via `uv run dbdvdl` or, if installed as a global tool, `dbdvdl`.
+This document covers the command hierarchy and global options available in `dbdvdl`. After a PyPI install, run `dbdvdl` directly. When working from a git checkout, use `uv run dbdvdl` instead (see [Installation](../getting-started/installation.md#install-from-source)).
 
 ## Command Hierarchy
 
@@ -25,13 +25,13 @@ dbdvdl
 Show the version and exit immediately. This option is eager -- it is processed before any other option or command.
 
 ```
-uv run dbdvdl --version
+dbdvdl --version
 ```
 
 Output:
 
 ```
-dbdvdl 0.1.0
+dbdvdl 0.2.0
 ```
 
 ### `--help`
@@ -39,7 +39,7 @@ dbdvdl 0.1.0
 Show help for any command. Available on the root app and every subcommand.
 
 ```
-uv run dbdvdl --help
-uv run dbdvdl download --help
-uv run dbdvdl config --help
+dbdvdl --help
+dbdvdl download --help
+dbdvdl config --help
 ```

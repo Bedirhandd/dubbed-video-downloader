@@ -17,25 +17,25 @@ Practical, copy-pasteable examples covering common workflows with Dubbed Video D
 
 ```bash
 # Setup (one-time)
-uv run dbdvdl init
-uv run dbdvdl doctor
+dbdvdl init
+dbdvdl doctor
 
 # Explore a video
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 
 # Download
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --video-quality 1080p
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --mode audio --audio-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --video-quality 1080p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --mode audio --audio-quality medium
 ```
 
 ## Prerequisites
 
 All examples assume you have:
 
-1. Cloned the repository and installed dependencies with `uv sync`
-2. Run `uv run dbdvdl init` to create the configuration file
-3. Verified your setup with `uv run dbdvdl doctor`
+1. Installed `dbdvdl` from PyPI (`pipx install dubbed-video-downloader` or `pip install dubbed-video-downloader`)
+2. Run `dbdvdl init` to create the configuration file
+3. Verified your setup with `dbdvdl doctor`
 
 See [Getting Started](../getting-started/quickstart.md) for a full walkthrough.

@@ -5,7 +5,7 @@
 **Usage:**
 
 ```
-uv run dbdvdl download [OPTIONS] URL...
+dbdvdl download [OPTIONS] URL...
 ```
 
 ## Arguments
@@ -116,28 +116,28 @@ uv run dbdvdl download [OPTIONS] URL...
 
 ```bash
 # Download with default settings
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Download multiple videos
-uv run dbdvdl download "https://www.youtube.com/watch?v=ID1" "https://www.youtube.com/watch?v=ID2"
+dbdvdl download "https://www.youtube.com/watch?v=ID1" "https://www.youtube.com/watch?v=ID2"
 
 # Download with Japanese dub at 1080p
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja --video-quality 1080p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja --video-quality 1080p
 
 # Audio-only download in French, medium quality
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio --audio-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio --audio-quality medium
 
 # Preview what would be downloaded
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
 
 # Overwrite existing files, auto-approve disk usage prompts, verbose output
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists overwrite --yes --verbose
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists overwrite --yes --verbose
 
 # Debug a failing download
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 
 # Custom output directory and FFmpeg path
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --output-dir /media/external --ffmpeg-path /usr/local/bin/ffmpeg
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --output-dir /media/external --ffmpeg-path /usr/local/bin/ffmpeg
 ```
 
 ## Download Status Display

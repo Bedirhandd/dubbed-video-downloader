@@ -4,7 +4,7 @@ This page lists every dependency of the project, categorized by purpose.
 
 ## Runtime Dependencies (Production)
 
-These are the packages required to run `dbdvdl`. They are installed with `uv sync`.
+These packages are required to run `dbdvdl`. They are installed automatically when you run `pipx install dubbed-video-downloader` or `pip install dubbed-video-downloader`.
 
 | Package | Version | Purpose |
 | --- | --- | --- |
@@ -12,16 +12,16 @@ These are the packages required to run `dbdvdl`. They are installed with `uv syn
 | [yt-dlp-ejs](https://pypi.org/project/yt-dlp-ejs/) | `>=0.8.0` | YouTube JavaScript solver plugin for yt-dlp. Required to bypass YouTube's bot detection. |
 | [Typer](https://typer.tiangolo.com/) | `>=0.12.0` | CLI framework built on Click. Defines all commands, arguments, options, and validation. |
 | [Rich](https://rich.readthedocs.io/) | `>=15.0.0` | Terminal formatting and display. Used for progress bars, tables (quality/language listings), colored output, and status panels. |
-| [PyYAML](https://pyyaml.org/) | `>=6.0.2` | YAML parsing. Used to read and write the configuration file (`~/.config/dbdvdl/config.yaml`). |
+| [PyYAML](https://pyyaml.org/) | `>=6.0.2` | YAML parsing. Used to read and write the configuration file (`~/.config/dubbed-video-downloader/config.yaml`). |
 | [langcodes](https://pypi.org/project/langcodes/) | `==3.5.1` | Language tag parsing and matching. Used to resolve user-provided language names/codes against yt-dlp's audio track metadata. |
 
 ## System Dependencies
 
-These must be installed separately on your system `PATH`. They are NOT managed by `uv`.
+These must be installed separately on your system `PATH`. They are NOT managed by pip or pipx.
 
 | Dependency | Minimum Version | Purpose |
 | --- | --- | --- |
-| [Python](https://www.python.org/) | 3.10+ | Language runtime. Required by `uv` and all Python packages. |
+| [Python](https://www.python.org/) | 3.10+ | Language runtime. Required by all Python packages. |
 | [Node.js](https://nodejs.org/) | recent | JavaScript runtime. Required by `yt-dlp-ejs` to execute YouTube's JavaScript challenge solver. |
 | [FFmpeg](https://ffmpeg.org/) | recent | Media processing toolkit. Required by yt-dlp for merging downloaded video and audio streams into the final output file. |
 
@@ -43,7 +43,7 @@ Verify with:
 ```bash
 ffmpeg -version
 node --version
-python --version
+python3 --version
 ```
 
 ## Development Dependencies
@@ -84,15 +84,16 @@ These are installed with `uv sync --group dev`. They are only needed when contri
 | --- | --- | --- |
 | [hatchling](https://hatch.pypa.io/) | (latest) | PEP 517 build backend. Builds the wheel from `src/dubbed_video_downloader/`. |
 
-## Package Manager
+## Development Workflow (uv)
 
-[uv](https://docs.astral.sh/uv/) is the package manager and virtual environment tool used throughout the project. It replaces pip, venv, and pip-tools. Key commands:
+[uv](https://docs.astral.sh/uv/) is the package manager used for local development and CI. End users install from PyPI with pip or pipx instead. Key commands when working from a git checkout:
 
 | Command | Purpose |
 | --- | --- |
 | `uv sync` | Install production dependencies into a virtual environment |
 | `uv sync --group dev` | Install production + development dependencies |
-| `uv run <command>` | Run a command inside the virtual environment (e.g., `uv run dbdvdl`, `uv run pytest`) |
+| `uv run dbdvdl` | Run the CLI from source without a PyPI install |
+| `uv run <command>` | Run a command inside the virtual environment (e.g., `uv run pytest`) |
 | `uv run ruff check src tests` | Run the linter |
 | `uv run ruff format --check src tests` | Check formatting |
 | `uv run mypy` | Run the type checker |

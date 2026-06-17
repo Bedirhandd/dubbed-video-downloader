@@ -25,13 +25,14 @@ Bu araç [yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.o
 **Platform:** Şimdilik yalnızca Linux. Windows ve macOS henüz desteklenmemektedir.
 
 ```bash
-git clone https://github.com/Bedirhandd/dubbed-video-downloader.git
-cd dubbed-video-downloader
-uv sync
-uv run dbdvdl init
-uv run dbdvdl doctor
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+pipx install dubbed-video-downloader   # önerilen
+# pip install dubbed-video-downloader  # alternatif
+dbdvdl init
+dbdvdl doctor
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
+
+Katkıda bulunuyorsanız [kaynak koddan kurulum](docs/getting-started/installation.md#install-from-source) için uv kullanın.
 
 Ön koşullar, ilk indirme adımları ve sorun giderme için [Hızlı Başlangıç](docs/getting-started/quickstart.md) bölümüne bakın.
 

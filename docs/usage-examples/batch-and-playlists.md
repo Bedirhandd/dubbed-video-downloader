@@ -7,7 +7,7 @@ Examples for downloading multiple videos in a single command. Each URL is proces
 Pass multiple URLs to the `download` command as positional arguments:
 
 ```bash
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=ID_ONE" \
   "https://www.youtube.com/watch?v=ID_TWO" \
   "https://www.youtube.com/watch?v=ID_THREE"
@@ -16,7 +16,7 @@ uv run dbdvdl download \
 All URLs share the same options (language, quality, mode, etc.):
 
 ```bash
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=ID_ONE" \
   "https://www.youtube.com/watch?v=ID_TWO" \
   --lang ja --video-quality 1080p
@@ -54,7 +54,7 @@ Size: 180 MB
 When one URL fails, the error is printed and processing moves to the next:
 
 ```bash
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=GOOD_ID" \
   "https://www.youtube.com/watch?v=BAD_ID" \
   "https://www.youtube.com/watch?v=ANOTHER_GOOD_ID"
@@ -86,7 +86,7 @@ The exit code is `1` because one URL failed.
 Preview all URLs before downloading:
 
 ```bash
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=ID_ONE" \
   "https://www.youtube.com/watch?v=ID_TWO" \
   --dry-run
@@ -113,7 +113,7 @@ Dry run OK
 When `ask_for_disk_usage` is enabled in config, each URL prompts separately:
 
 ```bash
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=ID_ONE" \
   "https://www.youtube.com/watch?v=ID_TWO"
 ```
@@ -133,7 +133,7 @@ Cancelled
 Answering `n` cancels just that one URL and continues to the next. Use `--yes` to approve all:
 
 ```bash
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=ID_ONE" \
   "https://www.youtube.com/watch?v=ID_TWO" \
   --yes
@@ -144,9 +144,9 @@ uv run dbdvdl download \
 Download multiple language tracks of the same video:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio
 ```
 
 Output layout:
@@ -165,14 +165,14 @@ Downloading the same video with different quality settings will overwrite (if us
 
 ```bash
 # First download: best quality
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality best
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality best
 
 # Second download: low quality -- skipped because file already exists
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality low
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality low
 # Output: Skipped — Output already exists: ...
 
 # To actually download a different quality, use --if-exists overwrite
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --video-quality low --if-exists overwrite
 ```
 
@@ -183,7 +183,7 @@ For scripts that process a list of URLs, use `--yes` and `--if-exists skip` for 
 ```bash
 #!/bin/bash
 # Download multiple videos non-interactively
-uv run dbdvdl download \
+dbdvdl download \
   "https://www.youtube.com/watch?v=ID_ONE" \
   "https://www.youtube.com/watch?v=ID_TWO" \
   "https://www.youtube.com/watch?v=ID_THREE" \
@@ -199,7 +199,7 @@ fi
 
 ## Current Limitations
 
-Note the following about the current version (0.1.0):
+Note the following about the current version (0.2.0):
 
 - **No playlist support:** The `download` command accepts individual video URLs only. YouTube playlist URLs will not be expanded automatically. For playlists, extract individual video URLs first (e.g., using `yt-dlp --flat-playlist --print url <playlist_url>`) and pass them to `dbdvdl download`.
 - **No channel support:** Channel URLs are not automatically expanded to individual videos.
@@ -207,12 +207,12 @@ Note the following about the current version (0.1.0):
 
 ```bash
 # Read URLs from a file (one URL per line) and pass as arguments
-xargs uv run dbdvdl download --lang ja --yes < urls.txt
+xargs dbdvdl download --lang ja --yes < urls.txt
 
 # Or using a shell loop for more control
 while IFS= read -r url; do
   [ -z "$url" ] && continue
-  uv run dbdvdl download "$url" --lang ja --yes || echo "Failed: $url"
+  dbdvdl download "$url" --lang ja --yes || echo "Failed: $url"
 done < urls.txt
 ```
 

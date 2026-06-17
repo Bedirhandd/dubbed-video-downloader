@@ -5,7 +5,7 @@
 **Usage:**
 
 ```
-uv run dbdvdl qualities [OPTIONS] URL
+dbdvdl qualities [OPTIONS] URL
 ```
 
 ## Arguments
@@ -51,9 +51,9 @@ uv run dbdvdl qualities [OPTIONS] URL
 ## Examples
 
 ```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID"
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --verbose
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --verbose
 ```
 
 ## Output

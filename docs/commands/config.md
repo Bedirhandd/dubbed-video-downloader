@@ -9,7 +9,7 @@ Configuration management subcommands.
 **Usage:**
 
 ```
-uv run dbdvdl config show
+dbdvdl config show
 ```
 
 ### Options
@@ -42,7 +42,7 @@ Ask for disk usage: false
 **Usage:**
 
 ```
-uv run dbdvdl config remove [OPTIONS]
+dbdvdl config remove [OPTIONS]
 ```
 
 ### Options
@@ -59,10 +59,10 @@ uv run dbdvdl config remove [OPTIONS]
 
 ```bash
 # Interactive removal (prompts for confirmation)
-uv run dbdvdl config remove
+dbdvdl config remove
 
 # Non-interactive removal
-uv run dbdvdl config remove --yes
+dbdvdl config remove --yes
 ```
 
 After removal, the command prints a hint showing how to recreate the config:

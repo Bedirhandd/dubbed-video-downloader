@@ -17,7 +17,7 @@ It is created by `dbdvdl init` and read by all other commands. The config file i
 Run `dbdvdl init` without options for an interactive setup that prompts for each setting:
 
 ```bash
-uv run dbdvdl init
+dbdvdl init
 ```
 
 Example interactive session:
@@ -52,7 +52,7 @@ Pressing Enter at any prompt accepts the default value shown in brackets.
 Skip all prompts and use built-in defaults:
 
 ```bash
-uv run dbdvdl init --default
+dbdvdl init --default
 ```
 
 This creates a config with:
@@ -71,7 +71,7 @@ This creates a config with:
 Set specific values without prompts by passing options:
 
 ```bash
-uv run dbdvdl init \
+dbdvdl init \
   --output-dir ~/Videos/dubbed \
   --default-lang tr \
   --default-download-mode audio \
@@ -84,7 +84,7 @@ uv run dbdvdl init \
 Any options you omit are prompted interactively. To skip all prompts while overriding some values, combine with `--default`:
 
 ```bash
-uv run dbdvdl init --default --default-lang ja --output-dir ~/Videos/dubbed
+dbdvdl init --default --default-lang ja --output-dir ~/Videos/dubbed
 ```
 
 Options specified on the command line take priority over the `--default` preset.
@@ -92,7 +92,7 @@ Options specified on the command line take priority over the `--default` preset.
 ## Viewing the Current Configuration
 
 ```bash
-uv run dbdvdl config show
+dbdvdl config show
 ```
 
 Expected output:
@@ -117,7 +117,7 @@ This shows the resolved (loaded and validated) configuration. If the config file
 By default, `dbdvdl init` refuses to overwrite an existing config:
 
 ```bash
-uv run dbdvdl init
+dbdvdl init
 ```
 
 Error output:
@@ -130,13 +130,13 @@ Use `--force` to overwrite:
 
 ```bash
 # Interactive re-initialization (overwrites existing config)
-uv run dbdvdl init --force
+dbdvdl init --force
 
 # Non-interactive (all defaults, overwrite)
-uv run dbdvdl init --default --force
+dbdvdl init --default --force
 
 # Change just one setting non-interactively
-uv run dbdvdl init --force --default-lang pt-BR
+dbdvdl init --force --default-lang pt-BR
 ```
 
 When you use `--force` with selective options, any option you don't provide is **prompted interactively** unless you also use `--default`.
@@ -147,7 +147,7 @@ Since `dbdvdl init` always prompts for every setting (unless `--default` is used
 
 ```bash
 # Change only the default language, keep everything else at defaults
-uv run dbdvdl init --force --default --default-lang ko
+dbdvdl init --force --default --default-lang ko
 ```
 
 ## Removing the Configuration
@@ -156,10 +156,10 @@ Delete the entire config directory:
 
 ```bash
 # Interactive (asks for confirmation)
-uv run dbdvdl config remove
+dbdvdl config remove
 
 # Non-interactive (no confirmation prompt)
-uv run dbdvdl config remove --yes
+dbdvdl config remove --yes
 ```
 
 Expected output:
@@ -180,7 +180,7 @@ You can create a new config with:
 Non-interactive removal without `--yes` is refused:
 
 ```bash
-echo "" | uv run dbdvdl config remove
+echo "" | dbdvdl config remove
 ```
 
 Error output:
@@ -219,7 +219,7 @@ nano ~/.config/dubbed-video-downloader/config.yaml
 After editing, verify that the config parses correctly:
 
 ```bash
-uv run dbdvdl config show
+dbdvdl config show
 ```
 
 If you introduce a syntax error:
@@ -251,7 +251,7 @@ Config values are overridden per-command using CLI flags. The precedence is:
 Example: the config has `default_lang: en`, but you want Japanese for one download:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 ```
 
 The config file is never modified by CLI overrides. The change is in effect only for that single command.
@@ -261,7 +261,7 @@ The config file is never modified by CLI overrides. The change is in effect only
 When `ask_for_disk_usage` is `true` in config, each download prompts:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 Expected prompt:
@@ -277,13 +277,13 @@ This download is estimated to use ~250 MB of disk space. Continue? [y/N]:
 To disable disk usage prompts permanently, re-initialize config:
 
 ```bash
-uv run dbdvdl init --force --no-ask-for-disk-usage
+dbdvdl init --force --no-ask-for-disk-usage
 ```
 
 ## Example: Config for a Bandwidth-Conscious Setup
 
 ```bash
-uv run dbdvdl init --default \
+dbdvdl init --default \
   --default-video-quality 720p \
   --default-audio-quality medium \
   --default-download-mode video
@@ -292,7 +292,7 @@ uv run dbdvdl init --default \
 ## Example: Config for Audio-Only Extraction
 
 ```bash
-uv run dbdvdl init --default \
+dbdvdl init --default \
   --default-download-mode audio \
   --default-audio-quality best \
   --output-dir ~/Music/dubbed-audio
@@ -301,7 +301,7 @@ uv run dbdvdl init --default \
 ## Example: Config for Scripting and Automation
 
 ```bash
-uv run dbdvdl init --default \
+dbdvdl init --default \
   --retry-on-network-failure 5 \
   --default-exists-behavior skip \
   --no-ask-for-disk-usage
@@ -314,8 +314,8 @@ The `--no-ask-for-disk-usage` ensures downloads run without interactive prompts,
 Always verify your config after making changes:
 
 ```bash
-uv run dbdvdl config show
-uv run dbdvdl doctor
+dbdvdl config show
+dbdvdl doctor
 ```
 
 `doctor` also checks config file permissions (POSIX warning only), that the output directory is writable, and that FFmpeg/Node.js are accessible.

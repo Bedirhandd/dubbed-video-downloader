@@ -31,7 +31,7 @@ Audio quality always scoped to the selected dub language:
 The `qualities` command lets you preview what quality options exist before downloading:
 
 ```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
 ```
 
 This shows:

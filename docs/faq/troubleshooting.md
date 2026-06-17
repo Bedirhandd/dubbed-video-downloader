@@ -6,7 +6,7 @@ yt-dlp was unable to fetch video information from YouTube. Possible causes:
 
 - **Invalid URL:** Make sure the URL is a valid YouTube video URL
 - **Network issues:** Check your internet connection
-- **YouTube changes:** YouTube may have updated its page structure. Try updating yt-dlp: `uv sync --upgrade-package yt-dlp`
+- **YouTube changes:** YouTube may have updated its page structure. Try upgrading the package: `pipx upgrade dubbed-video-downloader` or `pip install -U dubbed-video-downloader`
 - **Geographic restrictions:** The video may be unavailable in your region
 
 ## I get "Requested dub language not found".
@@ -15,7 +15,7 @@ The language you requested is not available on this video. Run `dbdvdl langs URL
 
 ## I get "Config error: Config file not found".
 
-Run `uv run dbdvdl init` to create the configuration file.
+Run `dbdvdl init` to create the configuration file.
 
 ## The download seems stuck. What should I do?
 
@@ -29,7 +29,7 @@ Run `uv run dbdvdl init` to create the configuration file.
 Use the `--debug` flag:
 
 ```bash
-uv run dbdvdl download "URL" --debug
+dbdvdl download "URL" --debug
 ```
 
 This shows yt-dlp's debug output and, on error, the full Python traceback.

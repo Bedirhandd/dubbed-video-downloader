@@ -3,7 +3,7 @@
 ## Show Config
 
 ```bash
-uv run dbdvdl config show
+dbdvdl config show
 ```
 
 Prints all resolved config values. Useful to verify what the app is using.
@@ -11,8 +11,8 @@ Prints all resolved config values. Useful to verify what the app is using.
 ## Remove Config
 
 ```bash
-uv run dbdvdl config remove
-uv run dbdvdl config remove --yes
+dbdvdl config remove
+dbdvdl config remove --yes
 ```
 
 Removes the entire config directory (`~/.config/dubbed-video-downloader/`). After removal, most commands will fail until a new config is created with `dbdvdl init`.
@@ -22,8 +22,8 @@ Removes the entire config directory (`~/.config/dubbed-video-downloader/`). Afte
 To recreate the config after removal or to start fresh:
 
 ```bash
-uv run dbdvdl init
-uv run dbdvdl init --default
+dbdvdl init
+dbdvdl init --default
 ```
 
 ## File Permissions

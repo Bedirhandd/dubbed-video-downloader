@@ -22,7 +22,7 @@
 Yes. Use `--mode audio`:
 
 ```bash
-uv run dbdvdl download "URL" --lang ja --mode audio --audio-quality best
+dbdvdl download "URL" --lang ja --mode audio --audio-quality best
 ```
 
 This downloads only the dubbed audio stream in its native format (`.webm`, `.m4a`, etc.).
