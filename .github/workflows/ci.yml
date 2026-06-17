@@ -97,7 +97,7 @@ jobs:
         run: uv sync --frozen --group dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=dubbed_video_downloader --cov-report=term --cov-report=xml:coverage.xml -v
+        run: uv run pytest --ignore=tests/live --cov=dubbed_video_downloader --cov-report=term --cov-report=xml:coverage.xml -v
 
       - name: Report coverage
         run: uv run coverage report

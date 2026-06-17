@@ -60,6 +60,18 @@ def test_get_video_info_suppresses_warnings_by_default() -> None:
     assert callable(opts["retry_sleep_functions"]["http"])
 
 
+def test_network_retry_sleep_functions_accept_ytdlp_keyword() -> None:
+    with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
+        ydl = youtube_dl.return_value.__enter__.return_value
+        ydl.extract_info.return_value = {"formats": []}
+        core.get_video_info("https://www.youtube.com/watch?v=EXAMPLE")
+    opts = youtube_dl.call_args.args[0]
+    for name, sleep_func in opts["retry_sleep_functions"].items():
+        delay = sleep_func(n=0)
+        assert isinstance(delay, float), f"{name} retry sleep must return a float"
+        assert delay > 0, f"{name} retry sleep must be positive"
+
+
 def test_get_video_info_uses_custom_network_retry_count() -> None:
     with patch("dubbed_video_downloader.core.yt_dlp.YoutubeDL") as youtube_dl:
         ydl = youtube_dl.return_value.__enter__.return_value

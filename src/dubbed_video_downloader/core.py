@@ -1912,6 +1912,6 @@ def _validate_retry_on_network_failure(value: int) -> int:
     return value
 
 
-def _retry_sleep_seconds(attempt: int) -> float:
-    base_delay = min(2**attempt, MAX_RETRY_SLEEP_SECONDS)
+def _retry_sleep_seconds(n: int) -> float:
+    base_delay = min(2**n, MAX_RETRY_SLEEP_SECONDS)
     return float(base_delay + random.random())
