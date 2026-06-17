@@ -348,6 +348,9 @@ def test_download_dry_run_uses_config_and_allows_cli_overrides(
     )
     override_output = home / "Videos" / "override"
     override_ffmpeg = home / "bin" / "ffmpeg"
+    override_ffmpeg.parent.mkdir(parents=True, exist_ok=True)
+    override_ffmpeg.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    override_ffmpeg.chmod(0o700)
     planned_output = override_output / "en" / "Channel" / "Title" / "Title.mkv"
     with (
         patch("dubbed_video_downloader.cli.core.download") as download,
@@ -1037,6 +1040,9 @@ def test_download_uses_config_and_allows_cli_overrides(
     )
     override_output = home / "Videos" / "override"
     override_ffmpeg = home / "bin" / "ffmpeg"
+    override_ffmpeg.parent.mkdir(parents=True, exist_ok=True)
+    override_ffmpeg.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    override_ffmpeg.chmod(0o700)
     output_path = override_output / "en" / "Title.mkv"
     with (
         patch(

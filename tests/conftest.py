@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import contextlib
+import os
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +12,34 @@ from typer.testing import CliRunner
 
 from dubbed_video_downloader import core
 from tests.support.network_guard import install_network_guard
+
+_FFMPEG_STUB_PATH = "/usr/bin/ffmpeg"
+
+
+@pytest.fixture(autouse=True)
+def _default_ffmpeg_on_path_for_tests(request: pytest.FixtureRequest) -> Iterator[None]:
+    if "test_cli_ffmpeg_validation.py" in request.node.nodeid:
+        yield
+        return
+    real_which = shutil.which
+
+    def _patched_which(
+        cmd: str,
+        mode: int = os.F_OK | os.X_OK,
+        path: str | None = None,
+    ) -> str | None:
+        resolved = real_which(cmd, mode=mode, path=path)
+        if resolved is not None:
+            return resolved
+        if cmd in {"ffmpeg", "ffmpeg.exe"}:
+            return _FFMPEG_STUB_PATH
+        return None
+
+    with patch(
+        "dubbed_video_downloader.doctor.shutil.which",
+        side_effect=_patched_which,
+    ):
+        yield
 
 
 @pytest.fixture(scope="session", autouse=True)
