@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'Bedirhandd/dubbed-video-downloader'
+    runs-on: ubuntu-latest
+    env:
+      DBDVDL_TESTS_ALLOW_NETWORK: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install uv and Python 3.12
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          python-version: "3.12"
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Verify tag matches package version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PYPROJECT_VERSION="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          INIT_VERSION="$(python -c 'import pathlib, re; text = pathlib.Path("src/dubbed_video_downloader/__init__.py").read_text(); match = re.search(r"__version__ = \"([^\"]+)\"", text); assert match; print(match.group(1))')"
+          if [ "$TAG" != "$PYPROJECT_VERSION" ] || [ "$TAG" != "$INIT_VERSION" ]; then
+            echo "Version mismatch:"
+            echo "  tag:           $TAG"
+            echo "  pyproject.toml: $PYPROJECT_VERSION"
+            echo "  __init__.py:   $INIT_VERSION"
+            exit 1
+          fi
+          echo "Version check passed: $TAG"
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Run Ruff linter
+        run: uv run ruff check --output-format=github src tests
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check src tests
+
+      - name: Run mypy
+        run: uv run mypy
+
+      - name: Audit project dependencies
+        run: uv audit --frozen --preview-features audit
+
+      - name: Run tests with coverage
+        run: uv run pytest --ignore=tests/live --cov=dubbed_video_downloader --cov-report=term -v
+
+      - name: Enforce coverage threshold
+        run: uv run coverage report --fail-under=79
+
+  release:
+    if: github.repository == 'Bedirhandd/dubbed-video-downloader'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/dubbed-video-downloader/
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish dist/*
