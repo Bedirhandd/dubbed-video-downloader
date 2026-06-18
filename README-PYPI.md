@@ -30,7 +30,8 @@ Install these on your system `PATH` before using `dbdvdl`:
 ## Install
 
 ```bash
-pip install dubbed-video-downloader
+pipx install dubbed-video-downloader   # recommended
+# pip install dubbed-video-downloader  # alternative
 dbdvdl init
 dbdvdl doctor
 dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
