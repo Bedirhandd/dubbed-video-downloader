@@ -5,7 +5,7 @@
 **Usage:**
 
 ```
-uv run dbdvdl langs [OPTIONS] URL
+dbdvdl langs [OPTIONS] URL
 ```
 
 ## Arguments
@@ -43,9 +43,9 @@ uv run dbdvdl langs [OPTIONS] URL
 ## Examples
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --retry-on-network-failure 5
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --retry-on-network-failure 5
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
 ```
 
 ## Output

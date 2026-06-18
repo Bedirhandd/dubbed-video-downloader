@@ -7,7 +7,7 @@ Practical troubleshooting scenarios -- common errors, their causes, and step-by-
 Before troubleshooting download issues, confirm your environment is correctly configured:
 
 ```bash
-uv run dbdvdl doctor
+dbdvdl doctor
 ```
 
 Expected output when everything is OK:
@@ -47,7 +47,7 @@ chmod 600 ~/.config/dubbed-video-downloader/config.yaml
 Alternatively:
 
 ```bash
-uv run dbdvdl init --force --default
+dbdvdl init --force --default
 ```
 
 Downloads continue to work while the warning is present; tightening permissions is recommended on shared or multi-user systems.
@@ -73,7 +73,7 @@ Config          FAIL    Config file not found at /home/user/.config/dubbed-video
 **Fix:**
 
 ```bash
-uv run dbdvdl init
+dbdvdl init
 ```
 
 ### Config Parsing Error
@@ -87,7 +87,7 @@ Config          FAIL    Could not parse /home/user/.config/dubbed-video-download
 **Fix:** Open the file and fix the YAML syntax, or recreate it:
 
 ```bash
-uv run dbdvdl init --force --default
+dbdvdl init --force --default
 ```
 
 ### Output Directory Not Writable
@@ -107,7 +107,7 @@ chmod u+w ~/Downloads/dbdvdl-output
 Or change to a different directory:
 
 ```bash
-uv run dbdvdl init --force --output-dir ~/Videos/dubbed
+dbdvdl init --force --output-dir ~/Videos/dubbed
 ```
 
 ### FFmpeg Not Found
@@ -135,7 +135,7 @@ sudo apt install ffmpeg
 **Fix (using a custom path if installed elsewhere):**
 
 ```bash
-uv run dbdvdl init --force --ffmpeg-path /usr/local/bin/ffmpeg
+dbdvdl init --force --ffmpeg-path /usr/local/bin/ffmpeg
 ```
 
 ### Node.js Not Found
@@ -169,7 +169,8 @@ yt-dlp          FAIL    package is not installed
 **Fix:**
 
 ```bash
-uv sync
+pipx reinstall dubbed-video-downloader
+# or: pip install --force-reinstall dubbed-video-downloader
 ```
 
 ## Download-Specific Errors
@@ -185,7 +186,7 @@ This happens with any command (`download`, `langs`, `qualities`) when the config
 **Fix:**
 
 ```bash
-uv run dbdvdl init
+dbdvdl init
 ```
 
 ### "Could not extract video metadata"
@@ -204,19 +205,21 @@ Error: Could not extract video metadata: ...
 
 ```bash
 # Test with --debug for full details
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 
 # Try a different, well-known video
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Check if yt-dlp itself can access the video
-uv run yt-dlp --print title "https://www.youtube.com/watch?v=VIDEO_ID"
+yt-dlp --print title "https://www.youtube.com/watch?v=VIDEO_ID"
+# If yt-dlp is not on PATH (some pip installs): python -m yt_dlp --print title "URL"
 ```
 
-**If yt-dlp works but dbdvdl doesn't:** This may indicate a version mismatch. Update dependencies:
+**If yt-dlp works but dbdvdl doesn't:** This may indicate a version mismatch. Upgrade the package:
 
 ```bash
-uv sync --upgrade-package yt-dlp
+pipx upgrade dubbed-video-downloader
+# or: pip install -U dubbed-video-downloader
 ```
 
 ### "Requested dub language not found"
@@ -232,14 +235,14 @@ Available: en, ja, ko
 **Fix:** List available languages and choose one:
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 # Output: en, ja, ko
 ```
 
 Then download with an available language:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 ```
 
 ### "Requested video quality Np is not available"
@@ -253,12 +256,12 @@ Input error: Requested video quality 480p is not available. Available video qual
 **Fix:** Inspect available qualities and pick one:
 
 ```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 
 # Then use an available quality or a preset
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja --video-quality 720p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja --video-quality 720p
 # Or use a preset that always works
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja --video-quality best
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja --video-quality best
 ```
 
 ### "No audio streams found for language"
@@ -273,10 +276,10 @@ Error: No audio streams found for language `ja`.
 
 ```bash
 # Check what quality options exist (this shows resolved vs requested language)
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 
 # Try without specifying lang to use config default
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 ### "Output already exists"
@@ -291,10 +294,10 @@ Error: Output already exists: ~/Downloads/dbdvdl-output/en/Channel/Title/Title.m
 
 ```bash
 # Skip existing files
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists skip
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists skip
 
 # Overwrite existing files
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists overwrite
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists overwrite
 ```
 
 ### "Output path already exists but is not a file"
@@ -325,13 +328,13 @@ Error: Could not download media: ...
 
 ```bash
 # Run with --debug to see the full yt-dlp output and traceback
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 
 # Check if the video is accessible at all
-uv run yt-dlp --print title "https://www.youtube.com/watch?v=VIDEO_ID"
+yt-dlp --print title "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Check for regional restrictions
-uv run yt-dlp --dump-json "https://www.youtube.com/watch?v=VIDEO_ID" | python3 -m json.tool | grep -A2 restriction
+yt-dlp --dump-json "https://www.youtube.com/watch?v=VIDEO_ID" | python3 -m json.tool | grep -A2 restriction
 ```
 
 ## Diagnosing with Verbose and Debug Modes
@@ -341,7 +344,7 @@ uv run yt-dlp --dump-json "https://www.youtube.com/watch?v=VIDEO_ID" | python3 -
 When the default status display hides useful information:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
 ```
 
 This shows yt-dlp's progress bar, info messages, and warnings instead of the minimal status spinner. Use this when:
@@ -354,7 +357,7 @@ This shows yt-dlp's progress bar, info messages, and warnings instead of the min
 For the deepest level of information:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 ```
 
 This shows:
@@ -372,10 +375,10 @@ Use this when:
 
 ```bash
 # Just verbose output
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
 
 # Verbose + debug tracebacks
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 ```
 
 ## Staging Directory (`tmp/.incomplete/`)
@@ -421,7 +424,7 @@ find ~/Downloads/dbdvdl-output -name ".dubbed-video-downloader-finalizing" -type
 Increase the retry count:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --retry-on-network-failure 10 \
   --verbose
 ```
@@ -437,12 +440,12 @@ If yt-dlp can't resolve YouTube, check if the issue is with your network:
 curl -I https://www.youtube.com
 
 # Test yt-dlp directly
-uv run yt-dlp --print title "https://www.youtube.com/watch?v=VIDEO_ID"
+yt-dlp --print title "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # If using a proxy, configure yt-dlp via environment variables
 export HTTP_PROXY=http://proxy:port
 export HTTPS_PROXY=http://proxy:port
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
 ```
 
 ## Understanding Disk Usage Prompts in Scripts
@@ -459,10 +462,10 @@ Refusing to download non-interactively with disk usage confirmation enabled. Use
 
 ```bash
 # Option 1: Add --yes to the command
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --yes
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --yes
 
 # Option 2: Disable disk usage prompts in config
-uv run dbdvdl init --force --default --no-ask-for-disk-usage
+dbdvdl init --force --default --no-ask-for-disk-usage
 ```
 
 ## Debugging Language Resolution Issues
@@ -471,13 +474,13 @@ If a language you expect to be available isn't matching:
 
 ```bash
 # 1. See raw language tags
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # 2. Try the exact tag shown in the output
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang es-419
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang es-419
 
 # 3. Check quality options with that language to confirm it resolves
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 ```
 
 The `qualities` output shows both `Language:` (what you requested) and `(track: <resolved>)` if the resolved track differs from your request.

@@ -19,7 +19,7 @@ Additionally, video quality supports exact resolution targets (e.g., `1080p`, `2
 Before choosing a quality, inspect what the video offers:
 
 ```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
 ```
 
 Expected output (example):
@@ -42,7 +42,7 @@ This tells you:
 Download at the highest available resolution:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality best
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality best
 ```
 
 This selects `bv` (best video-only stream). It always succeeds as long as the video has any video stream.
@@ -52,7 +52,7 @@ This selects `bv` (best video-only stream). It always succeeds as long as the vi
 Target approximately 720p. The system picks the closest available height:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality medium
 ```
 
 Behavior by available heights:
@@ -66,7 +66,7 @@ Behavior by available heights:
 Download at the lowest available resolution:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality low
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality low
 ```
 
 This picks the smallest height from the available list.
@@ -77,13 +77,13 @@ Request a specific resolution. The command fails if that exact height is not ava
 
 ```bash
 # Succeeds if 1080p is listed in qualities output
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 1080p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 1080p
 
 # Succeeds if 2160p (4K) is available
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 2160p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 2160p
 
 # Fails if 480p is not among the available heights
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 480p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 480p
 ```
 
 Error when the resolution is unavailable:
@@ -99,7 +99,7 @@ Valid resolution range: `144p` through `8640p`.
 Download at the highest available bitrate for the selected language:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality best
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality best
 ```
 
 When every candidate for the language reports bitrate metadata, the system picks the highest-bitrate audio candidate and builds a targeted yt-dlp selector (typically `bestaudio[format_id="…"]`). When any candidate lacks bitrate metadata, `best` falls back to a language-based yt-dlp selector so unknown streams stay in contention; if multiple raw metadata language casings match, the fallback uses one regex union filter rather than a `/` precedence chain. When no candidate reports bitrate metadata, it uses the same language-based fallback.
@@ -111,7 +111,7 @@ In video mode, the audio selector is combined with the video selector using `+`.
 Target approximately 128 kbps. The system picks the audio candidate closest to 128k:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality medium
 ```
 
 Selection logic:
@@ -130,7 +130,7 @@ Note: Audio quality medium fell back to best because bitrate metadata is unavail
 Download at the lowest available bitrate:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality low
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality low
 ```
 
 If no candidates have bitrate metadata, falls back to yt-dlp's `worstaudio` filter for the language:
@@ -145,11 +145,11 @@ Specify both video and audio quality together:
 
 ```bash
 # 1080p video, best audio
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --video-quality 1080p --audio-quality best
 
 # Medium video (target 720p), low audio (conserve bandwidth)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --video-quality medium --audio-quality low
 ```
 
@@ -159,11 +159,11 @@ In audio mode, `--video-quality` is not allowed:
 
 ```bash
 # This works
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --mode audio --audio-quality medium
 
 # This produces an error
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --mode audio --video-quality 1080p
 ```
 
@@ -178,7 +178,7 @@ Input error: --video-quality can only be used with --mode video.
 A dry run shows your requested quality and what was actually selected:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --video-quality medium --dry-run
 ```
 
@@ -227,7 +227,7 @@ This means some audio streams for the language are missing bitrate metadata. The
 Invalid quality values produce an immediate error:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality ultra
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality ultra
 ```
 
 Error output:
@@ -239,7 +239,7 @@ Input error: video_quality must be `best`, `medium`, `low`, or a video resolutio
 Resolution outside the valid range:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 100p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 100p
 ```
 
 Error output:

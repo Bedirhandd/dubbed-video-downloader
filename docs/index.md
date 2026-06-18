@@ -1,6 +1,6 @@
 # Dubbed Video Downloader -- Documentation
 
-**Version:** 0.1.0
+**Version:** 0.2.0
 
 Dubbed Video Downloader (`dbdvdl`) is a Python CLI tool that wraps [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/) to download YouTube videos or audio tracks with a selected dubbed audio language. It is designed for a language-first workflow: list available dubs, pick a language and quality, then download with organized output.
 
@@ -10,7 +10,7 @@ Dubbed Video Downloader (`dbdvdl`) is a Python CLI tool that wraps [yt-dlp](http
 
 | Document | Description |
 | --- | --- |
-| [Installation](getting-started/installation.md) | Prerequisites, cloning the repo, dependency installation, and dev tools |
+| [Installation](getting-started/installation.md) | PyPI install (pipx/pip), install from source, and dev tools |
 | [Dependencies](getting-started/dependencies.md) | Complete dependency reference -- runtime, system, and development packages |
 | [Quickstart](getting-started/quickstart.md) | Config setup, doctor verification, and first download walkthrough |
 
@@ -77,25 +77,31 @@ Dubbed Video Downloader (`dbdvdl`) is a Python CLI tool that wraps [yt-dlp](http
 | [Troubleshooting](faq/troubleshooting.md) | Common errors, stuck downloads, debug mode, staging directory |
 | [Usage and Development](faq/usage-and-development.md) | Scripting, cron, testing, linting, coverage, contributing, known limitations |
 
+### Project
+
+| Document | Description |
+| --- | --- |
+| [Changelog](../CHANGELOG.md) | Release history and notable changes |
+| [Security policy](../SECURITY.md) | Vulnerability reporting, scope, and supported versions |
+
 ## Quick Reference
 
 ```bash
-# Install
-git clone https://github.com/Bedirhandd/dubbed-video-downloader.git
-cd dubbed-video-downloader
-uv sync
+# Install (recommended)
+pipx install dubbed-video-downloader
+# pip install dubbed-video-downloader   # alternative
 
 # Setup
-uv run dbdvdl init              # Create config (~/.config/dubbed-video-downloader/config.yaml)
-uv run dbdvdl doctor            # Verify everything is ready
+dbdvdl init              # Create config (~/.config/dubbed-video-downloader/config.yaml)
+dbdvdl doctor            # Verify everything is ready
 
 # Explore
-uv run dbdvdl langs URL         # List available dub languages
-uv run dbdvdl qualities URL     # Show video and audio quality options
+dbdvdl langs URL         # List available dub languages
+dbdvdl qualities URL     # Show video and audio quality options
 
 # Download
-uv run dbdvdl download URL      # Download with default language
-uv run dbdvdl download URL --lang fr --video-quality 1080p
+dbdvdl download URL      # Download with default language
+dbdvdl download URL --lang fr --video-quality 1080p
 ```
 
 ## Command Overview

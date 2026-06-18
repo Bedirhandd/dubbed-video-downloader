@@ -7,7 +7,7 @@ Examples focused on language selection, listing available dubs, language fallbac
 Before downloading, inspect what dub languages a video offers:
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 Expected output (example):
@@ -26,13 +26,13 @@ Each line is a BCP-47 language tag found in the video's audio format metadata. I
 ### With Network Retry Control
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --retry-on-network-failure 5
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --retry-on-network-failure 5
 ```
 
 ### With Verbose Output
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
 ```
 
 ### When No Valid Languages Exist
@@ -55,13 +55,13 @@ Download with a specific dub language:
 
 ```bash
 # Two-letter code
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 
 # Three-letter code (ISO 639-3)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang jpn
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang jpn
 
 # Region-variant code
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang pt-BR
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang pt-BR
 ```
 
 ## Language Code Formats
@@ -87,7 +87,7 @@ The canonical BCP-47 code is matched case-insensitively against the raw metadata
 
 ```bash
 # If the video has tracks tagged "en" and "en-US", requesting "en" matches "en"
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang en
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang en
 ```
 
 ### Step 2: Fuzzy Match
@@ -97,7 +97,7 @@ If no exact match exists and you did not specify a territory or script, the syst
 ```bash
 # If the video has "es-419" (Latin American Spanish) but no plain "es",
 # requesting "es" will still match via fuzzy resolution
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang es
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang es
 ```
 
 The output shows the resolved language:
@@ -112,7 +112,7 @@ If no match is found:
 
 ```bash
 # If the video only has "en" and "ja", this fails
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
 ```
 
 Error output:
@@ -129,10 +129,10 @@ If your language code includes a region or script qualifier, only an exact match
 
 ```bash
 # Only matches a track explicitly tagged "pt-BR" — does not match plain "pt"
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang pt-BR
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang pt-BR
 
 # Only matches "zh-Hans" — does not match "zh" or "zh-Hant"
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang zh-Hans
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang zh-Hans
 ```
 
 ## Downloading Different Languages of the Same Video
@@ -141,13 +141,13 @@ Download multiple language tracks of the same video with separate commands:
 
 ```bash
 # Download Japanese dub
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 
 # Download Korean dub (goes into a separate directory)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
 
 # Download French audio-only
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio
 ```
 
 Each language produces a separate output path under the `output_dir`:
@@ -163,7 +163,7 @@ Each language produces a separate output path under the `output_dir`:
 Use `qualities` to see what quality options exist before downloading:
 
 ```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 ```
 
 Expected output (example):
@@ -181,10 +181,10 @@ The `qualities` command uses the same language resolution as `download`. You can
 
 ```bash
 # Uses config default_lang
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Explicit language
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
 ```
 
 ## Handling Skipped Invalid Tracks
@@ -192,7 +192,7 @@ uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko
 When YouTube provides audio tracks with missing, empty, or invalid language metadata, the system warns about them but continues:
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 If tracks were skipped:
@@ -216,7 +216,7 @@ Available languages: en, ja, ko
 Using an invalid language code produces an immediate error before any network request:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang invalid!
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang invalid!
 ```
 
 Error output:
@@ -231,16 +231,16 @@ Change the default language in your config:
 
 ```bash
 # Interactive re-initialization
-uv run dbdvdl init --force --default-lang ja
+dbdvdl init --force --default-lang ja
 
 # Non-interactive with all defaults preserved and only language changed
-uv run dbdvdl init --force --default --default-lang ko
+dbdvdl init --force --default --default-lang ko
 ```
 
 Verify the change:
 
 ```bash
-uv run dbdvdl config show
+dbdvdl config show
 ```
 
 Partial output:

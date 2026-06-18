@@ -7,7 +7,7 @@ The most common workflows for downloading dubbed videos with `dbdvdl`. Every exa
 Download a video using all defaults from your config file:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 This uses:
@@ -23,14 +23,14 @@ The file lands at `~/Downloads/dbdvdl-output/en/<channel>/<title>/<title>.mkv`.
 Pick a specific dub language with `--lang` (or `-l`):
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 ```
 
 This overrides your config's `default_lang` for this single download. The output file will be placed under the `ja/` directory inside your output directory.
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" -l de
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" -l de
 ```
 
 ## Choosing Video Quality
@@ -39,17 +39,17 @@ Set video quality with `--video-quality`. This only works with `--mode video` (t
 
 ```bash
 # Best available resolution
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality best
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality best
 
 # Target 720p (picks closest available height)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality medium
 
 # Lowest available resolution
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality low
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality low
 
 # Exact resolution (fails if not available)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 1080p
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 2160p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 1080p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --video-quality 2160p
 ```
 
 ## Choosing Audio Quality
@@ -58,13 +58,13 @@ Set audio quality with `--audio-quality`. Works in both `video` and `audio` mode
 
 ```bash
 # Best available bitrate for the language
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality best
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality best
 
 # Target ~128 kbps (picks closest)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality medium
 
 # Lowest available bitrate
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality low
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --audio-quality low
 ```
 
 ## Combining Language and Quality
@@ -73,15 +73,15 @@ Common combinations for different use cases:
 
 ```bash
 # High quality Japanese dub
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --lang ja --video-quality 1080p
 
 # Medium quality Korean dub
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --lang ko --video-quality medium --audio-quality medium
 
 # Low quality German dub (conserve bandwidth)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --lang de --video-quality low --audio-quality low
 ```
 
@@ -91,10 +91,10 @@ Download just the dubbed audio track without video:
 
 ```bash
 # Best quality audio-only
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --mode audio
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --mode audio
 
 # Audio-only with specific language and quality
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --mode audio --lang fr --audio-quality medium
 ```
 
@@ -108,10 +108,10 @@ In audio mode:
 Override the config's output directory for a single run:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --output-dir ~/Videos/dubbed
 
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --output-dir /media/external-drive
 ```
 
@@ -122,7 +122,7 @@ The `--output-dir` flag supports `~` expansion and environment variable expansio
 If FFmpeg is installed at a non-standard location:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --ffmpeg-path /usr/local/bin/ffmpeg
 ```
 
@@ -133,7 +133,7 @@ Use `--ffmpeg-path ffmpeg` (the default) to find FFmpeg on the system PATH.
 Use `--dry-run` to validate everything without actually downloading:
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --dry-run
 ```
 
 Expected output:
@@ -169,13 +169,13 @@ Control what happens when the output file already exists:
 
 ```bash
 # Skip if file exists (default behavior)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists skip
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists skip
 
 # Fail with an error if file exists
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists fail
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists fail
 
 # Overwrite the existing file
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists overwrite
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --if-exists overwrite
 ```
 
 When `skip` is used and the file exists, the output shows `Skipped` and the existing file path.
@@ -186,10 +186,10 @@ If your config has `ask_for_disk_usage: true`, downloads will prompt for confirm
 
 ```bash
 # Approve all prompts for this run
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --yes
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --yes
 
 # Same but shorter
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" -y
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" -y
 ```
 
 ## Verbose and Debug Output
@@ -198,10 +198,10 @@ When a download fails or you need to see what's happening:
 
 ```bash
 # Show yt-dlp progress and warnings
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --verbose
 
 # Show yt-dlp debug output and full error tracebacks
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --debug
 ```
 
 With `--verbose`, you see yt-dlp's own progress bar instead of the minimal status display. With `--debug`, you get the maximum detail level including yt-dlp's debug log and, on failure, the full Python traceback sent to stderr.
@@ -212,11 +212,11 @@ Adjust how many times network failures are retried:
 
 ```bash
 # No retries (fail immediately on network errors)
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --retry-on-network-failure 0
 
 # More retries for unreliable connections
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --retry-on-network-failure 5
 ```
 
@@ -225,7 +225,7 @@ Retries use exponential backoff: the delay doubles each attempt (1s, 2s, 4s, 8s 
 ## Complete Example: Download with Everything Specified
 
 ```bash
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" \
   --lang tr \
   --mode video \
   --video-quality 720p \

@@ -1,11 +1,13 @@
 # Quickstart
 
+After installing from PyPI (`pipx install dubbed-video-downloader` or `pip install dubbed-video-downloader`), run `dbdvdl` directly. If you installed from source, prefix commands with `uv run` (see [Installation](installation.md#install-from-source)).
+
 ## Create the Configuration File
 
 Run the interactive setup wizard:
 
 ```bash
-uv run dbdvdl init
+dbdvdl init
 ```
 
 This prompts you to configure:
@@ -25,13 +27,13 @@ The config is written to `~/.config/dubbed-video-downloader/config.yaml`. On POS
 To create a config with all defaults without being prompted:
 
 ```bash
-uv run dbdvdl init --default
+dbdvdl init --default
 ```
 
 To specify values directly:
 
 ```bash
-uv run dbdvdl init --output-dir ~/Videos --default-lang de --default-download-mode audio
+dbdvdl init --output-dir ~/Videos --default-lang de --default-download-mode audio
 ```
 
 ## Verify Your Setup
@@ -39,7 +41,7 @@ uv run dbdvdl init --output-dir ~/Videos --default-lang de --default-download-mo
 Run the doctor command to check everything:
 
 ```bash
-uv run dbdvdl doctor
+dbdvdl doctor
 ```
 
 This checks:
@@ -60,7 +62,7 @@ All checks should report `OK`. If any check reports `FAIL`, fix the issue before
 ### Step 1: See Available Dub Languages
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 This lists all audio language codes available for the video. Typical output looks like:
@@ -77,7 +79,7 @@ pt
 ### Step 2: Inspect Quality Options
 
 ```bash
-uv run dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
+dbdvdl qualities "https://www.youtube.com/watch?v=VIDEO_ID" --lang ja
 ```
 
 This shows:
@@ -91,11 +93,11 @@ This shows:
 
 ```bash
 # Download with default language and quality
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Download with a specific language and quality
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko --video-quality 1080p
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang ko --video-quality 1080p
 
 # Download audio only
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio --audio-quality medium
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID" --lang fr --mode audio --audio-quality medium
 ```

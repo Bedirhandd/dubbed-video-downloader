@@ -1,5 +1,6 @@
 # YouTube Dubbed Video Downloader
 
+[![PyPI version](https://img.shields.io/pypi/v/dubbed-video-downloader)](https://pypi.org/project/dubbed-video-downloader/)
 [![License: MIT](https://img.shields.io/github/license/Bedirhandd/dubbed-video-downloader)](LICENSE)
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
@@ -24,19 +25,21 @@ This tool wraps [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://
 - **Organized output** - files land under `language / channel / title`, not a random filename in your Downloads folder.
 - **Video or audio** - merge dubbed audio into `.mkv`, or save the audio stream on its own.
 - **Sensible defaults** - a short setup step stores your preferences; override anything per run when you need to.
+- **Crash-safe staging** - downloads go to a temporary staging area first; interrupted runs are cleaned automatically, and finalization is atomic so half-written files never land in your library.
 
 ## Quick start
 
 **Platform:** Linux only for now. Windows and macOS are not supported yet.
 
 ```bash
-git clone https://github.com/Bedirhandd/dubbed-video-downloader.git
-cd dubbed-video-downloader
-uv sync
-uv run dbdvdl init
-uv run dbdvdl doctor
-uv run dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
+pipx install dubbed-video-downloader   # recommended
+# pip install dubbed-video-downloader  # alternative
+dbdvdl init
+dbdvdl doctor
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
+
+Install from source with [uv](docs/getting-started/installation.md#install-from-source) if you are contributing to the project.
 
 Prerequisites, a first-download walkthrough, and troubleshooting tips are in [Getting Started](docs/getting-started/quickstart.md).
 
@@ -68,6 +71,11 @@ Found a bug or unexpected behavior? [Open an issue](https://github.com/Bedirhand
 ## Contributing
 
 Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [development FAQ](docs/faq/usage-and-development.md).
+
+## Project
+
+- [Changelog](CHANGELOG.md) — release history and notable changes
+- [Security policy](SECURITY.md) — how to report vulnerabilities
 
 ## Legal disclaimer
 

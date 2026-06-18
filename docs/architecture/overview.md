@@ -6,7 +6,7 @@
 dubbed-video-downloader/
 ├── src/
 │   └── dubbed_video_downloader/
-│       ├── __init__.py          # Package init, __version__ = "0.1.0"
+│       ├── __init__.py          # Package init, __version__ = "0.2.0"
 │       ├── __main__.py          # Entry point: from .cli import app; app()
 │       ├── cli.py               # Typer CLI definition, commands, option parsing, output formatting
 │       ├── core.py              # Download orchestration, staging, finalization, metadata extraction

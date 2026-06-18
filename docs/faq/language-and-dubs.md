@@ -3,7 +3,7 @@
 ## How do I find out what dub languages a video has?
 
 ```bash
-uv run dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
+dbdvdl langs "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
 ## What language codes can I use?

@@ -7,7 +7,7 @@
 Yes. Pass multiple URLs to the `download` command:
 
 ```bash
-uv run dbdvdl download "URL1" "URL2" "URL3" --lang ja
+dbdvdl download "URL1" "URL2" "URL3" --lang ja
 ```
 
 All URLs share the same options (language, quality, etc.). If one fails, the others continue.
@@ -22,8 +22,8 @@ Yes. Use `--default` to create config non-interactively, and `--yes` to auto-app
 
 ```bash
 #!/bin/bash
-uv run dbdvdl init --default --default-lang ja --output-dir ~/Videos
-uv run dbdvdl download "$URL" --yes --if-exists overwrite
+dbdvdl init --default --default-lang ja --output-dir ~/Videos
+dbdvdl download "$URL" --yes --if-exists overwrite
 ```
 
 ### Can I use this with cron or systemd timers?
@@ -38,7 +38,7 @@ Yes, but be aware:
 ### How do I check if everything is set up correctly?
 
 ```bash
-uv run dbdvdl doctor
+dbdvdl doctor
 ```
 
 This checks Python, config, FFmpeg, Node.js, and all Python packages.

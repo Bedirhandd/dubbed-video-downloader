@@ -1,9 +1,26 @@
 [project]
 name = "dubbed-video-downloader"
-version = "0.1.0"
+version = "0.2.0"
 description = "Download YouTube videos or audio with a selected dubbed audio track."
-readme = "README.md"
+readme = "README-PYPI.md"
 requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Bedirhan", email = "bedirhandedelec0@gmail.com" },
+]
+keywords = ["youtube", "download", "dub", "yt-dlp", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+]
 dependencies = [
     "langcodes==3.5.1",
     "PyYAML>=6.0.2",
@@ -12,6 +29,14 @@ dependencies = [
     "yt-dlp>=2026.6.9",
     "yt-dlp-ejs>=0.8.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Bedirhandd/dubbed-video-downloader"
+Documentation = "https://github.com/Bedirhandd/dubbed-video-downloader/tree/main/docs"
+Repository = "https://github.com/Bedirhandd/dubbed-video-downloader"
+Issues = "https://github.com/Bedirhandd/dubbed-video-downloader/issues"
+Changelog = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/CHANGELOG.md"
+Security = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/SECURITY.md"
 
 [project.scripts]
 dbdvdl = "dubbed_video_downloader.cli:app"
