@@ -29,7 +29,7 @@ Config permissions OK    owner-only permissions
 Output directory  OK     ~/Downloads/dbdvdl-output exists and is writable
 FFmpeg            OK     7.1.1 (/usr/bin/ffmpeg)
 Node              OK     v22.11.0 (/usr/bin/node)
-yt-dlp            OK     2026.3.17
+yt-dlp            OK     2026.6.9
 yt-dlp-ejs        OK     0.8.0
 ```
 
@@ -67,6 +67,6 @@ Config permissions FAIL   config unavailable
 Output directory  FAIL   config unavailable
 FFmpeg            FAIL   config unavailable
 Node              OK     v22.11.0 (/usr/bin/node)
-yt-dlp            OK     2026.3.17
+yt-dlp            OK     2026.6.9
 yt-dlp-ejs        OK     0.8.0
 ```

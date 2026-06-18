@@ -6,13 +6,15 @@ This page lists every dependency of the project, categorized by purpose.
 
 These packages are required to run `dbdvdl`. They are installed automatically when you run `pipx install dubbed-video-downloader` or `pip install dubbed-video-downloader`.
 
+The project exact-pins its direct runtime, development, and build dependencies in `pyproject.toml`. The versions below reflect that contract, while `uv.lock` captures the full resolved graph used in CI and release verification.
+
 | Package | Version | Purpose |
 | --- | --- | --- |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | `>=2026.3.17` | Core video/audio download engine. Handles YouTube extraction, format selection, and downloading. |
-| [yt-dlp-ejs](https://pypi.org/project/yt-dlp-ejs/) | `>=0.8.0` | YouTube JavaScript solver plugin for yt-dlp. Required to bypass YouTube's bot detection. |
-| [Typer](https://typer.tiangolo.com/) | `>=0.12.0` | CLI framework built on Click. Defines all commands, arguments, options, and validation. |
-| [Rich](https://rich.readthedocs.io/) | `>=15.0.0` | Terminal formatting and display. Used for progress bars, tables (quality/language listings), colored output, and status panels. |
-| [PyYAML](https://pyyaml.org/) | `>=6.0.2` | YAML parsing. Used to read and write the configuration file (`~/.config/dubbed-video-downloader/config.yaml`). |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | `==2026.6.9` | Core video/audio download engine. Handles YouTube extraction, format selection, and downloading. |
+| [yt-dlp-ejs](https://pypi.org/project/yt-dlp-ejs/) | `==0.8.0` | YouTube JavaScript solver plugin for yt-dlp. Required to bypass YouTube's bot detection. |
+| [Typer](https://typer.tiangolo.com/) | `==0.25.1` | CLI framework built on Click. Defines all commands, arguments, options, and validation. |
+| [Rich](https://rich.readthedocs.io/) | `==15.0.0` | Terminal formatting and display. Used for progress bars, tables (quality/language listings), colored output, and status panels. |
+| [PyYAML](https://pyyaml.org/) | `==6.0.3` | YAML parsing. Used to read and write the configuration file (`~/.config/dubbed-video-downloader/config.yaml`). |
 | [langcodes](https://pypi.org/project/langcodes/) | `==3.5.1` | Language tag parsing and matching. Used to resolve user-provided language names/codes against yt-dlp's audio track metadata. |
 
 ## System Dependencies
@@ -54,9 +56,9 @@ These are installed with `uv sync --group dev`. They are only needed when contri
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| [pytest](https://docs.pytest.org/) | `>=8.0` | Test framework. All tests are written with pytest. |
-| [pytest-cov](https://pytest-cov.readthedocs.io/) | `>=6.0` | Coverage reporting plugin for pytest. Generates coverage reports. |
-| [coverage[toml]](https://coverage.readthedocs.io/) | `>=7.6.0` | Core coverage measurement library. The `[toml]` extra enables reading `[tool.coverage]` from pyproject.toml (branch coverage, 79% minimum threshold). |
+| [pytest](https://docs.pytest.org/) | `==9.1.0` | Test framework. All tests are written with pytest. |
+| [pytest-cov](https://pytest-cov.readthedocs.io/) | `==7.1.0` | Coverage reporting plugin for pytest. Generates coverage reports. |
+| [coverage[toml]](https://coverage.readthedocs.io/) | `==7.14.1` | Core coverage measurement library. The `[toml]` extra enables reading `[tool.coverage]` from pyproject.toml (branch coverage, 79% minimum threshold). |
 
 ### Linting and Type Checking
 
@@ -69,20 +71,20 @@ These are installed with `uv sync --group dev`. They are only needed when contri
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| [pre-commit](https://pre-commit.com/) | `>=4.0.0` | Git hook framework. Runs linting and formatting checks before each commit. |
+| [pre-commit](https://pre-commit.com/) | `==4.6.0` | Git hook framework. Runs linting and formatting checks before each commit. |
 
 ### Type Stubs
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| [types-pyyaml](https://pypi.org/project/types-PyYAML/) | `>=6.0.12.20260518` | Type stubs for PyYAML, required for mypy strict mode. |
-| [types-yt-dlp](https://pypi.org/project/types-yt-dlp/) | `>=2026.3.17.20260605` | Type stubs for yt-dlp, required for mypy strict mode. |
+| [types-pyyaml](https://pypi.org/project/types-PyYAML/) | `==6.0.12.20260518` | Type stubs for PyYAML, required for mypy strict mode. |
+| [types-yt-dlp](https://pypi.org/project/types-yt-dlp/) | `==2026.3.17.20260605` | Type stubs for yt-dlp, required for mypy strict mode. |
 
 ## Build System
 
 | Package | Version | Purpose |
 | --- | --- | --- |
-| [hatchling](https://hatch.pypa.io/) | (latest) | PEP 517 build backend. Builds the wheel from `src/dubbed_video_downloader/`. |
+| [hatchling](https://hatch.pypa.io/) | `==1.30.1` | PEP 517 build backend. Builds the wheel from `src/dubbed_video_downloader/`. |
 
 ## Development Workflow (uv)
 
