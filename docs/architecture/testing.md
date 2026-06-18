@@ -32,13 +32,14 @@
 | `test_doctor.py` | Doctor check functions, executable resolution, command checks |
 | `test_errors.py` | Exception hierarchy, error message formatting |
 | `test_network_guard.py` | Network guard installation and behavior |
+| `test_version_sync.py` | Release metadata synchronization across package files and curated docs |
 | `tests/live/test_live_metadata.py` | Live metadata, langs, qualities, dry-run (local only) |
 | `tests/live/test_live_download.py` | Live audio/video download and error paths (local only) |
 | `tests/live/test_live_matrix.py` | Opt-in live quality matrix across audio/video presets (local only) |
 
 ## CI Pipeline
 
-The CI pipeline (`.github/workflows/ci.yml`) runs on push to `main` and `feat/cli`, and on all PRs:
+The CI pipeline (`.github/workflows/ci.yml`) runs on pull requests and branch pushes, with `main` serving as the release-relevant branch:
 
 1. **Lint job (Python 3.12):**
    - `ruff check` with GitHub output format

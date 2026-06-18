@@ -21,7 +21,7 @@ Config permissions OK    owner-only permissions
 Output directory OK    /home/user/Downloads/dbdvdl-output exists and is writable
 FFmpeg          OK     7.0.2-3ubuntu1 (/usr/bin/ffmpeg)
 Node            OK     v22.14.0 (/usr/bin/node)
-yt-dlp          OK     2026.3.17
+yt-dlp          OK     2026.6.9
 yt-dlp-ejs      OK     0.8.0
 ```
 

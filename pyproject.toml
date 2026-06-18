@@ -23,11 +23,11 @@ classifiers = [
 ]
 dependencies = [
     "langcodes==3.5.1",
-    "PyYAML>=6.0.2",
-    "rich>=15.0.0",
-    "typer>=0.12.0",
-    "yt-dlp>=2026.6.9",
-    "yt-dlp-ejs>=0.8.0",
+    "PyYAML==6.0.3",
+    "rich==15.0.0",
+    "typer==0.25.1",
+    "yt-dlp==2026.6.9",
+    "yt-dlp-ejs==0.8.0",
 ]
 
 [project.urls]
@@ -42,19 +42,19 @@ Security = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/SECU
 dbdvdl = "dubbed_video_downloader.cli:app"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.30.1"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "coverage[toml]>=7.6.0",
+    "coverage[toml]==7.14.1",
     "mypy==2.1.0",
-    "pre-commit>=4.0.0",
-    "pytest>=8.0",
-    "pytest-cov>=6.0",
+    "pre-commit==4.6.0",
+    "pytest==9.1.0",
+    "pytest-cov==7.1.0",
     "ruff==0.15.17",
-    "types-pyyaml>=6.0.12.20260518",
-    "types-yt-dlp>=2026.3.17.20260605",
+    "types-pyyaml==6.0.12.20260518",
+    "types-yt-dlp==2026.3.17.20260605",
 ]
 
 [tool.uv]
