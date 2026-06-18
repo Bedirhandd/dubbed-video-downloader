@@ -32,8 +32,11 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/Bedirhandd/dubbed-video-downloader"
+Documentation = "https://github.com/Bedirhandd/dubbed-video-downloader/tree/main/docs"
 Repository = "https://github.com/Bedirhandd/dubbed-video-downloader"
 Issues = "https://github.com/Bedirhandd/dubbed-video-downloader/issues"
+Changelog = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/CHANGELOG.md"
+Security = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/SECURITY.md"
 
 [project.scripts]
 dbdvdl = "dubbed_video_downloader.cli:app"

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `**dbdvdl` CLI** — a full command-line tool replaces the old single-file script. Commands include `init`, `doctor`, `langs`, `qualities`, `download`, and `config`.
+- **`dbdvdl` CLI** — a full command-line tool replaces the old single-file script. Commands include `init`, `doctor`, `langs`, `qualities`, `download`, and `config`.
 - **Persistent configuration** — settings are stored in `~/.config/dubbed-video-downloader/config.yaml` instead of editing source code. Run `dbdvdl init` to set up output directory, FFmpeg path, default language, quality presets, retry count, and more.
 - **Non-interactive setup** — `dbdvdl init --default` creates a config with sensible defaults without prompts; individual values can also be passed as flags.
 - **Environment checks** — `dbdvdl doctor` verifies Python, config, output directory, FFmpeg, Node.js, yt-dlp, and yt-dlp-ejs before you download anything.
@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- `**script.py` workflow** — configuration constants (`DUB_LANGUAGE`, `FFMPEG_PATH`, `VIDEO_URLS`) inside a Python file are no longer the way to use this tool. Use `dbdvdl init` and CLI flags instead.
+- **`script.py` workflow** — configuration constants (`DUB_LANGUAGE`, `FFMPEG_PATH`, `VIDEO_URLS`) inside a Python file are no longer the way to use this tool. Use `dbdvdl init` and CLI flags instead.
 
 ### Fixed
 

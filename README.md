@@ -72,6 +72,11 @@ Found a bug or unexpected behavior? [Open an issue](https://github.com/Bedirhand
 
 Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [development FAQ](docs/faq/usage-and-development.md).
 
+## Project
+
+- [Changelog](CHANGELOG.md) — release history and notable changes
+- [Security policy](SECURITY.md) — how to report vulnerabilities
+
 ## Legal disclaimer
 
 This tool is provided for **educational and personal use only**. Respect [YouTube's Terms of Service](https://www.youtube.com/static?template=terms) and the rights of content creators. Downloading and redistributing videos without permission may violate copyright laws.

@@ -77,6 +77,13 @@ Dubbed Video Downloader (`dbdvdl`) is a Python CLI tool that wraps [yt-dlp](http
 | [Troubleshooting](faq/troubleshooting.md) | Common errors, stuck downloads, debug mode, staging directory |
 | [Usage and Development](faq/usage-and-development.md) | Scripting, cron, testing, linting, coverage, contributing, known limitations |
 
+### Project
+
+| Document | Description |
+| --- | --- |
+| [Changelog](../CHANGELOG.md) | Release history and notable changes |
+| [Security policy](../SECURITY.md) | Vulnerability reporting, scope, and supported versions |
+
 ## Quick Reference
 
 ```bash
