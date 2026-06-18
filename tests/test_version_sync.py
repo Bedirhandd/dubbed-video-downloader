@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
-import tomllib
 import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
@@ -75,9 +80,15 @@ def test_direct_dependencies_are_exact_pins() -> None:
         assert isinstance(requirements, list)
         for requirement in requirements:
             assert isinstance(requirement, str)
-            assert EXACT_PIN_PATTERN.fullmatch(requirement), (
+            requirement_name, _, marker = requirement.partition(";")
+            assert EXACT_PIN_PATTERN.fullmatch(requirement_name.strip()), (
                 f"{group_name} must use exact pins, found {requirement!r}"
             )
+            if marker:
+                assert marker.strip(), (
+                    f"{group_name} must not have an empty environment marker, "
+                    f"found {requirement!r}"
+                )
 
 
 def test_workflows_use_one_exact_setup_uv_version() -> None:

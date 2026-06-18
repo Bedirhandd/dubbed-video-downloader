@@ -233,6 +233,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "types-pyyaml" },
     { name = "types-yt-dlp" },
 ]
@@ -255,6 +256,7 @@ dev = [
     { name = "pytest", specifier = "==9.1.0" },
     { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "ruff", specifier = "==0.15.17" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = "==2.4.1" },
     { name = "types-pyyaml", specifier = "==6.0.12.20260518" },
     { name = "types-yt-dlp", specifier = "==2026.3.17.20260605" },
 ]
