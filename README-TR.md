@@ -1,125 +1,74 @@
 # YouTube Dublajlı Video İndirici
 
-[yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.org/) kullanarak YouTube videolarını belirli bir **dublaj diliyle** (örneğin Türkçe, İngilizce veya İspanyolca) indirmenizi sağlayan basit bir Python betiği.
+YouTube videolarını veya seslerini **istediğiniz dublaj diliyle** indirin - Japonca, Fransızca, Portekizce ve daha fazlası.
 
-Script şu durumlar için kullanılabilir:
+Yapay zeka, içerik üreticilerinin aynı videoyu birden fazla dilde dublajlı sesle yayınlamasını her zamankinden kolaylaştırdı. Eskiden tek dilde yayınlayan kanallar artık çoğu zaman Almanca, Hintçe, Korece ve daha fazlasını tek bir yüklemede sunuyor.
 
-- **Dublajlı YouTube videolarını** indirmek (çok dilli ses desteği).
-- Videoyu `.mkv` formatında kaydedip seçilen ses parçasıyla birleştirmek.
-- Dosyaları **dil, kanal ve başlık** klasör yapısına göre düzenlemek.
-- Çoklu ses parçası sunan kanallarla çalışmak (örneğin MrBeast).
+YouTube'da başka bir dublaja geçmek birkaç tıklama. YouTube dışında istediğiniz parçayı almak başka bir hikaye. Çoğu indirici varsayılan akışı alır, alternatif dilleri format dizelerinin arkasına gizler ya da dosyaları size hiçbir şey anlatmayan isimlerle kaydeder.
 
-Betik videoları `.mkv` formatında kaydeder ve şu klasör yapısını oluşturur:
+Peki Fransızca dublajlı videoyu nasıl indireceksiniz, ya da yalnızca Japonca sesi nasıl kaydedeceksiniz? Bu CLI tam bunun için: dublaj parçasını bulur, kaliteyi seçer ve sonucu öngörülebilir bir yere kaydeder.
 
-```text
-Videos/<dil>/<kanal>/<başlık>/<başlık>.mkv
+> İngilizce özet için [README.md](README.md) dosyasına bakın. Ayrıntılı dokümantasyon [docs/](docs/index.md) klasöründedir (İngilizce).
 
-Örnek:
-Videos/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_Course.mkv
-```
+## Neden var?
 
-## Test Edilen Ortam
+Bu araç [yt-dlp](https://github.com/yt-dlp/yt-dlp) ve [FFmpeg](https://ffmpeg.org/) üzerine küçük, amaca yönelik bir iş akışı kurar:
 
-- Python `3.12.3`
-- yt-dlp `2026.3.17`
-- yt-dlp-ejs `0.8.0`
-- Node.js `22.22.2`
-- Bağımlılık yönetimi için [uv](https://docs.astral.sh/uv/)
+- **Dil öncelikli** - indirmeye başlamadan önce mevcut dublajları listeler.
+- **Düzenli çıktı** - dosyalar `dil / kanal / başlık` altına gider; İndirilenler klasöründe rastgele bir dosya adıyla kalmaz.
+- **Video veya ses** - dublajlı sesi `.mkv` içinde birleştirir ya da yalnızca ses akışını kaydeder.
+- **Mantıklı varsayılanlar** - kısa bir kurulum adımı tercihlerinizi saklar; gerektiğinde her çalıştırmada geçersiz kılabilirsiniz.
+- **Çökme güvenli staging** - indirmeler önce geçici bir staging alanına gider; yarım kalan çalışmalar otomatik temizlenir ve sonlandırma atomiktir; yarım yazılmış dosyalar kütüphanenize karışmaz.
 
-## Gereksinimler
+## Hızlı başlangıç
 
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Python `>=3.10` (uv proje `.python-version` dosyasını kullanabilir)
-- yt-dlp'nin YouTube JavaScript çözümleyicisi için sistem `PATH` içinde Node.js
-- **FFmpeg** sistem `PATH` içinde olmalı veya betikte `FFMPEG_PATH` ile tam yol belirtilmeli
-
-Node.js ve FFmpeg kurulu mu kontrol etmek için:
+**Platform:** Şimdilik yalnızca Linux. Windows ve macOS henüz desteklenmemektedir.
 
 ```bash
-node --version
-ffmpeg -version
+pipx install dubbed-video-downloader   # önerilen
+# pip install dubbed-video-downloader  # alternatif
+dbdvdl init
+dbdvdl doctor
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-Yüklü değilse resmi siteden indirebilirsiniz: [https://ffmpeg.org/](https://ffmpeg.org/)
+Katkıda bulunuyorsanız [kaynak koddan kurulum](docs/getting-started/installation.md#install-from-source) için uv kullanın.
 
-## Kurulum
+Ön koşullar, ilk indirme adımları ve sorun giderme için [Hızlı Başlangıç](docs/getting-started/quickstart.md) bölümüne bakın.
 
-Repoyu klonlayın veya script dosyasını indirin, sonra gerekirse uv kurun:
+## Dokümantasyon
 
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
+Tüm dokümantasyon [docs/](docs/index.md) klasöründedir:
 
-# Windows PowerShell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
+| Bölüm | İçerik |
+| --- | --- |
+| [Başlarken](docs/getting-started/installation.md) | [Kurulum](docs/getting-started/installation.md), [bağımlılıklar](docs/getting-started/dependencies.md), [hızlı başlangıç](docs/getting-started/quickstart.md) |
+| [Komutlar](docs/commands/overview.md) | [init](docs/commands/init.md), [doctor](docs/commands/doctor.md), [langs](docs/commands/langs.md), [qualities](docs/commands/qualities.md), [download](docs/commands/download.md), [config](docs/commands/config.md) |
+| [Yapılandırma](docs/configuration/overview.md) | [Config anahtarları](docs/configuration/config-keys.md), [yönetim](docs/configuration/management.md) |
+| [Kullanım örnekleri](docs/usage-examples/index.md) | İndirme, dil, kalite, betikleme ve [sorun giderme](docs/usage-examples/troubleshooting.md) |
+| [Özellikler](docs/features/language-resolution.md) | [Dil çözümleme](docs/features/language-resolution.md), [kalite](docs/features/quality-selection.md), [indirme modları](docs/features/download-modes.md), [çıktı düzeni](docs/features/output-layout.md), [aşamalı indirme](docs/features/staged-downloads.md) |
+| [SSS](docs/faq/general.md) | [Kurulum](docs/faq/installation-and-setup.md), [diller](docs/faq/language-and-dubs.md), [indirmeler](docs/faq/quality-and-downloads.md), [sorun giderme](docs/faq/troubleshooting.md) |
+| [Mimari](docs/architecture/overview.md) | Katkıda bulunanlar için: [modüller](docs/architecture/modules.md), [indirme hattı](docs/architecture/download-pipeline.md), [testler](docs/architecture/testing.md) |
 
-Proje ortamını senkronize edin:
+## Yakında
 
-```bash
-uv sync
-```
+- **Toplu indirme** - oynatma listelerini, kanalları veya URL listelerini ortak varsayılanlarla kuyruğa alma
+- **Çıktı formatı özelleştirme** - mevcut varsayılanların ötesinde konteyner ve adlandırma seçimi
+- **GUI** - bayrakları ezberlemeden aynı iş akışı için masaüstü arayüzü
+- **Windows uyumluluğu** - Windows'ta daha sorunsuz ilk kurulum ve paketleme
 
-uv `.venv/` klasörünü oluşturur ve bağımlılıkları `pyproject.toml` ile `uv.lock` üzerinden kurar.
-Projede `yt-dlp-ejs` bağımlılığı bulunur; YouTube formatlarını ve dublajlı sesleri tam görebilmek için Node.js yine de gereklidir.
+## Sorun bildirin
 
-## Yapılandırma
+Bir hata veya beklenmeyen davranış mı gördünüz? GitHub'da [issue açın](https://github.com/Bedirhandd/dubbed-video-downloader/issues). Önce [sorun giderme rehberi](docs/usage-examples/troubleshooting.md) ve [SSS](docs/faq/troubleshooting.md) yardımcı olabilir.
 
-`script.py` dosyasını açın ve gerekirse düzenleyin:
+## Katkıda bulunma
 
-```python
-DUB_LANGUAGE = "tr"   # İndirilecek dublaj dili, örn: "tr", "en"
-FFMPEG_PATH = None    # Örn: "C:/ffmpeg/ffmpeg.exe"
-                      # None bırakırsanız yt-dlp PATH üzerinden bulur
-VIDEO_URLS = [
-    "https://www.youtube.com/watch?v=EXAMPLE1",
-    "https://www.youtube.com/watch?v=EXAMPLE2",
-]
-```
+Pull request'ler memnuniyetle karşılanır. [CONTRIBUTING.md](CONTRIBUTING.md) ve [geliştirme SSS](docs/faq/usage-and-development.md) bölümüne bakın.
 
-- `DUB_LANGUAGE`: istediğiniz dublaj dil kodunu girin (`"tr"`, `"en"`, vb.).
-- `FFMPEG_PATH`: FFmpeg sistem `PATH` içinde değilse tam yolunu yazın.
-- `VIDEO_URLS`: indirmek istediğiniz YouTube linklerini ekleyin.
+## Yasal uyarı
 
-## Kullanım
+Bu araç yalnızca **eğitim ve kişisel kullanım** için sağlanmaktadır. [YouTube Kullanım Şartları](https://www.youtube.com/static?template=terms)'na ve içerik üreticilerinin haklarına saygı gösterin. İzinsiz video indirmek ve yeniden paylaşmak telif haklarını ihlal edebilir.
 
-Script'i uv ile çalıştırın:
+## Lisans
 
-```bash
-uv run script.py
-```
-
-Betik şu işlemleri yapar:
-
-1. Videoda istenen dublaj dili mevcut mu kontrol eder.
-2. Dil yoksa hata verir ve mevcut dillerin listesini gösterir.
-3. Videoyu ve seçilen ses parçasını indirir.
-4. Bunları `.mkv` dosyasında birleştirir.
-5. Dosyayı ilgili klasör yapısına kaydeder.
-
-## Bağımlılıkları Güncelleme
-
-yt-dlp'yi uv yönetimli proje içinde güncellemek için:
-
-```bash
-uv lock --upgrade-package yt-dlp
-uv lock --upgrade-package yt-dlp-ejs
-uv sync
-```
-
-Bağımlılık sürümleri değiştiğinde güncellenen `uv.lock` dosyasını commit edin. `uv.lock` dosyasını elle düzenlemeyin.
-
-## Notlar
-
-- `WARNING: Unable to download format 616. Skipping...` gibi uyarılar normaldir. yt-dlp farklı kalite ID'lerini dener, bazıları çalışmayabilir. Çalışan formata otomatik düşer.
-- Çıktı klasör yapısını değiştirmek isterseniz `outtmpl()` fonksiyonunu düzenleyebilirsiniz.
-
-## Yasal Uyarı
-
-- Bu betik yalnızca **kişisel ve eğitim amaçlı kullanım** için sağlanmaktadır.
-- YouTube'un [Kullanım Şartları](https://www.youtube.com/static?template=terms) ve içerik üreticilerin haklarına saygı gösterin.
-- İzin alınmadan video indirip yeniden paylaşmak telif haklarını ihlal edebilir.
-
-## Anahtar Kelimeler
-
-*YouTube video indirme, YouTube dublaj indirici, çok dilli ses, yt-dlp, ffmpeg, mkv, YouTube dublajlı video indirme, YouTube dublajlı video indir, Python YouTube downloader*
+Bu proje [MIT License](LICENSE) altında lisanslanmıştır.

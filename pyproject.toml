@@ -1,13 +1,129 @@
 [project]
 name = "dubbed-video-downloader"
-version = "0.1.0"
-description = "Download YouTube videos with a selected dubbed audio track."
-readme = "README.md"
+version = "0.2.0"
+description = "Download YouTube videos or audio with a selected dubbed audio track."
+readme = "README-PYPI.md"
 requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "Bedirhan", email = "bedirhandedelec0@gmail.com" },
+]
+keywords = ["youtube", "download", "dub", "yt-dlp", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+]
 dependencies = [
-    "yt-dlp>=2026.3.17",
-    "yt-dlp-ejs>=0.8.0",
+    "langcodes==3.5.1",
+    "PyYAML==6.0.3",
+    "rich==15.0.0",
+    "typer==0.25.1",
+    "yt-dlp==2026.6.9",
+    "yt-dlp-ejs==0.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Bedirhandd/dubbed-video-downloader"
+Documentation = "https://github.com/Bedirhandd/dubbed-video-downloader/tree/main/docs"
+Repository = "https://github.com/Bedirhandd/dubbed-video-downloader"
+Issues = "https://github.com/Bedirhandd/dubbed-video-downloader/issues"
+Changelog = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/CHANGELOG.md"
+Security = "https://github.com/Bedirhandd/dubbed-video-downloader/blob/main/SECURITY.md"
+
+[project.scripts]
+dbdvdl = "dubbed_video_downloader.cli:app"
+
+[build-system]
+requires = ["hatchling==1.30.1"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "coverage[toml]==7.14.1",
+    "mypy==2.1.0",
+    "pre-commit==4.6.0",
+    "pytest==9.1.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.15.17",
+    "tomli==2.4.1; python_version < \"3.11\"",
+    "types-pyyaml==6.0.12.20260518",
+    "types-yt-dlp==2026.3.17.20260605",
 ]
 
 [tool.uv]
-package = false
+package = true
+
+[tool.uv.audit]
+ignore = []
+ignore-until-fixed = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dubbed_video_downloader"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+extend-ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dubbed_video_downloader"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source_pkgs = ["dubbed_video_downloader"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
+fail_under = 79
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+namespace_packages = false
+mypy_path = ["src"]
+packages = ["dubbed_video_downloader"]
+exclude = ["src/dubbed_video_downloader/__main__.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = ["-ra", "--strict-markers", "--ignore=tests/live"]
+markers = [
+    "live: local-only integration tests requiring a real YouTube URL and network access",
+    "live_matrix: long-running audio/video quality matrix; opt-in via DBDVDL_LIVE_MATRIX=1",
+]

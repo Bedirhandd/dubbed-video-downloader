@@ -1,125 +1,86 @@
 # YouTube Dubbed Video Downloader
 
-A simple Python script that uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/) to download YouTube videos with a specific **dub language** (for example Turkish, English, or Spanish).
+[![PyPI version](https://img.shields.io/pypi/v/dubbed-video-downloader)](https://pypi.org/project/dubbed-video-downloader/)
+[![License: MIT](https://img.shields.io/github/license/Bedirhandd/dubbed-video-downloader)](LICENSE)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue)](https://www.python.org/)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue)](https://www.python.org/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/platform-linux-lightgrey)](#quick-start)
 
-This tool is helpful if you want to:
+Download YouTube videos or audio with the **dub language you actually want** - Japanese, French, Portuguese, and more.
 
-- Download YouTube videos with **dubbed audio tracks** and multi-language support.
-- Save the output as `.mkv` files with the chosen dubbed audio merged with video.
-- Organize downloaded videos by **language, channel, and title**.
-- Work with creators who provide **multiple audio tracks** on YouTube.
+AI has made it easier than ever for creators to publish the same video with dubbed audio in multiple languages. Channels that once shipped in one language now often offer German, Hindi, Korean, and more on a single upload.
 
-The script saves videos in this folder structure:
+On YouTube, switching to another dub is a few clicks away. Off YouTube, getting the track you want is a different story. Most downloaders grab the default stream, hide alternate languages behind format strings, or save files with names that tell you nothing.
 
-```text
-Videos/<lang>/<channel>/<title>/<title>.mkv
+So how do you download a video with the French dub, or save just the Japanese audio? This CLI is built for that: find the dubbed track, pick the quality, and save the result in a predictable place.
 
-Example:
-Videos/tr/MrBeast/World_s_Deadliest_Obstacle_Course/World_s_Deadliest_Obstacle_Course.mkv
-```
+> Türkçe özet için [README-TR.md](README-TR.md) dosyasına bakın.
 
-## Tested Environment
+## Why this exists
 
-- Python `3.12.3`
-- `yt-dlp==2026.3.17`
-- `yt-dlp-ejs==0.8.0`
-- Node.js `22.22.2`
-- Dependency management with [uv](https://docs.astral.sh/uv/)
+This tool wraps [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org/) with a small, purpose-built workflow:
 
-## Requirements
+- **Language-first** - list available dubs before you commit to a download.
+- **Organized output** - files land under `language / channel / title`, not a random filename in your Downloads folder.
+- **Video or audio** - merge dubbed audio into `.mkv`, or save the audio stream on its own.
+- **Sensible defaults** - a short setup step stores your preferences; override anything per run when you need to.
+- **Crash-safe staging** - downloads go to a temporary staging area first; interrupted runs are cleaned automatically, and finalization is atomic so half-written files never land in your library.
 
-- [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Python `>=3.10` (uv can use the project `.python-version`)
-- Node.js on your system `PATH` for yt-dlp's YouTube JavaScript challenge solver
-- **FFmpeg** installed and accessible in your system `PATH`, or set with `FFMPEG_PATH` in the script
+## Quick start
 
-Check if Node.js and FFmpeg are available:
+**Platform:** Linux only for now. Windows and macOS are not supported yet.
 
 ```bash
-node --version
-ffmpeg -version
+pipx install dubbed-video-downloader   # recommended
+# pip install dubbed-video-downloader  # alternative
+dbdvdl init
+dbdvdl doctor
+dbdvdl download "https://www.youtube.com/watch?v=VIDEO_ID"
 ```
 
-If FFmpeg is not installed, download it from the official site: [https://ffmpeg.org/](https://ffmpeg.org/)
+Install from source with [uv](docs/getting-started/installation.md#install-from-source) if you are contributing to the project.
 
-## Installation
+Prerequisites, a first-download walkthrough, and troubleshooting tips are in [Getting Started](docs/getting-started/quickstart.md).
 
-Clone the repo or copy the script file, then install uv if needed:
+## Documentation
 
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
+Full documentation is in the [docs/](docs/index.md) folder:
 
-# Windows PowerShell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
+| Section | What you'll find |
+| --- | --- |
+| [Getting Started](docs/getting-started/installation.md) | [Installation](docs/getting-started/installation.md), [dependencies](docs/getting-started/dependencies.md), [quickstart](docs/getting-started/quickstart.md) |
+| [Commands](docs/commands/overview.md) | [init](docs/commands/init.md), [doctor](docs/commands/doctor.md), [langs](docs/commands/langs.md), [qualities](docs/commands/qualities.md), [download](docs/commands/download.md), [config](docs/commands/config.md) |
+| [Configuration](docs/configuration/overview.md) | [Config keys](docs/configuration/config-keys.md), [management](docs/configuration/management.md) |
+| [Usage examples](docs/usage-examples/index.md) | Practical recipes for downloads, languages, quality, scripting, and [troubleshooting](docs/usage-examples/troubleshooting.md) |
+| [Features](docs/features/language-resolution.md) | [Language resolution](docs/features/language-resolution.md), [quality](docs/features/quality-selection.md), [download modes](docs/features/download-modes.md), [output layout](docs/features/output-layout.md), [staged downloads](docs/features/staged-downloads.md) |
+| [FAQ](docs/faq/general.md) | [Setup](docs/faq/installation-and-setup.md), [languages](docs/faq/language-and-dubs.md), [downloads](docs/faq/quality-and-downloads.md), [troubleshooting](docs/faq/troubleshooting.md) |
+| [Architecture](docs/architecture/overview.md) | For contributors: [modules](docs/architecture/modules.md), [download pipeline](docs/architecture/download-pipeline.md), [testing](docs/architecture/testing.md) |
 
-Sync the project environment:
+## Coming soon
 
-```bash
-uv sync
-```
+- **Batch downloading** - queue playlists, channels, or URL lists with shared defaults
+- **Output format customization** - choose container and naming beyond the current defaults
+- **GUI** - a desktop interface for the same workflow, without memorizing flags
+- **Windows compatibility** - smoother first-run setup and packaging on Windows
 
-uv will create `.venv/` and install the dependencies from `pyproject.toml` and `uv.lock`.
-The project includes `yt-dlp-ejs`; Node.js is still needed to run the solver for full YouTube format and dubbed-audio discovery.
+## Report an issue
 
-## Configuration
-
-Open `script.py` and edit these lines if needed:
-
-```python
-DUB_LANGUAGE = "tr"   # Target dub language, e.g. "tr", "en"
-FFMPEG_PATH = None    # Example: "C:/ffmpeg/ffmpeg.exe"
-                      # Leave as None to let yt-dlp find FFmpeg in PATH
-VIDEO_URLS = [
-    "https://www.youtube.com/watch?v=EXAMPLE1",
-    "https://www.youtube.com/watch?v=EXAMPLE2",
-]
-```
-
-- `DUB_LANGUAGE`: set the language code you want (`"tr"`, `"en"`, etc.).
-- `FFMPEG_PATH`: if FFmpeg is not in your system `PATH`, put its full path here.
-- `VIDEO_URLS`: add the video URLs you want to download.
-
-## Usage
-
-Run the script with uv:
-
-```bash
-uv run script.py
-```
-
-The script will:
-
-1. Check if the requested dub language is available for each video.
-2. Print an error with available languages if the requested language is missing.
-3. Download the video and the requested audio stream.
-4. Merge them into `.mkv`.
-5. Save them under `Videos/<lang>/<channel>/<title>/`.
-
-## Updating Dependencies
-
-To upgrade yt-dlp within the uv-managed project:
-
-```bash
-uv lock --upgrade-package yt-dlp
-uv lock --upgrade-package yt-dlp-ejs
-uv sync
-```
-
-Commit the updated `uv.lock` when dependency versions change. Do not edit `uv.lock` manually.
+Found a bug or unexpected behavior? [Open an issue](https://github.com/Bedirhandd/dubbed-video-downloader/issues) on GitHub. The [troubleshooting guide](docs/usage-examples/troubleshooting.md) and [FAQ](docs/faq/troubleshooting.md) may help first.
 
 ## Contributing
 
-Contributions and issues are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for commit, branch, and pull request guidelines.
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [development FAQ](docs/faq/usage-and-development.md).
 
-## Notes
+## Project
 
-- If the script prints warnings like `WARNING: Unable to download format 616. Skipping...`, this is normal. yt-dlp tries multiple format IDs, and some may be unavailable. It automatically falls back to a working format.
-- Output paths can be customized by editing the `outtmpl()` function in the script.
+- [Changelog](CHANGELOG.md) — release history and notable changes
+- [Security policy](SECURITY.md) — how to report vulnerabilities
 
-## Legal Disclaimer
+## Legal disclaimer
 
-- This script is provided for **educational and personal use only**.
-- Respect YouTube's [Terms of Service](https://www.youtube.com/static?template=terms) and the rights of content creators.
-- Downloading and redistributing videos without permission may violate copyright laws.
+This tool is provided for **educational and personal use only**. Respect [YouTube's Terms of Service](https://www.youtube.com/static?template=terms) and the rights of content creators. Downloading and redistributing videos without permission may violate copyright laws.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

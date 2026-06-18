@@ -45,6 +45,11 @@ nosetests.xml
 coverage.xml
 *.cover
 *.py,cover
+.pytest_cache/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
 
 # Django stuff:
 *.log
@@ -70,3 +75,7 @@ Desktop.ini
 
 # Output
 Videos/
+
+# Local project memory (agent notes, scratch context)
+.project-memory/
+AGENTS.md
