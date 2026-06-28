@@ -52,7 +52,7 @@ dev = [
     "pre-commit==4.6.0",
     "pytest==9.1.0",
     "pytest-cov==7.1.0",
-    "ruff==0.15.17",
+    "ruff==0.15.20",
     "tomli==2.4.1; python_version < \"3.11\"",
     "types-pyyaml==6.0.12.20260518",
     "types-yt-dlp==2026.3.17.20260605",
